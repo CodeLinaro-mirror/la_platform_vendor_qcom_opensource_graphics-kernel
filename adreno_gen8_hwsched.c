@@ -206,6 +206,24 @@ static void gen8_hwsched_gmu_suspend(struct adreno_device *adreno_dev, bool forc
 	adreno_hwsched_reset_hfi_mem(adreno_dev);
 }
 
+static void gen8_hwsched_set_ctxt_record_vrb(struct adreno_device *adreno_dev)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+
+	if (IS_ERR_OR_NULL(gmu->vrb))
+		return;
+
+	/* Populate context record sizes in VRB */
+	gmu_core_set_vrb_register(gmu->vrb, VRB_CTXRECORD_TOTAL_SZ,
+		adreno_dev->total_ctxt_record_sz >> 10);
+	gmu_core_set_vrb_register(gmu->vrb, VRB_CTXRECORD_GMEM_SZ,
+		adreno_dev->gpucore->gmem_size >> 10);
+
+	/* Populate size of AQE context record */
+	gmu_core_set_vrb_register(gmu->vrb, VRB_CTXRECORD_AQE_SZ,
+		adreno_dev->aqe_ctxt_record_sz >> 10);
+}
+
 static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -230,6 +248,14 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto clks_gdsc_off;
 
 	gen8_get_gpu_slice_info(adreno_dev);
+
+	/*
+	 * Set context record size after determining slice mask,
+	 * as GMEM size depends on it.
+	 */
+	gen8_populate_ctxt_record_size(adreno_dev);
+
+	gen8_hwsched_set_ctxt_record_vrb(adreno_dev);
 
 	/*
 	 * Enable AHB timeout detection to catch any register access taking longer

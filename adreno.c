@@ -41,6 +41,52 @@
 /* Include the master list of GPU cores that are supported */
 #include "adreno-gpulist.h"
 
+#define HOSTADDR_IN_MEMDESC(_addr, _memdesc) \
+	(((_addr) >= (_memdesc)->hostptr) && \
+	 ((_addr) < ((_memdesc)->hostptr + (_memdesc)->size)))
+
+/* Indicates that the context record table is present in CP ucode */
+#define CTXT_RECORD_TBL_MAGIC 0xADDED
+#define CTXT_RECORD_MAGIC_OFFSET 5
+#define CTXT_TBL_OFFSET 6
+/* Mask for extracting the instruction payload from ucode instructions */
+#define CTXT_RECORD_PAYLOAD_MASK GENMASK(23, 0)
+
+/**
+ * struct gpu_ctxt_record - Information about GPU context record, defined per GPU.
+ * If a ucode is shared by multiple targets, there will be multiple instances
+ * of this structure embedded in the ucode. Instances of this structure will be
+ * present immediately after ctxt_record_info.
+ */
+struct gpu_ctxt_record {
+	/**
+	 * @hw_version: GPU hardware version
+	 * [15:0]: Step, should be 0.
+	 * [27:16]: Minor
+	 * [31:28]: Major
+	 */
+	u32 hw_version;
+	/** @ctxt_record_size: Size of preemption record in KB */
+	u32 ctxt_record_size;
+	/** aqe_size: Size of AQE in preemption record in KB */
+	u32 aqe_size;
+} __packed;
+
+struct ctxt_record_info {
+	/**
+	 * @version: Version of the ctxt_record_info structure
+	 * [11:0]: Minor, [31:12]: Major.
+	 * Major version changes whenever a true incompatibility is generated.
+	 */
+	u32 version;
+	/** @dwords_per_gpu: DWORD size of struct gpu_ctxt_record */
+	u16 dwords_per_gpu;
+	/** @num_gpus: For targets that share same ucode binary, num_gpus > 1, otherwise 1 */
+	u16 num_gpus;
+	/** @reserved: for future use */
+	u32 reserved[2];
+} __packed;
+
 static void adreno_unbind(struct device *dev);
 static void adreno_input_work(struct work_struct *work);
 static int adreno_soft_reset(struct kgsl_device *device);
@@ -72,6 +118,63 @@ static u32 get_ucode_version(const u32 *data)
 
 	version &= ~0xfff;
 	return  version | ((data[3] & 0xfff000) >> 12);
+}
+
+int adreno_populate_ctxt_record_size(struct adreno_device *adreno_dev)
+{
+	struct kgsl_memdesc *memdesc = ADRENO_FW(adreno_dev, ADRENO_FW_SQE)->memdesc;
+	struct ctxt_record_info *info;
+	u32 *hostptr;
+	int i;
+
+	if (!memdesc)
+		return -ENODEV;
+
+	hostptr = (u32 *)memdesc->hostptr;
+
+	/*
+	 * SQE firmware inserts context record magic at offset 5.
+	 * The pointer to context record table is stored at offset 6.
+	 * The values are stored at [23:0].
+	 */
+	if ((hostptr[CTXT_RECORD_MAGIC_OFFSET] &
+		CTXT_RECORD_PAYLOAD_MASK) != CTXT_RECORD_TBL_MAGIC)
+		return -ENODEV;
+
+	/* Calculate the address of the context record table */
+	hostptr += (hostptr[CTXT_TBL_OFFSET] & CTXT_RECORD_PAYLOAD_MASK);
+	info = (struct ctxt_record_info *) hostptr;
+	hostptr += (sizeof(*info) >> 2);
+
+	/* Validate that the entire context record table is within mapped range */
+	if (!HOSTADDR_IN_MEMDESC((void *)(hostptr +
+		((u64) info->num_gpus * (u64) info->dwords_per_gpu)), memdesc))
+		return -EACCES;
+
+	for (i = 0; i < info->num_gpus; i++) {
+		struct gpu_ctxt_record *record = (struct gpu_ctxt_record *) hostptr;
+		u32 major, minor;
+
+		/* Compare the GPU revision to determine context record size */
+		major = FIELD_GET(GENMASK(31, 28), record->hw_version);
+		minor = FIELD_GET(GENMASK(27, 16), record->hw_version);
+
+		if ((ADRENO_REV_MAJOR(ADRENO_GPUREV(adreno_dev)) == major) &&
+			(ADRENO_REV_MINOR(ADRENO_GPUREV(adreno_dev)) == minor)) {
+			adreno_dev->total_ctxt_record_sz = record->ctxt_record_size * SZ_1K;
+
+			/* From v0.2, GMEM size is not exposed through ucode binary */
+			if ((info->version & GENMASK(11, 0)) >= 2)
+				adreno_dev->total_ctxt_record_sz += adreno_gmem_size(adreno_dev);
+
+			adreno_dev->aqe_ctxt_record_sz = record->aqe_size * SZ_1K;
+			return 0;
+		}
+
+		hostptr += info->dwords_per_gpu;
+	}
+
+	return -ENOENT;
 }
 
 int adreno_get_firmware(struct adreno_device *adreno_dev,

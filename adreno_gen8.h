@@ -255,6 +255,8 @@ struct gen8_cp_smmu_info {
 #define GEN8_CP_CTXRECORD_SIZE_IN_BYTES		(13536 * SZ_1K)
 /* Size of preemption record to be dumped in snapshot */
 #define GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES	(128 * 1024)
+/* Size of AQE context record */
+#define GEN8_CP_AQE_CTXRECORD_SIZE_IN_BYTES	(16 * 1024)
 /* Size of the performance counter save/restore block (in bytes) */
 #define GEN8_CP_PERFCOUNTER_SAVE_RESTORE_SIZE	(4 * 1024)
 
@@ -694,5 +696,28 @@ static inline u32 gen8_get_num_slices(struct adreno_device *adreno_dev)
 }
 
 u32 gen8_get_gmem_size(struct adreno_device *adreno_dev);
+
+/**
+ * gen8_populate_ctxt_record_size - Populate the context record size for Gen8 devices
+ * @adreno_dev: Pointer to the adreno device structure
+ *
+ * This function populates the total context record size and AQE context record size
+ * for Gen8 devices.
+ */
+static inline void gen8_populate_ctxt_record_size(struct adreno_device *adreno_dev)
+{
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	int ret;
+
+	ret = adreno_populate_ctxt_record_size(adreno_dev);
+	if (ret) {
+		adreno_dev->total_ctxt_record_sz = gen8_core->ctxt_record_size ?
+			gen8_core->ctxt_record_size : GEN8_CP_CTXRECORD_SIZE_IN_BYTES;
+		adreno_dev->aqe_ctxt_record_sz = GEN8_CP_AQE_CTXRECORD_SIZE_IN_BYTES;
+	}
+
+	adreno_dev->total_ctxt_record_sz = PAGE_ALIGN(adreno_dev->total_ctxt_record_sz);
+	adreno_dev->aqe_ctxt_record_sz = PAGE_ALIGN(adreno_dev->aqe_ctxt_record_sz);
+}
 
 #endif

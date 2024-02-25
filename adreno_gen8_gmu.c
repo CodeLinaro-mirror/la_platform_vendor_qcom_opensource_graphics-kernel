@@ -2323,6 +2323,10 @@ static int gen8_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
+	gen8_populate_ctxt_record_size(adreno_dev);
+
+	gen8_preemption_init(adreno_dev);
+
 	ret = gen8_gpu_boot(adreno_dev);
 	if (ret)
 		return ret;

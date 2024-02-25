@@ -2637,8 +2637,8 @@ int gen8_probe_common(struct platform_device *pdev,
 
 	/* Dump additional AQE 16KB data on top of default 128KB(64(BR)+64(BV)) */
 	device->snapshot_ctxt_record_size = ADRENO_FEATURE(adreno_dev, ADRENO_AQE) ?
-			(GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES + SZ_16K) :
-			GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES;
+		(GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES + GEN8_CP_AQE_CTXRECORD_SIZE_IN_BYTES) :
+		GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES;
 
 	return 0;
 }

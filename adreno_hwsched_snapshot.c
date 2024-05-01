@@ -288,6 +288,15 @@ void adreno_hwsched_snapshot_preemption_records(struct kgsl_device *device,
 	u64 rb0_ctxt_record_size = PAGE_ALIGN(adreno_dev->total_ctxt_record_sz);
 	int i;
 
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_DEFER_GMEM_ALLOC)) {
+		struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+
+		for (i = 0; i < KGSL_PRIORITY_MAX_RB_LEVELS; i++)
+			snapshot_preemption_record(device, snapshot,
+				hwsched->preempt_rec[i], 0, hwsched->preempt_rec[i]->size);
+		return;
+	}
+
 	/* Check whether GMU has removed GMEM size from RB0 context record */
 	if (md->size == (rb0_ctxt_record_size * KGSL_PRIORITY_MAX_RB_LEVELS)) {
 		do_div(ctxt_record_size, KGSL_PRIORITY_MAX_RB_LEVELS);

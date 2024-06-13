@@ -286,7 +286,7 @@ static int snapshot_context_queue(int id, void *ptr, void *data)
 	desc.type = SNAPSHOT_GMU_MEM_CONTEXT_QUEUE;
 	kgsl_snapshot_add_section(context->device,
 		KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-		snapshot, gen8_snapshot_gmu_mem, &desc);
+		snapshot, adreno_snapshot_gmu_mem, &desc);
 
 	return 0;
 }
@@ -394,7 +394,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 			desc.type = SNAPSHOT_GMU_MEM_HW_FENCE;
 			kgsl_snapshot_add_section(device,
 				KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-				snapshot, gen8_snapshot_gmu_mem, &desc);
+				snapshot, adreno_snapshot_gmu_mem, &desc);
 		}
 
 	}
@@ -402,25 +402,6 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 	read_lock(&device->context_lock);
 	idr_for_each(&device->context_idr, snapshot_context_queue, snapshot);
 	read_unlock(&device->context_lock);
-}
-
-static int gmu_clock_set_rate(struct adreno_device *adreno_dev)
-{
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	int ret = 0;
-
-	/* Switch to min GMU clock */
-	gen8_rdpm_cx_freq_update(gmu, gmu->freqs[0] / 1000);
-
-	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "gmu_clk",
-			gmu->freqs[0]);
-	if (ret)
-		dev_err(&gmu->pdev->dev, "GMU clock:%d set failed:%d\n",
-			gmu->freqs[0], ret);
-
-	trace_kgsl_gmu_pwrlevel(gmu->freqs[0], gmu->freqs[GMU_MAX_PWRLEVELS - 1]);
-
-	return ret;
 }
 
 static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
@@ -575,7 +556,7 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	ret = gmu_clock_set_rate(adreno_dev);
+	ret = gen8_gmu_clock_set_rate(adreno_dev, gmu->freqs[0]);
 	if (ret) {
 		gen8_hwsched_hfi_stop(adreno_dev);
 		goto err;
@@ -663,7 +644,7 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	ret = gmu_clock_set_rate(adreno_dev);
+	ret = gen8_gmu_clock_set_rate(adreno_dev, gmu->freqs[0]);
 	if (ret) {
 		gen8_hwsched_hfi_stop(adreno_dev);
 		goto err;
@@ -1455,8 +1436,8 @@ static void scale_gmu_frequency(struct adreno_device *adreno_dev, int buslevel)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	static unsigned long prev_freq;
-	unsigned long freq = gmu->freqs[0];
+	u32 cur_freq = gmu->cur_freq;
+	u32 req_freq = gmu->freqs[0];
 
 	if (!gmu->perf_ddr_bw)
 		return;
@@ -1466,22 +1447,12 @@ static void scale_gmu_frequency(struct adreno_device *adreno_dev, int buslevel)
 	 * a higher frequency
 	 */
 	if (pwr->ddr_table[buslevel] >= gmu->perf_ddr_bw)
-		freq = gmu->freqs[GMU_MAX_PWRLEVELS - 1];
+		req_freq = gmu->freqs[GMU_MAX_PWRLEVELS - 1];
 
-	if (prev_freq == freq)
+	if (cur_freq == req_freq)
 		return;
 
-	if (kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "gmu_clk", freq)) {
-		dev_err(&gmu->pdev->dev, "Unable to set the GMU clock to %ld\n",
-			freq);
-		return;
-	}
-
-	gen8_rdpm_cx_freq_update(gmu, freq / 1000);
-
-	trace_kgsl_gmu_pwrlevel(freq, prev_freq);
-
-	prev_freq = freq;
+	gen8_gmu_clock_set_rate(adreno_dev, req_freq);
 }
 
 static int gen8_hwsched_bus_set(struct adreno_device *adreno_dev, int buslevel,

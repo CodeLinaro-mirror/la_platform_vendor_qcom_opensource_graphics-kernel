@@ -684,6 +684,14 @@ bool gen8_gmu_gx_is_on(struct adreno_device *adreno_dev)
 	return is_on(val);
 }
 
+bool gen8_gmu_rpmh_pwr_state_is_active(struct kgsl_device *device)
+{
+	u32 val;
+
+	gmu_core_regread(device, GEN8_GMUCX_RPMH_POWER_STATE, &val);
+	return (val == GPU_HW_ACTIVE) ? true : false;
+}
+
 static const char *idle_level_name(int level)
 {
 	if (level == GPU_HW_ACTIVE)
@@ -854,6 +862,9 @@ void gen8_gmu_register_config(struct adreno_device *adreno_dev)
 
 	/* Clear any previously set cm3 fault */
 	atomic_set(&gmu->cm3_fault, 0);
+
+	/* Init the power state register before GMU turns on GX */
+	gmu_core_regwrite(device, GEN8_GMUCX_RPMH_POWER_STATE, 0xF);
 
 	/* Vote veto for FAL10 */
 	gmu_core_regwrite(device, GEN8_GMUCX_CX_FALNEXT_INTF, 0x1);
@@ -1872,7 +1883,9 @@ static int gen8_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	if (gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1) {
+	if (gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1 &&
+		!WARN_ONCE(!adreno_dev->gpucore->num_ddr_channels,
+			"Number of DDR channel is not specified in gpu core")) {
 		adreno_dev->gmu_ab = true;
 		set_bit(ADRENO_DEVICE_GMU_AB, &adreno_dev->priv);
 	}
@@ -1926,6 +1939,9 @@ static int gen8_gmu_boot(struct adreno_device *adreno_dev)
 	 * register access which happens to be just after enabling clocks.
 	 */
 	gen8_enable_ahb_timeout_detection(adreno_dev);
+
+	/* Initialize the CX timer */
+	gen8_cx_timer_init(adreno_dev);
 
 	ret = gen8_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
@@ -2105,8 +2121,6 @@ static int gen8_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 	return ret;
 }
 
-#define NUM_CHANNELS 4
-
 u32 gen8_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab)
 {
 	u16 vote = 0;
@@ -2121,7 +2135,7 @@ u32 gen8_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab)
 	 * max ddr bandwidth (kbps) = (Max bw in kbps per channel * number of channel)
 	 * max ab (Mbps) = max ddr bandwidth (kbps) / 1000
 	 */
-	max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * NUM_CHANNELS;
+	max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * adreno_dev->gpucore->num_ddr_channels;
 	max_ab = max_bw / 1000;
 
 	/*

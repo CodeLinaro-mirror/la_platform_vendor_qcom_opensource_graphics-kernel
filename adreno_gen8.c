@@ -140,7 +140,6 @@ static const u32 gen8_pwrup_reglist[] = {
 	GEN8_UCHE_TRAP_BASE_LO,
 	GEN8_UCHE_TRAP_BASE_HI,
 	GEN8_UCHE_CLIENT_PF,
-	GEN8_VSC_BIN_SIZE,
 	GEN8_VSC_KMD_DBG_ECO_CNTL,
 	GEN8_RB_CMP_NC_MODE_CNTL,
 	GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP,
@@ -165,7 +164,6 @@ static const u32 gen8_3_0_pwrup_reglist[] = {
 	GEN8_UCHE_TRAP_BASE_LO,
 	GEN8_UCHE_TRAP_BASE_HI,
 	GEN8_UCHE_CLIENT_PF,
-	GEN8_VSC_BIN_SIZE,
 	GEN8_RB_CMP_NC_MODE_CNTL,
 	GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP,
 	GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_LO,
@@ -742,7 +740,7 @@ void gen8_cx_timer_init(struct adreno_device *adreno_dev)
 	int i;
 	unsigned long flags;
 
-	/* Set up the CX timer just once */
+	/* Set it up during first boot or after suspend resume */
 	if (test_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv))
 		return;
 
@@ -920,6 +918,9 @@ static void gen8_protect_init(struct adreno_device *adreno_dev)
 				       FIELD_PREP(GENMASK(30, 18), count) |
 				       FIELD_PREP(BIT(31), regs[i].noaccess),
 				       PIPE_LPAC, 0, 0);
+
+	/* Clear aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 }
 
 static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
@@ -1165,6 +1166,9 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		}
 	}
 	mutex_unlock(&gen8_dev->nc_mutex);
+
+	/* Clear aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 
 	lock->dynamic_list_len = gen8_dev->ext_pwrup_list_len;
 }
@@ -2397,6 +2401,8 @@ int gen8_probe_common(struct platform_device *pdev,
 static u32 gen8_register_offsets[ADRENO_REG_REGISTER_MAX] = {
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_BASE, GEN8_CP_RB_BASE_LO_GC),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_BASE_HI, GEN8_CP_RB_BASE_HI_GC),
+	ADRENO_REG_DEFINE(ADRENO_REG_CP_LPAC_RB_BASE, GEN8_CP_RB_BASE_LO_LPAC),
+	ADRENO_REG_DEFINE(ADRENO_REG_CP_LPAC_RB_BASE_HI, GEN8_CP_RB_BASE_HI_LPAC),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_RPTR, GEN8_CP_RB_RPTR_BR),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_WPTR, GEN8_CP_RB_WPTR_GC),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_ME_CNTL, GEN8_CP_SQE_CNTL),
@@ -2864,7 +2870,7 @@ static void gen8_lpac_fault_header(struct adreno_device *adreno_dev,
 	pr_context(device, drawobj->context, "lpac cmdline: %s\n",
 		   drawctxt->base.proc_priv->cmdline);
 
-	if (!gx_on)
+	if (!gen8_gmu_rpmh_pwr_state_is_active(device) || !gx_on)
 		goto done;
 
 	kgsl_regread(device, GEN8_RBBM_LPAC_STATUS, &status);
@@ -2920,7 +2926,7 @@ static void gen8_fault_header(struct adreno_device *adreno_dev,
 			   drawctxt->base.proc_priv->cmdline);
 	}
 
-	if (!gx_on)
+	if (!gen8_gmu_rpmh_pwr_state_is_active(device) || !gx_on)
 		goto done;
 
 	kgsl_regread(device, GEN8_RBBM_STATUS, &status);

@@ -495,6 +495,8 @@ struct adreno_gpu_core {
 	u32 bus_width;
 	/** @snapshot_size: Size of the static snapshot region in bytes */
 	u32 snapshot_size;
+	/** @num_ddr_channels: Number of DDR channels */
+	u32 num_ddr_channels;
 };
 
 /**
@@ -831,6 +833,8 @@ enum adreno_regs {
 	ADRENO_REG_CP_ME_RAM_DATA,
 	ADRENO_REG_CP_RB_BASE,
 	ADRENO_REG_CP_RB_BASE_HI,
+	ADRENO_REG_CP_LPAC_RB_BASE,
+	ADRENO_REG_CP_LPAC_RB_BASE_HI,
 	ADRENO_REG_CP_RB_RPTR_ADDR_LO,
 	ADRENO_REG_CP_RB_RPTR_ADDR_HI,
 	ADRENO_REG_CP_RB_RPTR,
@@ -1306,7 +1310,7 @@ static inline int adreno_is_gen8_0_x_family(struct adreno_device *adreno_dev)
 		adreno_is_gen8_4_0(adreno_dev);
 }
 
-/* Gen7 target which does not support concurrent binning */
+/* Gen7 targets which does not support concurrent binning */
 static inline int adreno_is_gen7_no_cb_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen7_14_0(adreno_dev) || adreno_is_gen7_3_0(adreno_dev);

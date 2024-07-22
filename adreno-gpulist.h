@@ -2048,6 +2048,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_0_1 = {
 };
 
 extern const struct gen7_snapshot_block_list gen7_2_0_snapshot_block_list;
+extern const struct gen7_snapshot_block_list gen7_6_0_snapshot_block_list;
 
 static const struct kgsl_regmap_list gen7_2_0_gbif_regs[] = {
 	{ GEN7_GBIF_QSB_SIDE0, 0x00071620 },
@@ -2282,6 +2283,8 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_3_0 = {
 	.zap_name = "a710_zap.mdt",
 	.hwcg = gen7_3_0_hwcg_regs,
 	.hwcg_count = ARRAY_SIZE(gen7_3_0_hwcg_regs),
+	.ao_hwcg = gen7_0_0_ao_hwcg_regs,
+	.ao_hwcg_count = ARRAY_SIZE(gen7_0_0_ao_hwcg_regs),
 	.gbif = gen7_3_0_gbif_regs,
 	.gbif_count = ARRAY_SIZE(gen7_3_0_gbif_regs),
 	.hang_detect_cycles = 0xcfffff,
@@ -2289,7 +2292,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_3_0 = {
 	.highest_bank_bit = 15,
 	.gen7_snapshot_block_list = &gen7_3_0_snapshot_block_list,
 	.preempt_level = 1,
-	.ctxt_record_size = (2860 * SZ_1K),
+	.ctxt_record_size = (862 * SZ_1K),
 };
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_4_0 = {
@@ -2359,7 +2362,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_6_0 = {
 	.highest_bank_bit = 16,
 	.gmu_hub_clk_freq = 200000000,
 	.bcl_data = 1,
-	.gen7_snapshot_block_list = &gen7_2_0_snapshot_block_list,
+	.gen7_snapshot_block_list = &gen7_6_0_snapshot_block_list,
 	.qos_value = gen7_6_0_gbif_client_qos_values,
 	.preempt_level = 1,
 	.ctxt_record_size = (4192 * SZ_1K),
@@ -2436,6 +2439,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 		.gmem_size = 3 * SZ_1M,
 		.bus_width = 32,
 		.snapshot_size = SZ_8M,
+		.num_ddr_channels = 4,
 	},
 	.aqefw_name = "gen70900_aqe.fw",
 	.sqefw_name = "gen70900_sqe.fw",
@@ -2474,6 +2478,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
 		.gmem_size = 3 * SZ_1M,
 		.bus_width = 32,
 		.snapshot_size = SZ_8M,
+		.num_ddr_channels = 4,
 	},
 	.aqefw_name = "gen70900_aqe.fw",
 	.sqefw_name = "gen70900_sqe.fw",
@@ -2545,6 +2550,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_11_0 = {
 		.gmem_size = SZ_1M + SZ_512K,
 		.bus_width = 32,
 		.snapshot_size = SZ_4M,
+		.num_ddr_channels = 4,
 	},
 	.gmu_fw_version = GMU_VERSION(4, 5, 0),
 	.sqefw_name = "gen71100_sqe.fw",
@@ -2776,7 +2782,6 @@ static const struct gen8_nonctxt_regs gen8_0_0_nonctxt_regs[] = {
 	{ GEN8_VFD_CB_BUSY_REQ_CNT, 0x00200020, BIT(PIPE_BR) | BIT(PIPE_BV) },
 	{ GEN8_VFD_CB_LP_REQ_CNT, 0x00100020, BIT(PIPE_BR) | BIT(PIPE_BV) },
 	{ GEN8_VPC_FLATSHADE_MODE_CNTL, 0x00000001, BIT(PIPE_BR) | BIT(PIPE_BV) },
-	{ GEN8_VSC_BIN_SIZE, 0x00010001, BIT(PIPE_NONE) },
 	/* Disable redundant tile data optimization */
 	{ GEN8_VSC_KMD_DBG_ECO_CNTL, BIT(11), BIT(PIPE_NONE)},
 	{ 0 },
@@ -2856,6 +2861,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 		.gmem_size = 12 * SZ_1M,
 		.bus_width = 32,
 		.snapshot_size = SZ_8M,
+		.num_ddr_channels = 4,
 	},
 	.aqefw_name = "gen80000_aqe.fw",
 	.sqefw_name = "gen80000_sqe.fw",
@@ -2875,6 +2881,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 	.bcl_data = 1,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
+	.ctxt_record_size = (13536 * SZ_1K),
 };
 
 static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
@@ -2893,6 +2900,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
 		.gmem_size = 12 * SZ_1M,
 		.bus_width = 32,
 		.snapshot_size = SZ_8M,
+		.num_ddr_channels = 4,
 	},
 	.aqefw_name = "gen80000_aqe.fw",
 	.sqefw_name = "gen80000_sqe.fw",
@@ -2912,6 +2920,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
 	.bcl_data = 1,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
+	.ctxt_record_size = (13536 * SZ_1K),
 };
 
 /* GEN8_4_0 noncontext register list */
@@ -2972,7 +2981,6 @@ static const struct gen8_nonctxt_regs gen8_4_0_nonctxt_regs[] = {
 	{ GEN8_VFD_CB_BUSY_REQ_CNT, 0x00200020, BIT(PIPE_BR) | BIT(PIPE_BV) },
 	{ GEN8_VFD_CB_LP_REQ_CNT, 0x00100020, BIT(PIPE_BR) | BIT(PIPE_BV) },
 	{ GEN8_VPC_FLATSHADE_MODE_CNTL, 0x00000001, BIT(PIPE_BR) | BIT(PIPE_BV) },
-	{ GEN8_VSC_BIN_SIZE, 0x00010001, BIT(PIPE_NONE) },
 	/* Disable redundant tile data optimization */
 	{ GEN8_VSC_KMD_DBG_ECO_CNTL, BIT(11), BIT(PIPE_NONE)},
 	{ 0 },
@@ -2997,6 +3005,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 		.gmem_size = 12 * SZ_1M,
 		.bus_width = 32,
 		.snapshot_size = SZ_8M,
+		.num_ddr_channels = 4,
 	},
 	.aqefw_name = "gen80000_aqe.fw",
 	.sqefw_name = "gen80000_sqe.fw",
@@ -3015,6 +3024,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 	.qos_value = gen8_4_0_gbif_client_qos_values,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.bcl_data = 1,
+	.ctxt_record_size = (13536 * SZ_1K),
+	.noc_timeout_us = 3410, /* 3.41 msec */
 };
 
 extern const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list;
@@ -3030,12 +3041,6 @@ static const struct kgsl_regmap_list gen8_3_0_gbif_cx_regs[] = {
 /* GEN8_3_0 noncontext register list */
 static const struct gen8_nonctxt_regs gen8_3_0_nonctxt_regs[] = {
 	{ GEN8_CP_SMMU_STREAM_ID_LPAC, 0x00000101, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_CNTLT, 0xf0004000, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_MASKL_0, 0x00000003, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_MASKL_2, 0xffffffff, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_MASKL_3, 0xffffffff, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_BYTEL_0, 0x00000008, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_BYTEL_1, 0x76543210, BIT(PIPE_NONE) },
 	{ GEN8_GRAS_DBG_ECO_CNTL, 0x00f80800, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_PC_AUTO_VERTEX_STRIDE, 0x00000001, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_PC_VIS_STREAM_CNTL, 0x10010000, BIT(PIPE_BV) | BIT(PIPE_BR) },
@@ -3074,7 +3079,6 @@ static const struct gen8_nonctxt_regs gen8_3_0_nonctxt_regs[] = {
 	{ GEN8_VFD_CB_BUSY_REQ_CNT, 0x00200020, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_VFD_CB_LP_REQ_CNT, 0x00100020, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_VPC_FLATSHADE_MODE_CNTL, 0x00000001, BIT(PIPE_BV) | BIT(PIPE_BR) },
-	{ GEN8_VSC_BIN_SIZE, 0x00010001, BIT(PIPE_NONE) },
 	{ GEN8_RB_GC_GMEM_PROTECT, 0x00900000, BIT(PIPE_BR) },
 	{ 0 },
 };
@@ -3092,6 +3096,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_3_0 = {
 		.gmem_size = (SZ_512K + SZ_64K),
 		.bus_width = 32,
 		.snapshot_size = SZ_8M,
+		.num_ddr_channels = 2,
 	},
 	.sqefw_name = "gen80300_sqe.fw",
 	.gmufw_name = "gen80300_gmu.bin",

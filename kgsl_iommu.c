@@ -8,6 +8,7 @@
 #include <linux/compat.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
+#include <linux/of_device.h>
 #include <linux/of_platform.h>
 #include <linux/scatterlist.h>
 #include <linux/qcom-iommu-util.h>
@@ -1257,6 +1258,13 @@ static int kgsl_iommu_fault_handler(struct kgsl_mmu *mmu,
 	kgsl_context_put(context);
 	kgsl_process_private_put(private);
 
+	/*
+	 * Fallback to smmu fault handler during globals faults to print useful
+	 * debug information.
+	 */
+	if (!stall && kgsl_iommu_addr_is_global(mmu, addr))
+		return -ENOSYS;
+
 	/* Return -EBUSY to keep the IOMMU driver from resuming on a stall */
 	return stall ? -EBUSY : 0;
 }
@@ -2466,6 +2474,8 @@ static int kgsl_iommu_setup_context(struct kgsl_mmu *mmu,
 		/*FIXME: Put back the pdev here? */
 		return -ENODEV;
 	}
+
+	qcom_iommu_set_fault_model(context->domain, QCOM_IOMMU_FAULT_MODEL_NON_FATAL);
 
 	_enable_gpuhtw_llc(mmu, context->domain);
 

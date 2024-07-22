@@ -794,6 +794,14 @@ bool gen7_gmu_gx_is_on(struct adreno_device *adreno_dev)
 	return is_on(val);
 }
 
+static bool gen7_gmu_rpmh_pwr_state_is_active(struct kgsl_device *device)
+{
+	u32 val;
+
+	gmu_core_regread(device, GEN7_GPU_GMU_CX_GMU_RPMH_POWER_STATE, &val);
+	return (val == GPU_HW_ACTIVE) ? true : false;
+}
+
 static const char *idle_level_name(int level)
 {
 	if (level == GPU_HW_ACTIVE)
@@ -1513,7 +1521,14 @@ static void gen7_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	_do_gbif_halt(device, GEN7_GBIF_HALT, GEN7_GBIF_HALT_ACK,
 			GEN7_GBIF_ARB_HALT_MASK, "CX");
 
-	if (gen7_gmu_gx_is_on(adreno_dev))
+	/*
+	 * GX_CXO_CLK is needed to access RBBM_SW_RESET_CMD register. There are
+	 * scenarios where the IFPC exit sequence is still in progress, and the
+	 * above clock may not be enabled. This situation leads to unclocked
+	 * access. Thus, trigger RBBM_SW_RESET_CMD only when GPU is fully active
+	 * i.e., IFPC sequence is completed.
+	 */
+	if (gen7_gmu_gx_is_on(adreno_dev) && gen7_gmu_rpmh_pwr_state_is_active(device))
 		kgsl_regwrite(device, GEN7_RBBM_SW_RESET_CMD, 0x1);
 
 	/* Make sure above writes are posted before turning off power resources */
@@ -2046,7 +2061,9 @@ static int gen7_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto err;
 
 	if (adreno_gmu_ab_support(adreno_dev) &&
-		gen7_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1) {
+		gen7_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1 &&
+		!WARN_ONCE(!adreno_dev->gpucore->num_ddr_channels,
+			"Number of DDR channel is not specified in gpu core")) {
 		adreno_dev->gmu_ab = true;
 		set_bit(ADRENO_DEVICE_GMU_AB, &adreno_dev->priv);
 	}
@@ -2100,6 +2117,9 @@ static int gen7_gmu_boot(struct adreno_device *adreno_dev)
 	 * register access which happens to be just after enabling clocks.
 	 */
 	gen7_enable_ahb_timeout_detection(adreno_dev);
+
+	/* Initialize the CX timer */
+	gen7_cx_timer_init(adreno_dev);
 
 	ret = gen7_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
@@ -2286,8 +2306,6 @@ static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 	return ret;
 }
 
-#define NUM_CHANNELS 4
-
 u32 gen7_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab)
 {
 	u16 vote = 0;
@@ -2302,7 +2320,7 @@ u32 gen7_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab)
 	 * max ddr bandwidth (kbps) = (Max bw in kbps per channel * number of channel)
 	 * max ab (Mbps) = max ddr bandwidth (kbps) / 1000
 	 */
-	max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * NUM_CHANNELS;
+	max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * adreno_dev->gpucore->num_ddr_channels;
 	max_ab = max_bw / 1000;
 
 	/*

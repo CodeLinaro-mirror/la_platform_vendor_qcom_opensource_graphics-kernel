@@ -107,7 +107,7 @@ def external_deps(target, variant):
 
     if target in [ "monaco", "parrot" ]:
         deplist = deplist + [
-            "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers"
+            "//vendor/qcom/opensource/monaco/mm-drivers/hw_fence:hw_fence_headers"
             ]
 
     native.genrule(

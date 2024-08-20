@@ -5,7 +5,6 @@
  */
 
 #include <linux/iommu.h>
-#include <linux/sched/clock.h>
 #include <soc/qcom/msm_performance.h>
 
 #include "adreno.h"
@@ -439,7 +438,7 @@ static void process_ctx_bad(struct adreno_device *adreno_dev)
 	else
 		log_gpu_fault(adreno_dev);
 
-	adreno_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_HARD_FAULT);
 }
 
 static u32 peek_next_header(struct a6xx_gmu_device *gmu, uint32_t queue_idx)
@@ -495,7 +494,7 @@ static void a6xx_hwsched_process_msgq(struct adreno_device *adreno_dev)
 		if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
 			a6xx_receive_ack_async(adreno_dev, rcvd);
 		} else if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_TS_RETIRE) {
-			adreno_hwsched_trigger(adreno_dev);
+			adreno_scheduler_queue(adreno_dev);
 			log_profiling_info(adreno_dev, rcvd);
 		} else if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_GMU_CNTR_RELEASE) {
 			struct hfi_gmu_cntr_release_cmd *cmd =
@@ -554,7 +553,7 @@ static void a6xx_hwsched_process_dbgq(struct adreno_device *adreno_dev, bool lim
 	if (!recovery)
 		return;
 
-	adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 }
 
 /* HFI interrupt handler */
@@ -583,7 +582,7 @@ static irqreturn_t a6xx_hwsched_hfi_handler(int irq, void *data)
 
 	if (status & (HFI_IRQ_MSGQ_MASK | HFI_IRQ_DBGQ_MASK)) {
 		wake_up_interruptible(&hfi->f2h_wq);
-		adreno_hwsched_trigger(adreno_dev);
+		adreno_scheduler_queue(adreno_dev);
 	}
 	if (status & HFI_IRQ_CM3_FAULT_MASK) {
 		atomic_set(&gmu->cm3_fault, 1);
@@ -594,7 +593,7 @@ static irqreturn_t a6xx_hwsched_hfi_handler(int irq, void *data)
 		dev_err_ratelimited(&gmu->pdev->dev,
 				"GMU CM3 fault interrupt received\n");
 
-		adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 
 	/* Ignore OOB bits */
@@ -1238,8 +1237,7 @@ int a6xx_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	ret = a6xx_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_A6XX_KPROF,
-			1, 0);
+	ret = a6xx_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_KPROF, 1, 0);
 	if (ret)
 		goto err;
 
@@ -1570,67 +1568,6 @@ void a6xx_hwsched_hfi_remove(struct adreno_device *adreno_dev)
 		kthread_stop(hw_hfi->f2h_task);
 }
 
-static void a6xx_add_profile_events(struct adreno_device *adreno_dev,
-	struct kgsl_drawobj_cmd *cmdobj, struct adreno_submit_time *time)
-{
-	unsigned long flags;
-	u64 time_in_s;
-	unsigned long time_in_ns;
-	struct kgsl_drawobj *drawobj = DRAWOBJ(cmdobj);
-	struct kgsl_context *context = drawobj->context;
-	struct submission_info info = {0};
-
-	if (!time)
-		return;
-
-	/*
-	 * Here we are attempting to create a mapping between the
-	 * GPU time domain (alwayson counter) and the CPU time domain
-	 * (local_clock) by sampling both values as close together as
-	 * possible. This is useful for many types of debugging and
-	 * profiling. In order to make this mapping as accurate as
-	 * possible, we must turn off interrupts to avoid running
-	 * interrupt handlers between the two samples.
-	 */
-
-	local_irq_save(flags);
-
-	/* Read always on registers */
-	time->ticks = a6xx_read_alwayson(adreno_dev);
-
-	/* Trace the GPU time to create a mapping to ftrace time */
-	trace_adreno_cmdbatch_sync(context->id, context->priority,
-		drawobj->timestamp, time->ticks);
-
-	/* Get the kernel clock for time since boot */
-	time->ktime = local_clock();
-
-	/* Get the timeofday for the wall time (for the user) */
-	ktime_get_real_ts64(&time->utime);
-
-	local_irq_restore(flags);
-
-	/* Return kernel clock time to the client if requested */
-	time_in_s = time->ktime;
-	time_in_ns = do_div(time_in_s, 1000000000);
-
-	info.inflight = -1;
-	info.rb_id = adreno_get_level(context);
-	info.gmu_dispatch_queue = context->gmu_dispatch_queue;
-
-	cmdobj->submit_ticks = time->ticks;
-
-	msm_perf_events_update(MSM_PERF_GFX, MSM_PERF_SUBMIT,
-		pid_nr(context->proc_priv->pid),
-		context->id, drawobj->timestamp,
-		!!(drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME));
-	trace_adreno_cmdbatch_submitted(drawobj, &info, time->ticks,
-		(unsigned long) time_in_s, time_in_ns / 1000, 0);
-
-	log_kgsl_cmdbatch_submitted_event(context->id, drawobj->timestamp,
-		context->priority, drawobj->flags);
-}
-
 static u32 get_next_dq(u32 priority)
 {
 	struct dq_info *info = &a6xx_hfi_dqs[priority];
@@ -1717,7 +1654,7 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 			context->id, ret);
 
 		if (device->gmu_fault)
-			adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+			adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 
 		return ret;
 	}
@@ -1729,7 +1666,7 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 			context->id, ret);
 
 		if (device->gmu_fault)
-			adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+			adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 
 		return ret;
 	}
@@ -1820,7 +1757,7 @@ static int a6xx_hfi_dispatch_queue_write(struct adreno_device *adreno_dev, uint3
 	if (!cmdobj)
 		goto done;
 
-	a6xx_add_profile_events(adreno_dev, cmdobj, time);
+	adreno_hwsched_add_profile_events(adreno_dev, cmdobj, time);
 
 	/*
 	 * Put the profiling information in the user profiling buffer.
@@ -1936,7 +1873,7 @@ int a6xx_hwsched_send_recurring_cmdobj(struct adreno_device *adreno_dev,
 	int ret;
 	static bool active;
 
-	if (adreno_gpu_halt(adreno_dev) || adreno_hwsched_gpu_fault(adreno_dev))
+	if (adreno_gpu_halt(adreno_dev) || adreno_gpu_fault(adreno_dev))
 		return -EBUSY;
 
 	if (test_bit(CMDOBJ_RECURRING_STOP, &cmdobj->priv)) {
@@ -2027,7 +1964,7 @@ static void trigger_context_unregister_fault(struct adreno_device *adreno_dev,
 	 * replayed after recovery.
 	 */
 	adreno_drawctxt_set_guilty(device, context);
-	adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 }
 
 static int send_context_unregister_hfi(struct adreno_device *adreno_dev,

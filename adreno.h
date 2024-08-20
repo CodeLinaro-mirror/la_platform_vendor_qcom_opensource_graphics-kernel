@@ -214,6 +214,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A530 = 530,
 	ADRENO_REV_A540 = 540,
 	ADRENO_REV_A610 = 610,
+	ADRENO_REV_A611 = 611,
 	ADRENO_REV_A612 = 612,
 	ADRENO_REV_A615 = 615,
 	ADRENO_REV_A616 = 616,
@@ -515,11 +516,8 @@ struct adreno_dispatch_ops {
 			struct adreno_context *drawctxt);
 	void (*setup_context)(struct adreno_device *adreno_dev,
 			struct adreno_context *drawctxt);
-	void (*fault)(struct adreno_device *adreno_dev, u32 fault);
 	/* @create_hw_fence: Create a hardware fence */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev, struct kgsl_sync_fence *kfence);
-	/* @get_fault: Get the GPU fault status */
-	u32 (*get_fault)(struct adreno_device *adreno_dev);
 };
 
 /**
@@ -758,7 +756,22 @@ struct adreno_device {
 	struct adreno_fault_proc fault_procs[ADRENO_MAX_FAULTING_PROCS];
 	/** @fault_stats_lock: A R/W lock to protect GPU fault statistics */
 	rwlock_t fault_stats_lock;
+	/** @fault_recovery_mutex: Mutex taken during fault handling in the dispatcher */
+	struct mutex fault_recovery_mutex;
+	/** @pm_nb: Notifier block for defining a callback that gets called during system suspend */
+	struct notifier_block pm_nb;
+	/** @suspend_recovery_gate: Gate to wait on for system to come out of suspend */
+	struct completion suspend_recovery_gate;
+	/** @scheduler_worker: kthread worker for scheduling gpu commands */
+	struct kthread_worker *scheduler_worker;
+	/** @scheduler_work: work_struct to put the gpu command scheduler in a work queue */
+	struct kthread_work scheduler_work;
+	/** @scheduler_fault: Atomic to trigger scheduler based fault recovery */
+	atomic_t scheduler_fault;
 };
+
+/* Time to wait for suspend recovery gate to complete */
+#define ADRENO_SUSPEND_RECOVERY_GATE_TIMEOUT_MS 5000
 
 /**
  * enum adreno_device_flags - Private flags for the adreno_device
@@ -823,6 +836,20 @@ struct adreno_drawobj_profile_entry {
 	 ((_index) * sizeof(struct adreno_drawobj_profile_entry) \
 	  + offsetof(struct adreno_drawobj_profile_entry, _member))
 
+/**
+ * struct adreno_submit_time - utility structure to store the wall clock / GPU
+ * ticks at command submit time
+ * @ticks: GPU ticks at submit time (from the 19.2Mhz timer)
+ * @ktime: local clock time (in nanoseconds)
+ * @utime: Wall clock time
+ * @drawobj: the object that we want to profile
+ */
+struct adreno_submit_time {
+	u64 ticks;
+	u64 ktime;
+	struct timespec64 utime;
+	struct kgsl_drawobj *drawobj;
+};
 
 /**
  * adreno_regs: List of registers that are used in kgsl driver for all
@@ -1055,6 +1082,7 @@ extern const struct adreno_gpudev adreno_a5xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_rgmu_gpudev;
 extern const struct adreno_gpudev adreno_a619_holi_gpudev;
+extern const struct adreno_gpudev adreno_a611_gpudev;
 
 extern int adreno_wake_nice;
 extern unsigned int adreno_wake_timeout;
@@ -1179,6 +1207,7 @@ static inline int adreno_is_a660_shima(struct adreno_device *adreno_dev)
 }
 
 ADRENO_TARGET(a610, ADRENO_REV_A610)
+ADRENO_TARGET(a611, ADRENO_REV_A611)
 ADRENO_TARGET(a612, ADRENO_REV_A612)
 ADRENO_TARGET(a618, ADRENO_REV_A618)
 ADRENO_TARGET(a619, ADRENO_REV_A619)
@@ -1253,6 +1282,13 @@ static inline int adreno_is_a620(struct adreno_device *adreno_dev)
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
 
 	return (rev == ADRENO_REV_A620 || rev == ADRENO_REV_A621);
+}
+
+static inline int adreno_is_a610_family(struct adreno_device *adreno_dev)
+{
+	u32 rev = ADRENO_GPUREV(adreno_dev);
+
+	return (rev == ADRENO_REV_A610 || rev == ADRENO_REV_A611);
 }
 
 static inline int adreno_is_a612_family(struct adreno_device *adreno_dev)
@@ -1434,7 +1470,7 @@ static inline unsigned int adreno_gpu_fault(struct adreno_device *adreno_dev)
 {
 	/* make sure we're reading the latest value */
 	smp_rmb();
-	return atomic_read(&adreno_dev->dispatcher.fault);
+	return atomic_read(&adreno_dev->scheduler_fault);
 }
 
 /**
@@ -1447,7 +1483,7 @@ static inline void adreno_set_gpu_fault(struct adreno_device *adreno_dev,
 	int state)
 {
 	/* only set the fault bit w/o overwriting other bits */
-	atomic_or(state, &adreno_dev->dispatcher.fault);
+	atomic_or(state, &adreno_dev->scheduler_fault);
 
 	/* make sure other CPUs see the update */
 	smp_wmb();
@@ -1459,13 +1495,33 @@ static inline void adreno_set_gpu_fault(struct adreno_device *adreno_dev,
  *
  * Clear the GPU fault status for the adreno device
  */
-
 static inline void adreno_clear_gpu_fault(struct adreno_device *adreno_dev)
 {
-	atomic_set(&adreno_dev->dispatcher.fault, 0);
+	atomic_set(&adreno_dev->scheduler_fault, 0);
 
 	/* make sure other CPUs see the update */
 	smp_wmb();
+}
+
+/**
+ * adreno_scheduler_queue - Queue the scheduler kthread
+ * @adreno_dev: Adreno device handle
+ */
+static inline void adreno_scheduler_queue(struct adreno_device *adreno_dev)
+{
+	kthread_queue_work(adreno_dev->scheduler_worker, &adreno_dev->scheduler_work);
+}
+
+/**
+ * adreno_scheduler_fault() - Set GPU fault and trigger fault recovery
+ * @adreno_dev: A pointer to an adreno_device structure
+ * @fault: Type of fault
+ */
+static inline void adreno_scheduler_fault(struct adreno_device *adreno_dev,
+		u32 fault)
+{
+	adreno_set_gpu_fault(adreno_dev, fault);
+	adreno_scheduler_queue(adreno_dev);
 }
 
 /**

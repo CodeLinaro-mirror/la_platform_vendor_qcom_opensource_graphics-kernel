@@ -1079,6 +1079,7 @@ static void kgsl_iommu_print_fault(struct kgsl_mmu *mmu,
 	const char *fault_type = NULL;
 	const char *comm = NULL;
 	u32 ptname = KGSL_MMU_GLOBAL_PT;
+	struct adreno_context *drawctxt = context ? ADRENO_CONTEXT(context) : NULL;
 	int id;
 
 	if (private) {
@@ -1112,8 +1113,9 @@ static void kgsl_iommu_print_fault(struct kgsl_mmu *mmu,
 		return;
 
 	dev_crit(device->dev,
-		"GPU PAGE FAULT: addr = %lX pid= %d name=%s drawctxt=%d context pid = %d\n", addr,
-		ptname, comm, contextid, context ? context->tid : 0);
+		"GPU PAGE FAULT: addr = %lX group id= %d name=%s drawctxt=%d context pid = %d ctx_type=%s\n",
+		addr, ptname, comm, contextid, context ? context->tid : 0,
+		drawctxt ? kgsl_context_type(drawctxt->type) : "ANY");
 
 	dev_crit(device->dev,
 		"context=%s TTBR0=0x%llx (%s %s fault)\n",
@@ -1250,9 +1252,7 @@ static int kgsl_iommu_fault_handler(struct kgsl_mmu *mmu,
 		ctx->stalled_on_fault = true;
 
 		/* Go ahead with recovery*/
-		if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->fault)
-			adreno_dev->dispatch_ops->fault(adreno_dev,
-				ADRENO_IOMMU_PAGE_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_IOMMU_PAGE_FAULT);
 	}
 
 	kgsl_context_put(context);
@@ -2547,8 +2547,10 @@ static int iommu_probe_user_context(struct kgsl_device *device,
 
 	/* Make the default pagetable */
 	mmu->defaultpagetable = kgsl_iommu_default_pagetable(mmu);
-	if (IS_ERR(mmu->defaultpagetable))
-		return PTR_ERR(mmu->defaultpagetable);
+	if (IS_ERR(mmu->defaultpagetable)) {
+		ret = PTR_ERR(mmu->defaultpagetable);
+		goto err;
+	}
 
 	/* If IOPGTABLE isn't enabled then we are done */
 	if (!test_bit(KGSL_MMU_IOPGTABLE, &mmu->features))
@@ -2566,16 +2568,15 @@ static int iommu_probe_user_context(struct kgsl_device *device,
 	kgsl_iommu_set_ttbr0(&iommu->lpac_context, mmu, &pt->info.cfg);
 
 	ret = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
-	if (ret < 0) {
-		kgsl_iommu_detach_context(&iommu->lpac_context);
+	if (ret < 0)
 		goto err;
-	}
 
 	return 0;
 
 err:
 	kgsl_mmu_putpagetable(mmu->defaultpagetable);
 	mmu->defaultpagetable = NULL;
+	kgsl_iommu_detach_context(&iommu->lpac_context);
 	kgsl_iommu_detach_context(&iommu->user_context);
 
 	return ret;

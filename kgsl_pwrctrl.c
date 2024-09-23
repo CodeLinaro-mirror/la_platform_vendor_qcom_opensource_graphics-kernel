@@ -76,16 +76,12 @@ static void _bimc_clk_prepare_enable(struct kgsl_device *device,
  */
 static u32 _adjust_pwrlevel(struct kgsl_pwrctrl *pwr, u32 level, struct kgsl_pwr_constraint *pwrc)
 {
-	u32 thermal_pwrlevel = READ_ONCE(pwr->thermal_pwrlevel);
-	u32 max_pwrlevel = max_t(u32, thermal_pwrlevel,
-					pwr->max_pwrlevel);
-	u32 min_pwrlevel = pwr->min_pwrlevel;
-
+	u32 thermal_pwrlevel = max_t(u32, READ_ONCE(pwr->thermal_pwrlevel),
+			READ_ONCE(pwr->pmqos_max_pwrlevel));
 	/* Ensure that max pwrlevel is within pmqos max limit */
-	max_pwrlevel = max_t(u32, max_pwrlevel, READ_ONCE(pwr->pmqos_max_pwrlevel));
-
+	u32 max_pwrlevel = max_t(u32, pwr->max_pwrlevel, thermal_pwrlevel);
 	/* Ensure that min pwrlevel is within thermal limit */
-	min_pwrlevel = max_t(u32, min_pwrlevel, thermal_pwrlevel);
+	u32 min_pwrlevel = max_t(u32, pwr->min_pwrlevel, thermal_pwrlevel);
 
 	switch (pwrc->type) {
 	case KGSL_CONSTRAINT_PWRLEVEL: {
@@ -137,11 +133,10 @@ static void kgsl_pwrctrl_pwrlevel_change_settings(struct kgsl_device *device,
  * @device: Pointer to the kgsl_device struct
  * @new_level: Requested powerlevel, an index into the pwrlevel array
  */
-unsigned int kgsl_pwrctrl_adjust_pwrlevel(struct kgsl_device *device,
-				unsigned int new_level)
+static u32 kgsl_pwrctrl_adjust_pwrlevel(struct kgsl_device *device, u32 new_level)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	unsigned int old_level = pwr->active_pwrlevel;
+	u32 old_level = pwr->active_pwrlevel;
 	bool reset = false;
 
 	/* If a pwr constraint is expired, remove it */
@@ -543,12 +538,13 @@ static ssize_t gpuclk_store(struct device *dev,
 	if (ret)
 		return ret;
 
-	mutex_lock(&device->mutex);
 	level = _get_nearest_pwrlevel(pwr, val);
-	if (level >= 0)
+	if (level >= 0) {
+		mutex_lock(&device->mutex);
 		kgsl_pwrctrl_pwrlevel_change(device, (unsigned int) level);
+		mutex_unlock(&device->mutex);
+	}
 
-	mutex_unlock(&device->mutex);
 	return count;
 }
 
@@ -1770,7 +1766,6 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 	struct kgsl_device *device = container_of(pwr, struct kgsl_device, pwrctrl);
 	u32 max_freq = val * 1000;
 	int level;
-	u32 thermal_pwrlevel;
 
 	if (!device->pwrscale.devfreq_enabled)
 		return NOTIFY_DONE;
@@ -1788,14 +1783,6 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 		return NOTIFY_OK;
 
 	pwr->pmqos_max_pwrlevel = level;
-
-	/*
-	 * Since thermal constraint is already applied prior to this, if qos constraint is same as
-	 * thermal constraint, we can return early here.
-	 */
-	thermal_pwrlevel = READ_ONCE(pwr->thermal_pwrlevel);
-	if (pwr->pmqos_max_pwrlevel == thermal_pwrlevel)
-		return NOTIFY_OK;
 
 	trace_kgsl_thermal_constraint(max_freq);
 
@@ -1851,7 +1838,6 @@ static int kgsl_cooling_set_cur_state(struct thermal_cooling_device *cooling_dev
 
 	mutex_unlock(&device->mutex);
 
-	queue_work(kgsl_driver.workqueue, &pwr->cooling_ws);
 	return 0;
 }
 
@@ -1860,15 +1846,6 @@ static const struct thermal_cooling_device_ops kgsl_cooling_ops = {
 	.get_cur_state = kgsl_cooling_get_cur_state,
 	.set_cur_state = kgsl_cooling_set_cur_state,
 };
-
-static void do_pmqos_update(struct work_struct *work)
-{
-	struct kgsl_pwrctrl *pwr = container_of(work, struct kgsl_pwrctrl, cooling_ws);
-	u32 thermal_pwrlevel = READ_ONCE(pwr->thermal_pwrlevel);
-	u32 freq = pwr->pwrlevels[thermal_pwrlevel].gpu_freq;
-
-	dev_pm_qos_update_request(&pwr->pmqos_max_freq, DIV_ROUND_UP(freq, HZ_PER_KHZ));
-}
 
 static int register_thermal_cooling_device(struct kgsl_device *device, struct device_node *np)
 {
@@ -1880,8 +1857,6 @@ static int register_thermal_cooling_device(struct kgsl_device *device, struct de
 			DEV_PM_QOS_MAX_FREQUENCY, PM_QOS_MAX_FREQUENCY_DEFAULT_VALUE);
 	if (ret)
 		goto err;
-
-	INIT_WORK(&pwr->cooling_ws, do_pmqos_update);
 
 	pwr->cooling_dev = thermal_of_cooling_device_register(np, name, device,
 			&kgsl_cooling_ops);
@@ -2540,7 +2515,7 @@ int kgsl_active_count_wait(struct kgsl_device *device, int count,
  * kgsl_pwrctrl_set_default_gpu_pwrlevel() - Set GPU to default power level
  * @device: Pointer to the kgsl_device struct
  */
-int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device)
+static int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	unsigned int new_level = pwr->default_pwrlevel;
@@ -2557,6 +2532,19 @@ int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device)
 
 	/* Request adjusted DCVS level */
 	return device->ftbl->gpu_clock_set(device, pwr->active_pwrlevel);
+}
+
+int kgsl_pwrctrl_setup_default_votes(struct kgsl_device *device)
+{
+	int ret;
+
+	/* Request default DCVS level */
+	ret = kgsl_pwrctrl_set_default_gpu_pwrlevel(device);
+	if (ret)
+		return ret;
+
+	/* Request default BW vote */
+	return kgsl_pwrctrl_axi(device, true);
 }
 
 u32 kgsl_pwrctrl_get_acv_perfmode_lvl(struct kgsl_device *device, u32 ddr_freq)

@@ -4,7 +4,7 @@
  * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
-#include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
+#include <dt-bindings/power/qcom-rpmpd.h>
 #include <linux/clk.h>
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -1396,6 +1396,8 @@ static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	/* Make sure above writes are committed before we proceed to recovery */
 	wmb();
 
+	gmu_core_regwrite(device, GEN8_GMUCX_CM3_SYSRESET, 1);
+
 	/* Halt CX traffic */
 	_do_gbif_halt(device, GEN8_GBIF_HALT, GEN8_GBIF_HALT_ACK,
 			GEN8_GBIF_ARB_HALT_MASK, "CX");
@@ -2536,29 +2538,6 @@ error:
 	return ret;
 }
 
-static void gen8_gmu_active_count_put(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
-		return;
-
-	if (WARN(atomic_read(&device->active_cnt) == 0,
-		"Unbalanced get/put calls to KGSL active count\n"))
-		return;
-
-	if (atomic_dec_and_test(&device->active_cnt)) {
-		kgsl_pwrscale_update_stats(device);
-		kgsl_pwrscale_update(device);
-		kgsl_start_idle_timer(device);
-	}
-
-	trace_kgsl_active_count(device,
-		(unsigned long) __builtin_return_address(0));
-
-	wake_up(&device->active_cnt_wq);
-}
-
 int gen8_halt_gbif(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2993,7 +2972,7 @@ static int gen8_gmu_first_open(struct adreno_device *adreno_dev)
 	 * check by incrementing the active count and immediately releasing it.
 	 */
 	atomic_inc(&device->active_cnt);
-	gen8_gmu_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 
 	return 0;
 }
@@ -3140,7 +3119,6 @@ const struct adreno_power_ops gen8_gmu_power_ops = {
 	.first_open = gen8_gmu_first_open,
 	.last_close = gen8_gmu_last_close,
 	.active_count_get = gen8_gmu_active_count_get,
-	.active_count_put = gen8_gmu_active_count_put,
 	.pm_suspend = gen8_gmu_pm_suspend,
 	.pm_resume = gen8_gmu_pm_resume,
 	.touch_wakeup = gen8_gmu_touch_wakeup,

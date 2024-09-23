@@ -1285,15 +1285,7 @@ int a6xx_hwsched_hfi_start(struct adreno_device *adreno_dev)
 
 	set_bit(GMU_PRIV_HFI_STARTED, &gmu->flags);
 
-	/* Request default DCVS level */
-	ret = kgsl_pwrctrl_set_default_gpu_pwrlevel(device);
-	if (ret)
-		goto err;
-
-	/* Request default BW vote */
-	ret = kgsl_pwrctrl_axi(device, true);
-	if (ret)
-		goto err;
+	ret = kgsl_pwrctrl_setup_default_votes(device);
 
 err:
 	if (ret)
@@ -2021,7 +2013,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	ret = check_ack_failure(adreno_dev, &pending_ack);
 
 done:
-	a6xx_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 	del_waiter(hfi, &pending_ack);
 
 	return ret;

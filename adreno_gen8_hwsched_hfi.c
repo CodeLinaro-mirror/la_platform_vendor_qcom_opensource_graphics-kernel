@@ -430,7 +430,7 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 		dev_crit_ratelimited(dev,
 			"CP BV | Ringbuffer HW fault | status=0x%8.8x\n",
 			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_HW_FAULT));
+				KEY_CP_BV_HW_FAULT));
 		break;
 	case GMU_CP_BV_ILLEGAL_INST_ERROR:
 		dev_crit_ratelimited(dev, "CP BV Illegal instruction error\n");
@@ -1060,7 +1060,7 @@ static void gen8_defer_hw_fence_work(struct kthread_work *work)
 	 */
 	kgsl_context_put(&drawctxt->base);
 
-	gen8_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 
 	_disable_hw_fence_throttle(adreno_dev, false);
 
@@ -2155,20 +2155,6 @@ int gen8_hwsched_boot_gpu(struct adreno_device *adreno_dev)
 		return gen8_hwsched_coldboot_gpu(adreno_dev);
 }
 
-static int gen8_hwsched_setup_default_votes(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	int ret = 0;
-
-	/* Request default DCVS level */
-	ret = kgsl_pwrctrl_set_default_gpu_pwrlevel(device);
-	if (ret)
-		return ret;
-
-	/* Request default BW vote */
-	return kgsl_pwrctrl_axi(device, true);
-}
-
 int gen8_hwsched_warmboot_init_gmu(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -2184,7 +2170,7 @@ int gen8_hwsched_warmboot_init_gmu(struct adreno_device *adreno_dev)
 
 	set_bit(GMU_PRIV_HFI_STARTED, &gmu->flags);
 
-	ret = gen8_hwsched_setup_default_votes(adreno_dev);
+	ret = kgsl_pwrctrl_setup_default_votes(KGSL_DEVICE(adreno_dev));
 
 err:
 	if (ret) {
@@ -2355,7 +2341,7 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (adreno_dev->warmboot_enabled)
 		set_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
 
-	ret = gen8_hwsched_setup_default_votes(adreno_dev);
+	ret = kgsl_pwrctrl_setup_default_votes(KGSL_DEVICE(adreno_dev));
 
 err:
 	if (ret)
@@ -3645,7 +3631,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 		ret = check_ack_failure(adreno_dev, &pending_ack);
 
 done:
-	gen8_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 	del_waiter(hfi, &pending_ack);
 
 	return ret;
@@ -3682,10 +3668,16 @@ void gen8_hwsched_context_detach(struct adreno_context *drawctxt)
 
 u32 gen8_hwsched_preempt_count_get(struct adreno_device *adreno_dev)
 {
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int ret, preempt_count = 0;
 
-	if (device->state != KGSL_STATE_ACTIVE)
+	ret = gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_TOTAL, &preempt_count);
+	if (ret)
 		return 0;
+
+	if ((preempt_count != 0) || (device->state != KGSL_STATE_ACTIVE))
+		return preempt_count;
 
 	return gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_PREEMPT_COUNT);
 }
@@ -3723,7 +3715,7 @@ int gen8_hwsched_disable_hw_fence_throttle(struct adreno_device *adreno_dev)
 	ret = process_hw_fence_deferred_ctxt(adreno_dev, drawctxt, ts);
 
 	kgsl_context_put(&drawctxt->base);
-	gen8_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 
 done:
 	_disable_hw_fence_throttle(adreno_dev, true);

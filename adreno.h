@@ -633,6 +633,8 @@ struct adreno_device {
 	bool bcl_enabled;
 	/** @clx_enabled: True if CLX is enabled */
 	bool clx_enabled;
+	/** @isense_reg_mapped: True if isense registers are mapped to regmap */
+	bool isense_reg_mapped;
 	/** @lpac_enabled: True if LPAC is enabled */
 	bool lpac_enabled;
 	/** @dms_enabled: True if DMS is enabled */
@@ -1914,6 +1916,15 @@ void adreno_set_active_ctxs_null(struct adreno_device *adreno_dev);
  * gpu bus usage for bus dcvs
  */
 void adreno_get_bus_counters(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_gmu_bus_ab_quantize - Calculate the AB vote that needs to be sent to GMU
+ * @adreno_dev: Handle to the adreno device
+ * @ab: ab request that needs to be scaled in MBps
+ *
+ * Returns the AB value that needs to be prefixed to bandwidth vote in kbps
+ */
+u32 adreno_gmu_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
 
 /**
  * adreno_suspend_context - Make sure device is idle

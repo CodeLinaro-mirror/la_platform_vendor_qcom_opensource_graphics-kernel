@@ -10,6 +10,7 @@
 #include <linux/delay.h>
 
 #include "adreno_gen8_gmu.h"
+#include "adreno_gen8_hwsched_hfi.h"
 #include "gen8_reg.h"
 
 #define GEN8_0_0_NUM_PHYSICAL_SLICES	3
@@ -171,6 +172,10 @@ struct adreno_gen8_core {
 	bool fast_bus_hint;
 	/** @noc_timeout_us: GPU config NOC port timeout in usec */
 	u32 noc_timeout_us;
+	/** @cl_no_ft_timeout_ms: Use this timeout for CL NO_FT instead of infinite */
+	u32 cl_no_ft_timeout_ms;
+	/** @therm_profile: GMU thermal mitigation profile */
+	const struct hfi_therm_profile_ctrl *therm_profile;
 };
 
 /**
@@ -299,8 +304,6 @@ u32 gen8_preemption_post_ibsubmit(struct adreno_device *adreno_dev,
 u32 gen8_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 		struct adreno_ringbuffer *rb, struct adreno_context *drawctxt,
 		u32 *cmds);
-
-u32 gen8_set_marker(u32 *cmds, enum adreno_cp_marker_type type);
 
 void gen8_preemption_callback(struct adreno_device *adreno_dev, int bit);
 

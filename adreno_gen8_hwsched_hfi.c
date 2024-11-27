@@ -2175,6 +2175,33 @@ static void warmboot_init_message_record_bitmask(struct adreno_device *adreno_de
 	clear_bit(H2F_MSG_GX_BW_PERF_VOTE, hfi->wb_set_record_bitmask);
 }
 
+static int gen8_hfi_send_thermal_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	const struct hfi_therm_profile_ctrl *therm = gen8_core->therm_profile;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	static struct hfi_thermaltable_cmd cmd = {0};
+	int ret;
+
+	if (!test_bit(GMU_THERMAL_MITIGATION, &device->gmu_core.flags) || !therm)
+		return 0;
+
+	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_THERMAL, 1, 0);
+	if (ret)
+		return ret;
+
+	if (cmd.version == 0) {
+		ret = CMD_MSG_HDR(cmd, H2F_MSG_THERM_TBL);
+		if (ret)
+			return ret;
+
+		cmd.version = 1;
+		memcpy(&cmd.ctrl, therm, sizeof(*therm));
+	}
+
+	return gen8_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
+}
+
 int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -2228,6 +2255,10 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 		goto err;
 
 	ret = gen8_hfi_send_ifpc_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
+
+	ret = gen8_hfi_send_thermal_feature_ctrl(adreno_dev);
 	if (ret)
 		goto err;
 
@@ -3247,7 +3278,7 @@ static void setup_hw_fence_deferred_ctxt(struct adreno_device *adreno_dev,
 	 * Increment the active count so that device doesn't get powered off until this fence has
 	 * been sent to GMU
 	 */
-	gen8_hwsched_active_count_get(adreno_dev);
+	adreno_active_count_get(adreno_dev);
 }
 
 /**
@@ -3576,7 +3607,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	 * take an active count before releasing the mutex so as to avoid a
 	 * concurrent SLUMBER sequence while GMU is un-registering this context.
 	 */
-	ret = gen8_hwsched_active_count_get(adreno_dev);
+	ret = adreno_active_count_get(adreno_dev);
 	if (ret) {
 		trigger_context_unregister_fault(adreno_dev, drawctxt);
 		return ret;

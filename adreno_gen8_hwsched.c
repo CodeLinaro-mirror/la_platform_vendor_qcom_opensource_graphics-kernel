@@ -599,8 +599,10 @@ static int gen8_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 	gen8_hwsched_init_ucode_regs(adreno_dev);
 
 	ret = gen8_hwsched_boot_gpu(adreno_dev);
-	if (ret)
+	if (ret) {
+		adreno_llcc_slice_deactivate(adreno_dev);
 		goto err;
+	}
 
 	/*
 	 * At this point it is safe to assume that we recovered. Setting
@@ -710,6 +712,9 @@ static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 static int gen8_hwsched_gmu_init(struct adreno_device *adreno_dev)
 {
 	int ret;
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_THERMAL_MITIGATION))
+		set_bit(GMU_THERMAL_MITIGATION, &KGSL_DEVICE(adreno_dev)->gmu_core.flags);
 
 	ret = gen8_gmu_parse_fw(adreno_dev);
 	if (ret)
@@ -1107,7 +1112,7 @@ static int gen8_hwsched_first_open(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-int gen8_hwsched_active_count_get(struct adreno_device *adreno_dev)
+static int gen8_hwsched_active_count_get(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -1271,20 +1276,7 @@ static int gen8_hwsched_pm_suspend(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SUSPEND);
 
-	/* Halt any new submissions */
-	reinit_completion(&device->halt_gate);
-
-	/**
-	 * Wait for the dispatcher to retire everything by waiting
-	 * for the active count to go to zero.
-	 */
-	ret = kgsl_active_count_wait(device, 0, msecs_to_jiffies(100));
-	if (ret) {
-		dev_err(device->dev, "Timed out waiting for the active count\n");
-		goto err;
-	}
-
-	ret = adreno_hwsched_idle(adreno_dev);
+	ret = adreno_hwsched_drain_and_idle(adreno_dev);
 	if (ret)
 		goto err;
 

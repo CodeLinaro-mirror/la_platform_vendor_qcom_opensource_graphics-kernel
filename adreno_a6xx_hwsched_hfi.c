@@ -714,8 +714,8 @@ static int gmu_import_buffer(struct adreno_device *adreno_dev,
 		return -ENOMEM;
 	}
 
-
-	ret = gmu_core_map_memdesc(gmu->domain, entry->md, vma->next_va, attrs);
+	ret = gmu_core_map_memdesc(device->gmu_core.domain,
+			entry->md, vma->next_va, attrs);
 	if (ret) {
 		dev_err(GMU_PDEV_DEV(device), "gmu map err: 0x%08x, %x\n",
 			vma->next_va, attrs);
@@ -1928,7 +1928,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	 * take an active count before releasing the mutex so as to avoid a
 	 * concurrent SLUMBER sequence while GMU is un-registering this context.
 	 */
-	ret = a6xx_hwsched_active_count_get(adreno_dev);
+	ret = adreno_active_count_get(adreno_dev);
 	if (ret) {
 		trigger_context_unregister_fault(adreno_dev, context);
 		return ret;

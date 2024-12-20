@@ -255,12 +255,13 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN8_0_1 = ADRENO_GPUREV_VALUE(8, 0, 1),
 	ADRENO_REV_GEN8_3_0 = ADRENO_GPUREV_VALUE(8, 3, 0),
 	ADRENO_REV_GEN8_4_0 = ADRENO_GPUREV_VALUE(8, 4, 0),
+	ADRENO_REV_GEN8_6_0 = ADRENO_GPUREV_VALUE(8, 6, 0),
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
 #define ADRENO_HARD_FAULT BIT(1)
 #define ADRENO_TIMEOUT_FAULT BIT(2)
-#define ADRENO_IOMMU_PAGE_FAULT BIT(3)
+#define ADRENO_IOMMU_STALL_ON_PAGE_FAULT BIT(3)
 #define ADRENO_PREEMPT_FAULT BIT(4)
 #define ADRENO_GMU_FAULT BIT(5)
 #define ADRENO_CTX_DETATCH_TIMEOUT_FAULT BIT(6)
@@ -1286,6 +1287,7 @@ ADRENO_TARGET(gen8_0_0, ADRENO_REV_GEN8_0_0)
 ADRENO_TARGET(gen8_0_1, ADRENO_REV_GEN8_0_1)
 ADRENO_TARGET(gen8_3_0, ADRENO_REV_GEN8_3_0)
 ADRENO_TARGET(gen8_4_0, ADRENO_REV_GEN8_4_0)
+ADRENO_TARGET(gen8_6_0, ADRENO_REV_GEN8_6_0)
 
 static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
 {
@@ -1308,7 +1310,7 @@ static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 static inline int adreno_is_gen8_0_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen8_0_0(adreno_dev) || adreno_is_gen8_0_1(adreno_dev) ||
-		adreno_is_gen8_4_0(adreno_dev);
+		adreno_is_gen8_4_0(adreno_dev) || adreno_is_gen8_6_0(adreno_dev);
 }
 
 /* Gen7 targets which does not support concurrent binning */

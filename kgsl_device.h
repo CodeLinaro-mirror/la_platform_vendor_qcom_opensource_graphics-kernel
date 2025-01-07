@@ -81,7 +81,8 @@ enum gpu_pwrlevel_op {
 	GPU_PWRLEVEL_OP_MIN_PWRLEVEL,
 	GPU_PWRLEVEL_OP_MAX_PWRLEVEL,
 	GPU_PWRLEVEL_OP_GPUCLK,
-	GPU_PWRLEVEL_OP_PERF_HINT,
+	GPU_PWRLEVEL_OP_PERF_HINT,     /* Mutex grabbed in the ops function */
+	GPU_PWRLEVEL_OP_DCVS_ENABLE,
 };
 
 struct kgsl_device;

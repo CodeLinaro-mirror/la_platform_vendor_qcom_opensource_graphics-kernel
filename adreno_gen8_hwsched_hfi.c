@@ -2002,6 +2002,8 @@ static int gen8_hwsched_set_gmu_based_dcvs_votes(struct adreno_device *adreno_de
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct gen8_hfi *hfi = to_gen8_hfi(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	u32 thermal_pwrlevel = max_t(u32, pwr->thermal_pwrlevel, pwr->pmqos_max_pwrlevel);
 	int ret = 0;
 	bool reset = false;
@@ -2009,6 +2011,11 @@ static int gen8_hwsched_set_gmu_based_dcvs_votes(struct adreno_device *adreno_de
 	/* Disable recording of these messages */
 	if (test_and_clear_bit(H2F_MSG_SET_VALUE, hfi->wb_set_record_bitmask))
 		reset = true;
+
+	if (hwsched->dcvs_param_update)
+		ret = gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev,
+				HFI_VALUE_DCVS_ENABLE, 0,
+				gmu_core->gpu_pwrscale_enable, true);
 
 	if (thermal_pwrlevel != 0)
 		ret = gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev,
@@ -2027,6 +2034,8 @@ static int gen8_hwsched_set_gmu_based_dcvs_votes(struct adreno_device *adreno_de
 
 	if (reset)
 		set_bit(H2F_MSG_SET_VALUE, hfi->wb_set_record_bitmask);
+
+	hwsched->dcvs_param_update = false;
 
 	return ret;
 }

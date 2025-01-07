@@ -564,6 +564,8 @@ struct gmu_core_device {
 	u32 perf_ddr_bw;
 	/** @cur_freq: Tracks scaled frequency for GMU */
 	u32 cur_freq;
+	/** @gpu_pwrscale_enable: Flag to toggle GMU based DCVS pwrscale */
+	bool gpu_pwrscale_enable;
 };
 
 extern struct platform_driver a6xx_gmu_driver;

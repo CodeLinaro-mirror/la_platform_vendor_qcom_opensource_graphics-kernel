@@ -1090,15 +1090,14 @@ static ssize_t pwrscale_store(struct device *dev,
 	if (ret)
 		return ret;
 
-	if (!device->host_based_dcvs)
-		return count;
-
 	mutex_lock(&device->mutex);
 
-	if (enable)
-		kgsl_pwrscale_enable(device);
-	else
-		kgsl_pwrscale_disable(device, false);
+	if (device->ftbl->gmu_based_dcvs_pwr_ops(device, enable, GPU_PWRLEVEL_OP_DCVS_ENABLE)) {
+		if (enable)
+			kgsl_pwrscale_enable(device);
+		else
+			kgsl_pwrscale_disable(device, false);
+	}
 
 	mutex_unlock(&device->mutex);
 
@@ -1110,8 +1109,12 @@ static ssize_t pwrscale_show(struct device *dev,
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
 	struct kgsl_pwrscale *psc = &device->pwrscale;
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 
-	return scnprintf(buf, PAGE_SIZE, "%u\n", psc->enabled);
+	if (device->host_based_dcvs)
+		return scnprintf(buf, PAGE_SIZE, "%u\n", psc->enabled);
+	else
+		return scnprintf(buf, PAGE_SIZE, "%u\n", (u32)gmu_core->gpu_pwrscale_enable);
 }
 
 static DEVICE_ATTR_RO(temp);

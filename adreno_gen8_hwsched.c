@@ -1535,6 +1535,23 @@ ssize_t gen8_hwsched_preempt_info_get(struct adreno_device *adreno_dev, char *bu
 	return count;
 }
 
+static void gen8_hwsched_set_dcvs_enable(struct adreno_device *adreno_dev, u32 enable)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+
+	gmu_core->gpu_pwrscale_enable = (enable >= 1) ? 1 : enable;
+
+	if (device->state == KGSL_STATE_ACTIVE) {
+		/* If GMU is up, send the HFI */
+		gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev, HFI_VALUE_DCVS_ENABLE, 0,
+				gmu_core->gpu_pwrscale_enable, false);
+	} else {
+		hwsched->dcvs_param_update = true;
+	}
+}
+
 void gen8_hwsched_set_pwrconstraint(struct adreno_device *adreno_dev,
 		u32 context_id)
 {
@@ -1628,6 +1645,7 @@ static void gen8_hwsched_set_maxpwrlevel(struct adreno_device *adreno_dev, u32 v
 static void gen8_hwsched_gmu_based_dcvs_pwr_ops(struct adreno_device *adreno_dev, u32 arg,
 		enum gpu_pwrlevel_op op)
 {
+	/* For all ops except GPU_PWRLEVEL_OP_PERF_HINT, caller must hold the device mutex */
 	switch (op) {
 	case GPU_PWRLEVEL_OP_THERMAL:
 		gen8_hwsched_set_thermal_index(adreno_dev);
@@ -1648,6 +1666,9 @@ static void gen8_hwsched_gmu_based_dcvs_pwr_ops(struct adreno_device *adreno_dev
 		gen8_hwsched_set_pwrconstraint(adreno_dev, arg);
 		mutex_unlock(&device->mutex);
 		}
+		break;
+	case GPU_PWRLEVEL_OP_DCVS_ENABLE:
+		gen8_hwsched_set_dcvs_enable(adreno_dev, arg);
 		break;
 	}
 }

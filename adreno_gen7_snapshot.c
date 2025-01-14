@@ -380,7 +380,7 @@ static size_t gen7_legacy_snapshot_shader(struct kgsl_device *device,
 	 * AHB path might fail. Hence, skip SP_INST_TAG and SP_INST_DATA*
 	 * state types during snapshot dump in legacy flow.
 	 */
-	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0(adreno_dev)) {
+	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0_family(adreno_dev)) {
 		if (block->statetype == SP_INST_TAG ||
 			block->statetype == SP_INST_DATA ||
 			block->statetype == SP_INST_DATA_1 ||
@@ -716,7 +716,7 @@ static void gen7_snapshot_shader(struct kgsl_device *device,
 		void *priv) = gen7_legacy_snapshot_shader;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
-	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0(adreno_dev))
+	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0_family(adreno_dev))
 		kgsl_regrmw(device, GEN7_SP_DBG_CNTL, GENMASK(1, 0), 3);
 
 	if (CD_SCRIPT_CHECK(device)) {
@@ -786,7 +786,7 @@ static void gen7_snapshot_shader(struct kgsl_device *device,
 	}
 
 done:
-	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0(adreno_dev))
+	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0_family(adreno_dev))
 		kgsl_regrmw(device, GEN7_SP_DBG_CNTL, GENMASK(1, 0), 0x0);
 }
 
@@ -1691,21 +1691,20 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	if (is_current_rt)
 		sched_set_normal(current, 0);
 
-	kgsl_regread64(device, GEN7_CP_IB1_BASE_HI, GEN7_CP_IB1_BASE, &snapshot->ib1base);
+	kgsl_regread64(device, GEN7_CP_IB1_BASE, GEN7_CP_IB1_BASE_HI, &snapshot->ib1base);
 
-	kgsl_regread64(device, GEN7_CP_IB2_BASE_HI, GEN7_CP_IB2_BASE, &snapshot->ib2base);
+	kgsl_regread64(device, GEN7_CP_IB2_BASE, GEN7_CP_IB2_BASE_HI, &snapshot->ib2base);
 
-	kgsl_regread64(device, GEN7_CP_IB3_BASE_HI, GEN7_CP_IB3_BASE, &snapshot->ib3base);
+	kgsl_regread64(device, GEN7_CP_IB3_BASE, GEN7_CP_IB3_BASE_HI, &snapshot->ib3base);
 
 	kgsl_regread(device, GEN7_CP_IB1_REM_SIZE, &snapshot->ib1size);
 	kgsl_regread(device, GEN7_CP_IB2_REM_SIZE, &snapshot->ib2size);
 	kgsl_regread(device, GEN7_CP_IB3_REM_SIZE, &snapshot->ib3size);
 
-	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE_HI,
-		GEN7_CP_LPAC_IB1_BASE, &snapshot->ib1base_lpac);
-
-	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE_HI,
-		GEN7_CP_LPAC_IB2_BASE, &snapshot->ib2base_lpac);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE,
+		GEN7_CP_LPAC_IB1_BASE_HI, &snapshot->ib1base_lpac);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE,
+		GEN7_CP_LPAC_IB2_BASE_HI, &snapshot->ib2base_lpac);
 
 	kgsl_regread(device, GEN7_CP_LPAC_IB1_REM_SIZE, &snapshot->ib1size_lpac);
 	kgsl_regread(device, GEN7_CP_LPAC_IB2_REM_SIZE, &snapshot->ib2size_lpac);

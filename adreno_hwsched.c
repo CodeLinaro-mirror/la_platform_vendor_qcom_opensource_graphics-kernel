@@ -1311,10 +1311,10 @@ void adreno_hwsched_deregister_hw_fence(struct adreno_device *adreno_dev)
 
 	kgsl_hw_fence_close(KGSL_DEVICE(adreno_dev));
 
-	if (hwsched->hw_fence_md.sgt)
-		sg_free_table(hwsched->hw_fence_md.sgt);
+	if (hwsched->hw_fence.md.sgt)
+		sg_free_table(hwsched->hw_fence.md.sgt);
 
-	memset(&hwsched->hw_fence_md, 0x0, sizeof(hwsched->hw_fence_md));
+	memset(&hwsched->hw_fence.md, 0x0, sizeof(hwsched->hw_fence.md));
 
 	kmem_cache_destroy(hwsched->hw_fence_cache);
 
@@ -1347,6 +1347,15 @@ static void adreno_hwsched_dispatcher_close(struct adreno_device *adreno_dev)
 static void force_retire_timestamp(struct kgsl_device *device,
 	struct kgsl_drawobj *drawobj)
 {
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+
+	if (test_bit(ADRENO_HWSCHED_FORCE_RETIRE_GMU, &adreno_dev->hwsched.flags)) {
+		struct kgsl_drawobj_cmd *cmdobj = CMDOBJ(drawobj);
+
+		set_bit(CMDOBJ_NOP_SUBMISSION, &cmdobj->priv);
+		return;
+	}
+
 	kgsl_sharedmem_writel(device->memstore,
 		KGSL_MEMSTORE_OFFSET(drawobj->context->id, soptimestamp),
 		drawobj->timestamp);
@@ -1685,13 +1694,12 @@ static void print_fault_syncobj(struct adreno_device *adreno_dev,
 	}
 }
 
-static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adreno_dev, int fault)
+static void adreno_hwsched_snapshot_legacy(struct adreno_device *adreno_dev, int fault)
 {
 	struct kgsl_drawobj *drawobj = NULL;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_context *context = NULL;
 	struct cmd_list_obj *obj;
-	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct hfi_context_bad_cmd_legacy *cmd = hwsched->ctxt_bad;
 
@@ -1701,7 +1709,7 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
 		print_fault_syncobj(adreno_dev, cmd->ctxt_id, cmd->ts);
 		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
-		goto done;
+		return;
 	}
 
 	/*
@@ -1712,7 +1720,7 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 	 * faulted.
 	 */
 	obj = get_fault_cmdobj(adreno_dev, cmd->ctxt_id, cmd->ts);
-	if (!obj && (fault & ADRENO_IOMMU_PAGE_FAULT))
+	if (!obj && (fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT))
 		obj = get_active_cmdobj(adreno_dev);
 
 	if (obj) {
@@ -1733,7 +1741,7 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		else
 			kgsl_device_snapshot(device, NULL, NULL, false);
-		goto done;
+		return;
 	}
 
 	context = drawobj->context;
@@ -1757,12 +1765,9 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 	 * faulted command object
 	 */
 	kgsl_drawobj_put(drawobj);
-done:
-	memset(hwsched->ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
-	gpudev->reset(adreno_dev);
 }
 
-static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, int fault)
+static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 {
 	struct kgsl_drawobj *drawobj = NULL;
 	struct kgsl_drawobj *drawobj_lpac = NULL;
@@ -1781,7 +1786,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
 		print_fault_syncobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
 		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
-		goto done;
+		return;
 	}
 
 	/*
@@ -1794,7 +1799,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 	obj = get_fault_cmdobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
 	obj_lpac = get_fault_cmdobj(adreno_dev, cmd->lpac.ctxt_id, cmd->lpac.ts);
 
-	if (!obj && (fault & ADRENO_IOMMU_PAGE_FAULT))
+	if (!obj && (fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT))
 		obj = get_active_cmdobj(adreno_dev);
 
 	if (obj) {
@@ -1810,7 +1815,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	do_fault_header(adreno_dev, drawobj, fault);
 
-	if (!obj_lpac && (fault & ADRENO_IOMMU_PAGE_FAULT))
+	if (!obj_lpac && (fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT))
 		obj_lpac = get_active_cmdobj_lpac(adreno_dev);
 
 	if (!obj && !obj_lpac) {
@@ -1820,7 +1825,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 			kgsl_device_snapshot(device, NULL, NULL, false);
 
 		adreno_gpufault_stats(adreno_dev, NULL, NULL, fault);
-		goto done;
+		return;
 	}
 
 	if (obj)
@@ -1866,9 +1871,6 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 		 */
 		kgsl_drawobj_put(drawobj_lpac);
 	}
-done:
-	memset(hwsched->ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
-	gpudev->reset(adreno_dev);
 }
 
 static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
@@ -1902,19 +1904,24 @@ static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
 
 	mutex_lock(&device->mutex);
 
-	if (device->state != KGSL_STATE_ACTIVE)
-		goto skip_snapshot;
+	if (device->state == KGSL_STATE_ACTIVE) {
+		/*
+		 * Halt CP for page faults here. CP is halted from GMU when required,
+		 * for other faults.
+		 */
+		if ((fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT) && adreno_gx_is_on(adreno_dev))
+			adreno_writereg(adreno_dev, ADRENO_REG_CP_ME_CNTL, 0);
 
-	/* Halt CP for page faults here. CP is halted from GMU when required, for other faults. */
-	if ((fault & ADRENO_IOMMU_PAGE_FAULT) && adreno_gx_is_on(adreno_dev))
-		adreno_writereg(adreno_dev, ADRENO_REG_CP_ME_CNTL, 0);
+		if (test_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &hwsched->flags))
+			adreno_hwsched_snapshot_legacy(adreno_dev, fault);
+		else
+			adreno_hwsched_snapshot(adreno_dev, fault);
 
-	if (test_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &hwsched->flags))
-		adreno_hwsched_reset_and_snapshot_legacy(adreno_dev, fault);
-	else
-		adreno_hwsched_reset_and_snapshot(adreno_dev, fault);
+		memset(hwsched->ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
 
-skip_snapshot:
+		adreno_gpudev_reset(adreno_dev);
+	}
+
 	adreno_scheduler_queue(adreno_dev);
 
 	mutex_unlock(&device->mutex);
@@ -1976,10 +1983,6 @@ static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	if (kgsl_context_is_bad(context))
 		return;
 
-	if (!kgsl_hw_fence_tx_slot_available(KGSL_DEVICE(adreno_dev),
-		&adreno_dev->hwsched.hw_fence_count))
-		return;
-
 	hwsched_ops->create_hw_fence(adreno_dev, kfence);
 }
 
@@ -2019,6 +2022,7 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 	int i;
 
 	memset(hwsched, 0, sizeof(*hwsched));
@@ -2059,6 +2063,9 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
 		INIT_WORK(&hwsched->lsr_check_ws, hwsched_lsr_check);
 		timer_setup(&hwsched->lsr_timer, hwsched_lsr_timer, 0);
 	}
+
+	init_waitqueue_head(&hwf->unack_wq);
+	spin_lock_init(&hwf->lock);
 
 	return 0;
 }
@@ -2288,16 +2295,16 @@ void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev)
 	 * We need to set up the memory descriptor with the physical address of the Tx/Rx Queues so
 	 * that these buffers can be imported in to GMU VA space
 	 */
-	kgsl_memdesc_init(device, &hwsched->hw_fence_md, 0);
-	kgsl_hw_fence_populate_md(device, &hwsched->hw_fence_md);
+	kgsl_memdesc_init(device, &hwsched->hw_fence.md, 0);
+	kgsl_hw_fence_populate_md(device, &hwsched->hw_fence.md);
 
-	ret = kgsl_memdesc_sg_dma(&hwsched->hw_fence_md, hwsched->hw_fence_md.physaddr,
-		hwsched->hw_fence_md.size);
+	ret = kgsl_memdesc_sg_dma(&hwsched->hw_fence.md, hwsched->hw_fence.md.physaddr,
+		hwsched->hw_fence.md.size);
 	if (ret) {
 		dev_err(device->dev, "Failed to setup HW fences memdesc: %d\n",
 			ret);
 		kgsl_hw_fence_close(device);
-		memset(&hwsched->hw_fence_md, 0x0, sizeof(hwsched->hw_fence_md));
+		memset(&hwsched->hw_fence.md, 0x0, sizeof(hwsched->hw_fence.md));
 		return;
 	}
 
@@ -2472,7 +2479,7 @@ u32 adreno_hwsched_get_payload_rb_key(struct adreno_device *adreno_dev, u32 rb_i
 	return 0;
 }
 
-void adreno_hwsched_log_destroy_pending_hw_fences(struct adreno_device *adreno_dev,
+void adreno_hwsched_log_remove_pending_hw_fences(struct adreno_device *adreno_dev,
 	struct device *dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2492,7 +2499,6 @@ void adreno_hwsched_log_destroy_pending_hw_fences(struct adreno_device *adreno_d
 			if (count < ARRAY_SIZE(entries))
 				memcpy(&entries[count], entry, sizeof(*entry));
 			count++;
-			kgsl_hw_fence_destroy(entry->kfence);
 			adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 		}
 
@@ -2625,8 +2631,11 @@ void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct adreno_context *drawctxt = entry->drawctxt;
+	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 
-	atomic_dec(&hwsched->hw_fence_count);
+	spin_lock(&hwf->lock);
+	hwf->pending_count--;
+	spin_unlock(&hwf->lock);
 	drawctxt->hw_fence_count--;
 
 	dma_fence_put(&entry->kfence->fence);

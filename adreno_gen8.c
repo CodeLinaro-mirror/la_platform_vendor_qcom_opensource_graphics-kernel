@@ -167,7 +167,6 @@ static const u32 gen8_2_0_pwrup_reglist[] = {
 	GEN8_UCHE_TRAP_BASE_LO,
 	GEN8_UCHE_TRAP_BASE_HI,
 	GEN8_UCHE_CLIENT_PF,
-	GEN8_VSC_KMD_DBG_ECO_CNTL,
 	GEN8_RB_CMP_NC_MODE_CNTL,
 	GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_LO,
 	GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_HI,
@@ -286,6 +285,7 @@ static const u32 gen8_2_0_ifpc_pwrup_reglist[] = {
 	GEN8_RBBM_NC_MODE_CNTL,
 	GEN8_RBBM_SLICE_NC_MODE_CNTL,
 	GEN8_SP_NC_MODE_CNTL,
+	GEN8_SP_CHICKEN_BITS,
 	GEN8_SP_CHICKEN_BITS_2,
 	GEN8_SP_CHICKEN_BITS_3,
 	GEN8_SP_PERFCTR_SHADER_MASK,
@@ -293,6 +293,8 @@ static const u32 gen8_2_0_ifpc_pwrup_reglist[] = {
 	GEN8_TPL1_DBG_ECO_CNTL1,
 	GEN8_TPL1_NC_MODE_CNTL,
 	GEN8_RBBM_SLICE_INTERFACE_HANG_INT_CNTL,
+	GEN8_SP_HLSQ_DBG_ECO_CNTL_1,
+	GEN8_SP_HLSQ_DBG_ECO_CNTL_2,
 	GEN8_SP_HLSQ_LPAC_GMEM_RANGE_MIN_LO,
 	GEN8_SP_HLSQ_LPAC_GMEM_RANGE_MIN_HI,
 	GEN8_SP_CHICKEN_BITS_1,
@@ -873,7 +875,9 @@ int gen8_init(struct adreno_device *adreno_dev)
 	mutex_init(&gen8_dev->nc_mutex);
 
 	/* Debugfs node for noncontext registers override */
-	debugfs_create_file("nc_override", 0644, device->d_debugfs, device, &nc_override_fops);
+	if (!debugfs_lookup("nc_override", device->d_debugfs))
+		debugfs_create_file("nc_override", 0644,
+			device->d_debugfs, device, &nc_override_fops);
 
 	return adreno_allocate_global(device, &adreno_dev->pwrup_reglist,
 		PAGE_SIZE, 0, 0, KGSL_MEMDESC_PRIVILEGED,
@@ -950,6 +954,31 @@ void gen8_get_gpu_feature_info(struct adreno_device *adreno_dev)
 		adreno_dev->lpac_enabled = feature_fuse & BIT(GEN8_LPAC_SW_FUSE);
 
 	adreno_dev->feature_fuse = feature_fuse;
+}
+
+void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
+{
+	u32 slice_mask;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
+
+	if (adreno_is_gen8_2_0(adreno_dev)) {
+		kgsl_regread(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_FINAL, &slice_mask);
+		slice_mask = FIELD_GET(GENMASK(3, 0), slice_mask);
+
+		/*
+		 * Update the chipid with the number of active slices. This is the number
+		 * of bits set in the slice mask.
+		 */
+		adreno_dev->chipid |= FIELD_PREP(GENMASK(7, 4), hweight32(slice_mask));
+	} else if (adreno_is_gen8_3_0(adreno_dev))
+		slice_mask = GENMASK(GEN8_3_0_NUM_PHYSICAL_SLICES - 1, 0);
+	else if (adreno_is_gen8_6_0(adreno_dev))
+		slice_mask = GENMASK(GEN8_6_0_NUM_PHYSICAL_SLICES - 1, 0);
+	else
+		slice_mask = GENMASK(GEN8_0_0_NUM_PHYSICAL_SLICES - 1, 0);
+
+	gen8_dev->slice_mask = slice_mask;
 }
 
 void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id,

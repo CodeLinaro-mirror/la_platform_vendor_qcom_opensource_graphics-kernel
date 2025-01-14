@@ -51,11 +51,6 @@ struct a6xx_gmu_device {
 	u32 vlvls[GMU_MAX_PWRLEVELS];
 	struct kgsl_mailbox mailbox;
 	bool preallocations;
-	/** @gmu_globals: Array to store gmu global buffers */
-	struct kgsl_memdesc gmu_globals[GMU_KERNEL_ENTRIES];
-	/** @global_entries: To keep track of number of gmu buffers */
-	u32 global_entries;
-	struct gmu_vma_entry *vma;
 	unsigned int log_wptr_retention;
 	/** @cm3_fault: whether gmu received a cm3 fault interrupt */
 	atomic_t cm3_fault;
@@ -319,11 +314,12 @@ void a6xx_gmu_irq_disable(struct adreno_device *adreno_dev);
 /**
  * a6xx_gmu_suspend - Hard reset the gpu and gmu
  * @adreno_dev: Pointer to the adreno device
+ * @force: Set to true to enforce a hard reset
  *
  * In case we hit a gmu fault, hard reset the gpu and gmu
  * to recover from the fault
  */
-void a6xx_gmu_suspend(struct adreno_device *adreno_dev);
+void a6xx_gmu_suspend(struct adreno_device *adreno_dev, bool force);
 
 /**
  * a6xx_gmu_oob_set - send gmu oob request

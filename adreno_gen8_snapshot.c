@@ -687,6 +687,25 @@ err_clk_put:
 	clk_put(clk);
 }
 
+static size_t gen8_snapshot_slice_mask(struct kgsl_device *device, u8 *buf,
+		size_t remain, void *priv)
+{
+	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
+	u32 *data = (u32 *)(buf + sizeof(*header));
+
+	if (remain < DEBUG_SECTION_SZ(1)) {
+		SNAPSHOT_ERR_NOMEM(device, "SLICE MASK DEBUG");
+		return 0;
+	}
+
+	/* Dump the slice information */
+	header->type = SNAPSHOT_DEBUG_SLICE_MASK;
+	header->size = 1;
+	*data = gen8_get_slice_mask(ADRENO_DEVICE(device));
+
+	return DEBUG_SECTION_SZ(1);
+}
+
 static bool gen8_snapshot_shader(struct kgsl_device *device,
 				struct kgsl_snapshot *snapshot)
 {
@@ -1715,6 +1734,9 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 		if (!gen8_cx_misc_regs_snapshot(device, snapshot))
 			return;
 	}
+
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, gen8_snapshot_slice_mask, NULL);
 
 	gen8_snapshot_cx_debugbus(adreno_dev, snapshot);
 

@@ -198,6 +198,7 @@ int a6xx_init(struct adreno_device *adreno_dev)
 	if (of_fdt_get_ddrtype() == 0x7) {
 		if (adreno_is_a660_shima(adreno_dev) ||
 			adreno_is_a642l(adreno_dev) ||
+			adreno_is_a643(adreno_dev) ||
 			adreno_is_a662(adreno_dev) ||
 			adreno_is_gen6_3_26_0(adreno_dev))
 			adreno_dev->highest_bank_bit = 14;
@@ -824,8 +825,9 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		kgsl_regwrite(device, A6XX_CP_CHICKEN_DBG, 0x1);
 		kgsl_regwrite(device, A6XX_RBBM_GBIF_CLIENT_QOS_CNTL, 0x0);
 
-		/* Set dualQ + disable afull for A660 GPU but not for A642L */
-		if (!adreno_is_a642l(adreno_dev))
+		/* Set dualQ + disable afull for A660 GPU but not for A642L and A643  */
+		if (!adreno_is_a642l(adreno_dev) ||
+			!adreno_is_a643(adreno_dev))
 			kgsl_regwrite(device, A6XX_UCHE_CMDQ_CONFIG, 0x66906);
 	}
 

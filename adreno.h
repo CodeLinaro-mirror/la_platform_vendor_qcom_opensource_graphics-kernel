@@ -264,8 +264,8 @@ enum adreno_gpurev {
 	ADRENO_REV_A621 = 621,
 	ADRENO_REV_A622 = 622,
 	ADRENO_REV_A630 = 630,
-	ADRENO_REV_A635 = 635,
 	ADRENO_REV_A640 = 640,
+	ADRENO_REV_A642 = 642,
 	ADRENO_REV_A650 = 650,
 	ADRENO_REV_A660 = 660,
 	ADRENO_REV_A662 = 662,
@@ -1224,6 +1224,13 @@ static inline int adreno_is_a6xx(struct adreno_device *adreno_dev)
 			ADRENO_GPUREV(adreno_dev) == ADRENO_REV_GEN6_3_26_0;
 }
 
+static inline int adreno_is_a642l(struct adreno_device *adreno_dev)
+{
+	return (adreno_dev->gpucore->compatible &&
+		!strcmp(adreno_dev->gpucore->compatible,
+		"qcom,adreno-gpu-a642l"));
+}
+
 static inline int adreno_is_a660_shima(struct adreno_device *adreno_dev)
 {
 	return (ADRENO_GPUREV(adreno_dev) == ADRENO_REV_A660) &&
@@ -1240,7 +1247,6 @@ ADRENO_TARGET(a619, ADRENO_REV_A619)
 ADRENO_TARGET(a621, ADRENO_REV_A621)
 ADRENO_TARGET(a622, ADRENO_REV_A622)
 ADRENO_TARGET(a630, ADRENO_REV_A630)
-ADRENO_TARGET(a635, ADRENO_REV_A635)
 ADRENO_TARGET(a662, ADRENO_REV_A662)
 ADRENO_TARGET(a640, ADRENO_REV_A640)
 ADRENO_TARGET(a650, ADRENO_REV_A650)
@@ -1249,12 +1255,12 @@ ADRENO_TARGET(a680, ADRENO_REV_A680)
 ADRENO_TARGET(gen6_3_26_0, ADRENO_REV_GEN6_3_26_0)
 ADRENO_TARGET(a702, ADRENO_REV_A702)
 
-/* A635 is derived from A660 and shares same logic */
+/* A642L is derived from A660 and shares same logic */
 static inline int adreno_is_a660(struct adreno_device *adreno_dev)
 {
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
 
-	return (rev == ADRENO_REV_A660 || rev == ADRENO_REV_A635 ||
+	return (rev == ADRENO_REV_A660 || adreno_is_a642l(adreno_dev) ||
 			rev == ADRENO_REV_A662);
 }
 
@@ -1285,7 +1291,7 @@ static inline int adreno_is_a640_family(struct adreno_device *adreno_dev)
  * Derived GPUs from A650 needs to be added to this list.
  * A650 is derived from A640 but register specs has been
  * changed hence do not belongs to A640 family. A620, A621,
- * A622, A660, A663, A690 follows the register specs of A650.
+ * A622, A642L, A660, A663, A690 follows the register specs of A650.
  *
  */
 static inline int adreno_is_a650_family(struct adreno_device *adreno_dev)
@@ -1293,7 +1299,7 @@ static inline int adreno_is_a650_family(struct adreno_device *adreno_dev)
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
 
 	return (rev == ADRENO_REV_A650 || rev == ADRENO_REV_A620 ||
-		rev == ADRENO_REV_A660 || rev == ADRENO_REV_A635 ||
+		rev == ADRENO_REV_A660 || adreno_is_a642l(adreno_dev) ||
 		rev == ADRENO_REV_A662 || rev == ADRENO_REV_A621 ||
 		rev == ADRENO_REV_A622 || rev == ADRENO_REV_A663);
 }

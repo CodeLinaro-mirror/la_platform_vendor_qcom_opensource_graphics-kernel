@@ -114,8 +114,8 @@ const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list = {
 };
 
 const struct gen8_snapshot_block_list gen8_6_0_snapshot_block_list = {
-	.pre_crashdumper_regs = gen8_6_0_ahb_registers,
-	.num_pre_crashdumper_regs = ARRAY_SIZE(gen8_6_0_ahb_registers),
+	.pre_crashdumper_regs = gen8_0_0_ahb_registers,
+	.num_pre_crashdumper_regs = ARRAY_SIZE(gen8_0_0_ahb_registers),
 	.debugbus_blocks = gen8_6_0_debugbus_blocks,
 	.debugbus_blocks_len = ARRAY_SIZE(gen8_6_0_debugbus_blocks),
 	.gbif_debugbus_blocks = gen8_gbif_debugbus_blocks,
@@ -130,7 +130,7 @@ const struct gen8_snapshot_block_list gen8_6_0_snapshot_block_list = {
 	.rscc_regs = gen8_0_0_rscc_rsc_registers,
 	.reg_list = gen8_6_0_reg_list,
 	.cx_misc_regs = gen8_0_0_cx_misc_registers,
-	.shader_blocks = gen8_0_0_shader_blocks,
+	.shader_blocks = gen8_6_0_shader_blocks,
 	.num_shader_blocks = ARRAY_SIZE(gen8_0_0_shader_blocks),
 	.cp_clusters = gen8_0_0_cp_clusters,
 	.num_cp_clusters = ARRAY_SIZE(gen8_0_0_cp_clusters),
@@ -280,7 +280,7 @@ size_t gen8_legacy_snapshot_registers(struct kgsl_device *device,
 	header->location_id = UINT_MAX;
 	header->sp_id = UINT_MAX;
 	header->usptp_id = UINT_MAX;
-	header->slice_id = info->regs->slice_region ? info->slice_id : UINT_MAX;
+	header->slice_id = HEADER_SLICE_ID(info->regs->slice_region, info->slice_id);
 
 	if (info->regs->sel)
 		kgsl_regwrite(device, info->regs->sel->host_reg, info->regs->sel->val);
@@ -331,7 +331,7 @@ static size_t gen8_snapshot_registers(struct kgsl_device *device, u8 *buf,
 	header->location_id = UINT_MAX;
 	header->sp_id = UINT_MAX;
 	header->usptp_id = UINT_MAX;
-	header->slice_id = info->regs->slice_region ? info->slice_id : UINT_MAX;
+	header->slice_id = HEADER_SLICE_ID(info->regs->slice_region, info->slice_id);
 
 	src = gen8_crashdump_registers->hostptr + info->offset;
 
@@ -369,7 +369,7 @@ static size_t gen8_legacy_snapshot_shader(struct kgsl_device *device,
 	}
 
 	header->type = block->statetype;
-	header->slice_id = block->slice_region ? info->slice_id : UINT_MAX;
+	header->slice_id = HEADER_SLICE_ID(block->slice_region, info->slice_id);
 	header->sp_index = info->sp_id;
 	header->usptp = info->usptp;
 	header->pipe_id = block->pipeid;
@@ -409,7 +409,7 @@ static size_t gen8_snapshot_shader_memory(struct kgsl_device *device,
 	}
 
 	header->type = block->statetype;
-	header->slice_id = block->slice_region ? info->slice_id : UINT_MAX;
+	header->slice_id = HEADER_SLICE_ID(block->slice_region, info->slice_id);
 	header->sp_index = info->sp_id;
 	header->usptp = info->usptp;
 	header->pipe_id = block->pipeid;
@@ -815,7 +815,7 @@ static void gen8_snapshot_mempool(struct kgsl_device *device,
 			kgsl_snapshot_indexed_registers_v2(device, snapshot,
 				cp_indexed_reg->addr, cp_indexed_reg->data,
 				0, cp_indexed_reg->size, cp_indexed_reg->pipe_id,
-				SLICE_ID(cp_indexed_reg->slice_region, j));
+				HEADER_SLICE_ID(cp_indexed_reg->slice_region, j));
 
 			/* Reset CP_CHICKEN_DBG[StabilizeMVC] once we are done */
 			gen8_rmw_aperture(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x0,
@@ -862,7 +862,7 @@ static size_t gen8_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 	header->location_id = info->location_id;
 	header->sp_id = info->sp_id;
 	header->usptp_id = info->usptp_id;
-	header->slice_id = info->cluster->slice_region ? info->slice_id : UINT_MAX;
+	header->slice_id = HEADER_SLICE_ID(info->cluster->slice_region, info->slice_id);
 
 	read_sel = GEN8_SP_READ_SEL_VAL(0, info->slice_id, info->location_id,
 			info->pipe_id, info->statetype_id, info->usptp_id, info->sp_id);
@@ -914,7 +914,7 @@ static size_t gen8_snapshot_cluster_dbgahb(struct kgsl_device *device, u8 *buf,
 	header->location_id = info->location_id;
 	header->sp_id = info->sp_id;
 	header->usptp_id = info->usptp_id;
-	header->slice_id = info->cluster->slice_region ? info->slice_id : UINT_MAX;
+	header->slice_id = HEADER_SLICE_ID(info->cluster->slice_region, info->slice_id);
 
 	src = gen8_crashdump_registers->hostptr + info->offset;
 
@@ -1049,7 +1049,7 @@ static size_t gen8_legacy_snapshot_mvc(struct kgsl_device *device, u8 *buf,
 	header->location_id = UINT_MAX;
 	header->sp_id = UINT_MAX;
 	header->usptp_id = UINT_MAX;
-	header->slice_id = info->cluster->slice_region ? info->slice_id : UINT_MAX;
+	header->slice_id = HEADER_SLICE_ID(info->cluster->slice_region, info->slice_id);
 
 	/*
 	 * Set the AHB control for the Host to read from the
@@ -1104,7 +1104,7 @@ static size_t gen8_snapshot_mvc(struct kgsl_device *device, u8 *buf,
 	header->location_id = UINT_MAX;
 	header->sp_id = UINT_MAX;
 	header->usptp_id = UINT_MAX;
-	header->slice_id = info->cluster->slice_region ? info->slice_id : UINT_MAX;
+	header->slice_id = HEADER_SLICE_ID(info->cluster->slice_region, info->slice_id);
 
 	src = gen8_crashdump_registers->hostptr + info->offset;
 
@@ -1724,33 +1724,33 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	if (is_current_rt)
 		sched_set_normal(current, 0);
 
-	gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
-		GEN8_CP_IB1_BASE_HI_PIPE, &snapshot->ib1base, PIPE_BR, 0, 0);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB1_BASE_LO,
+		GEN8_CP_PERIPH_IB1_BASE_HI, &snapshot->ib1base, PIPE_BR);
 
-	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
-		GEN8_CP_IB2_BASE_HI_PIPE, &snapshot->ib2base, PIPE_BR, 0, 0);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB2_BASE_LO,
+		GEN8_CP_PERIPH_IB2_BASE_HI, &snapshot->ib2base, PIPE_BR);
 
-	gen8_regread64_aperture(device, GEN8_CP_IB3_BASE_LO_PIPE,
-		GEN8_CP_IB3_BASE_HI_PIPE, &snapshot->ib3base, PIPE_BR, 0, 0);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB3_BASE_LO,
+		GEN8_CP_PERIPH_IB3_BASE_HI, &snapshot->ib3base, PIPE_BR);
 
-	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE,
-			&snapshot->ib1size, PIPE_BR, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
-			&snapshot->ib2size, PIPE_BR, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB3_REM_SIZE_PIPE,
-		&snapshot->ib3size, PIPE_BR, 0, 0);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB1_SIZE,
+			&snapshot->ib1size, PIPE_BR);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB2_SIZE,
+			&snapshot->ib2size, PIPE_BR);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB3_SIZE,
+			&snapshot->ib3size, PIPE_BR);
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
-		gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
-			GEN8_CP_IB1_BASE_HI_PIPE, &snapshot->ib1base_lpac, PIPE_LPAC, 0, 0);
+		gen8_periph_regread64(device, GEN8_CP_PERIPH_IB1_BASE_LO,
+			GEN8_CP_PERIPH_IB1_BASE_HI, &snapshot->ib1base_lpac, PIPE_LPAC);
 
-		gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
-			GEN8_CP_IB2_BASE_HI_PIPE, &snapshot->ib2base_lpac, PIPE_LPAC, 0, 0);
+		gen8_periph_regread64(device, GEN8_CP_PERIPH_IB2_BASE_LO,
+			GEN8_CP_PERIPH_IB2_BASE_HI, &snapshot->ib2base_lpac, PIPE_LPAC);
 
-		gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE,
-			&snapshot->ib1size_lpac, PIPE_LPAC, 0, 0);
-		gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
-			&snapshot->ib2size_lpac, PIPE_LPAC, 0, 0);
+		gen8_periph_regread(device, GEN8_CP_PERIPH_IB1_SIZE,
+			&snapshot->ib1size_lpac, PIPE_LPAC);
+		gen8_periph_regread(device, GEN8_CP_PERIPH_IB2_SIZE,
+			&snapshot->ib2size_lpac, PIPE_LPAC);
 	}
 
 	/* Clear aperture register */

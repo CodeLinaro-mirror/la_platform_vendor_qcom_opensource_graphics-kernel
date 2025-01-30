@@ -890,7 +890,7 @@ int gen7_gmu_wait_for_idle(struct adreno_device *adreno_dev)
 int gen7_gmu_version_info(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
 	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 
 	/* GMU version info is at a fixed offset in the DTCM */
@@ -1975,7 +1975,7 @@ static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 		pwr->cur_ab = ab;
 	}
 
-	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab);
+	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab, 0);
 	return ret;
 }
 

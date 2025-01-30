@@ -315,6 +315,9 @@ enum gmu_trace_id {
 	GMU_TRACE_PREEMPT_DONE = 2,
 	GMU_TRACE_EXTERNAL_HW_FENCE_SIGNAL = 3,
 	GMU_TRACE_SYNCOBJ_RETIRE = 4,
+	GMU_TRACE_DCVS_PWRLVL = 5,
+	GMU_TRACE_DCVS_BUSLVL = 6,
+	GMU_TRACE_DCVS_PWRSTATS = 7,
 	GMU_TRACE_MAX,
 };
 
@@ -339,6 +342,24 @@ struct trace_ext_hw_fence_signal {
 struct trace_syncobj_retire {
 	u32 gmu_ctxt_id;
 	u32 timestamp;
+} __packed;
+
+struct trace_dcvs_pwrlvl {
+	u32 new_pwrlvl;
+	u32 prev_pwrlvl;
+} __packed;
+
+struct trace_dcvs_buslvl {
+	u32 gpu_pwrlvl;
+	u32 buslvl;
+	u32 cur_abmbps;
+} __packed;
+
+struct trace_dcvs_pwrstats {
+	u64 total_time;
+	u64 gpu_time;
+	u64 ram_wait;
+	u64 ram_time;
 } __packed;
 
 /**
@@ -500,6 +521,14 @@ struct gmu_core_device {
 	struct firmware_capabilities common_caps;
 	/** @platform_caps: GMU firmware platform capabilities */
 	struct firmware_capabilities platform_caps;
+	/* @ver: GMU Version information */
+	struct {
+		u32 core;
+		u32 core_dev;
+		u32 pwr;
+		u32 pwr_dev;
+		u32 hfi;
+	} ver;
 };
 
 extern struct platform_driver a6xx_gmu_driver;

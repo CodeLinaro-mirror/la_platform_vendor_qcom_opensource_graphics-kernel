@@ -32,13 +32,6 @@ struct gen8_dcvs_table {
  * @log_wptr_retention: Store the log wptr offset on slumber
  */
 struct gen8_gmu_device {
-	struct {
-		u32 core;
-		u32 core_dev;
-		u32 pwr;
-		u32 pwr_dev;
-		u32 hfi;
-	} ver;
 	int irq;
 	const struct firmware *fw_image;
 	struct kgsl_memdesc *dump_mem;
@@ -111,6 +104,8 @@ struct gen8_gmu_device {
 	u32 cur_freq;
 	/** @dcvs_cmdbuf: Pointer to the table to pass DCVS data to GMU */
 	u32 *dcvs_cmdbuf;
+	/** @gmu_scaling_cmdbuf: Pointer to the table to pass GMU power levels */
+	u32 *gmu_scaling_cmdbuf;
 };
 
 /* Helper function to get to gen8 gmu device from adreno device */

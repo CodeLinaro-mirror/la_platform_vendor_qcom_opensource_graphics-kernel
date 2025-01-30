@@ -622,7 +622,7 @@ int a6xx_gmu_device_start(struct adreno_device *adreno_dev)
 	gmu_ao_sync_event(adreno_dev);
 
 	/* Check for 0xBABEFACE on legacy targets */
-	if (gmu->ver.core <= 0x20010004) {
+	if (device->gmu_core.ver.core <= 0x20010004) {
 		val = 0xBABEFACE;
 		mask = 0xFFFFFFFF;
 	}
@@ -1374,7 +1374,7 @@ int a6xx_gmu_wait_for_idle(struct adreno_device *adreno_dev)
 void a6xx_gmu_version_info(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
 
 	/* GMU version info is at a fixed offset in the DTCM */
 	gmu_core_regread(device, A6XX_GMU_CM3_DTCM_START + 0xFF8,
@@ -2643,7 +2643,7 @@ static int a6xx_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 		pwr->cur_ab = ab;
 	}
 
-	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab);
+	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab, 0);
 	return ret;
 }
 

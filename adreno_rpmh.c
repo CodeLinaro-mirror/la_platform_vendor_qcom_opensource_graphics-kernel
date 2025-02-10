@@ -14,6 +14,7 @@
 int adreno_rpmh_arc_cmds(struct rpmh_arc_vals *arc, const char *res_id)
 {
 	size_t len = 0;
+	bool dummy_res = true;
 
 	arc->val = cmd_db_read_aux_data(res_id, &len);
 
@@ -25,9 +26,16 @@ int adreno_rpmh_arc_cmds(struct rpmh_arc_vals *arc, const char *res_id)
 	 * zero padding.
 	 */
 	for (arc->num = 1; arc->num < (len >> 1); arc->num++) {
+		if (arc->val[arc->num] != 0)
+			dummy_res = false;
+
 		if (arc->val[arc->num - 1] != 0 && arc->val[arc->num] == 0)
 			break;
 	}
+
+	/* Dummy resource entry in cmd_db with all zeros */
+	if (dummy_res)
+		return -ENODATA;
 
 	return 0;
 }
@@ -200,23 +208,18 @@ struct rpmh_bw_votes *adreno_rpmh_build_bw_votes(struct bcm *bcms, int bcm_count
 	}
 
 	for (i = 0; i < levels_count; i++) {
-		votes->cmds[i] = kcalloc(bcm_count, sizeof(u32), GFP_KERNEL);
-		if (!votes->cmds[i]) {
-			adreno_rpmh_free_bw_votes(votes);
-			return ERR_PTR(-ENOMEM);
-		}
+                votes->cmds[i] = kcalloc(bcm_count, sizeof(u32), GFP_KERNEL);
+                if (!votes->cmds[i]) {
+                        adreno_rpmh_free_bw_votes(votes);
+                        return ERR_PTR(-ENOMEM);
+                }
 
-		if (gmu_ab)
-			tcs_cmd_data(bcms, bcm_count, levels[i],
-				levels[i], votes->cmds[i],
-				(i >= perfmode_lvl) ? perfmode_vote : 0x0);
-		else
-			tcs_cmd_data(bcms, bcm_count, 0x0,
-				levels[i], votes->cmds[i],
-				(i >= perfmode_lvl) ? perfmode_vote : 0x0);
-	}
+                tcs_cmd_data(bcms, bcm_count, gmu_ab ? levels[i] : 0x0,
+                        levels[i], votes->cmds[i],
+                        (i >= perfmode_lvl) ? perfmode_vote : 0x0);
+        }
 
-	return votes;
+        return votes;
 }
 
 int adreno_rpmh_to_cx_hlvl(struct rpmh_arc_vals *cx_rail, u32 vlvl, u32 *hlvl)

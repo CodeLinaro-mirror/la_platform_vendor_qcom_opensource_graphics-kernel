@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -1198,6 +1198,7 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 	mutex_init(&adreno_dev->dev.mutex);
 	mutex_init(&adreno_dev->dev.file_mutex);
 	mutex_init(&adreno_dev->fault_recovery_mutex);
+	mutex_init(&adreno_dev->dcvs_tuning_mutex);
 	INIT_LIST_HEAD(&adreno_dev->dev.globals);
 
 	/* Set the fault tolerance policy to replay, skip, throttle */
@@ -1405,12 +1406,12 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	/*
 	 * Force no write allocate for A5x, A6x and all gen7 targets
-	 * except gen_7_9_x and gen_7_14_0. gen_7_9_x and gen_7_14_0
+	 * except gen_7_9_x and gen_7_14_0_family. gen_7_9_x and gen_7_14_0_family
 	 * use write allocate.
 	 */
 	if (adreno_is_a5xx(adreno_dev) || adreno_is_a6xx(adreno_dev) ||
 		(adreno_is_gen7(adreno_dev) && !adreno_is_gen7_9_x(adreno_dev) &&
-		!adreno_is_gen7_14_0(adreno_dev)))
+		!adreno_is_gen7_14_0_family(adreno_dev)))
 		kgsl_mmu_set_feature(device, KGSL_MMU_FORCE_LLCC_NWA);
 
 	 /* Bind the components before doing the KGSL platform probe. */
@@ -2225,7 +2226,7 @@ int adreno_reset(struct kgsl_device *device, int fault)
 	 * the IOMMU hardware needs a reset too)
 	 */
 
-	if (!(fault & ADRENO_IOMMU_PAGE_FAULT))
+	if (!(fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT))
 		ret = adreno_soft_reset(device);
 
 	if (ret) {
@@ -3389,7 +3390,7 @@ bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev)
 
 	fault = adreno_gpu_fault(adreno_dev);
 
-	return ((fault & ADRENO_IOMMU_PAGE_FAULT) &&
+	return ((fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT) &&
 		test_bit(KGSL_FT_PAGEFAULT_GPUHALT_ENABLE, &mmu->pfpolicy)) ? true : false;
 }
 

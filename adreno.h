@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -251,16 +251,18 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN7_9_1 = ADRENO_GPUREV_VALUE(7, 9, 1),
 	ADRENO_REV_GEN7_14_0 = ADRENO_GPUREV_VALUE(7, 14, 0),
 	ADRENO_REV_GEN7_11_0 = ADRENO_GPUREV_VALUE(7, 11, 0),
+	ADRENO_REV_GEN7_17_0 = ADRENO_GPUREV_VALUE(7, 17, 0),
 	ADRENO_REV_GEN8_0_0 = ADRENO_GPUREV_VALUE(8, 0, 0),
 	ADRENO_REV_GEN8_0_1 = ADRENO_GPUREV_VALUE(8, 0, 1),
 	ADRENO_REV_GEN8_3_0 = ADRENO_GPUREV_VALUE(8, 3, 0),
 	ADRENO_REV_GEN8_4_0 = ADRENO_GPUREV_VALUE(8, 4, 0),
+	ADRENO_REV_GEN8_6_0 = ADRENO_GPUREV_VALUE(8, 6, 0),
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
 #define ADRENO_HARD_FAULT BIT(1)
 #define ADRENO_TIMEOUT_FAULT BIT(2)
-#define ADRENO_IOMMU_PAGE_FAULT BIT(3)
+#define ADRENO_IOMMU_STALL_ON_PAGE_FAULT BIT(3)
 #define ADRENO_PREEMPT_FAULT BIT(4)
 #define ADRENO_GMU_FAULT BIT(5)
 #define ADRENO_CTX_DETATCH_TIMEOUT_FAULT BIT(6)
@@ -765,6 +767,14 @@ struct adreno_device {
 	struct kthread_work scheduler_work;
 	/** @scheduler_fault: Atomic to trigger scheduler based fault recovery */
 	atomic_t scheduler_fault;
+	/** @dcvs_tuning_mutex: Mutex taken during dcvs tuning */
+	struct mutex dcvs_tuning_mutex;
+	/** @dcvs_tuning_mingap_lvl: Current DCVS tuning level for mingap */
+	u32 dcvs_tuning_mingap_lvl;
+	/** @dcvs_tuning_penalty_lvl: Current DCVS tuning level for penalty */
+	u32 dcvs_tuning_penalty_lvl;
+	/** @dcvs_tuning_numbusy_lvl: Current DCVS tuning level for numbusy */
+	u32 dcvs_tuning_numbusy_lvl;
 };
 
 /* Time to wait for suspend recovery gate to complete */
@@ -1280,10 +1290,12 @@ ADRENO_TARGET(gen7_9_0, ADRENO_REV_GEN7_9_0)
 ADRENO_TARGET(gen7_9_1, ADRENO_REV_GEN7_9_1)
 ADRENO_TARGET(gen7_14_0, ADRENO_REV_GEN7_14_0)
 ADRENO_TARGET(gen7_11_0, ADRENO_REV_GEN7_11_0)
+ADRENO_TARGET(gen7_17_0, ADRENO_REV_GEN7_17_0)
 ADRENO_TARGET(gen8_0_0, ADRENO_REV_GEN8_0_0)
 ADRENO_TARGET(gen8_0_1, ADRENO_REV_GEN8_0_1)
 ADRENO_TARGET(gen8_3_0, ADRENO_REV_GEN8_3_0)
 ADRENO_TARGET(gen8_4_0, ADRENO_REV_GEN8_4_0)
+ADRENO_TARGET(gen8_6_0, ADRENO_REV_GEN8_6_0)
 
 static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
 {
@@ -1296,23 +1308,28 @@ static inline int adreno_is_gen7_0_x_family(struct adreno_device *adreno_dev)
 		adreno_is_gen7_4_0(adreno_dev) || adreno_is_gen7_3_0(adreno_dev);
 }
 
+static inline int adreno_is_gen7_14_0_family(struct adreno_device *adreno_dev)
+{
+	return adreno_is_gen7_14_0(adreno_dev) || adreno_is_gen7_17_0(adreno_dev);
+}
+
 static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
 		adreno_is_gen7_6_0(adreno_dev) || adreno_is_gen7_9_x(adreno_dev) ||
-		adreno_is_gen7_14_0(adreno_dev) || adreno_is_gen7_11_0(adreno_dev);
+		adreno_is_gen7_14_0_family(adreno_dev) || adreno_is_gen7_11_0(adreno_dev);
 }
 
 static inline int adreno_is_gen8_0_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen8_0_0(adreno_dev) || adreno_is_gen8_0_1(adreno_dev) ||
-		adreno_is_gen8_4_0(adreno_dev);
+		adreno_is_gen8_4_0(adreno_dev) || adreno_is_gen8_6_0(adreno_dev);
 }
 
 /* Gen7 targets which does not support concurrent binning */
 static inline int adreno_is_gen7_no_cb_family(struct adreno_device *adreno_dev)
 {
-	return adreno_is_gen7_14_0(adreno_dev) || adreno_is_gen7_3_0(adreno_dev);
+	return adreno_is_gen7_14_0_family(adreno_dev) || adreno_is_gen7_3_0(adreno_dev);
 }
 
 /*

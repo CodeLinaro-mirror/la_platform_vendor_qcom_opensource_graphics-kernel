@@ -1079,8 +1079,10 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 		else
 			type = MSG_HDR_GET_ID(next_hdr);
 
-		if (type != F2H_MSG_CONTEXT_BAD)
-			gen8_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd));
+		if (type != F2H_MSG_CONTEXT_BAD) {
+			if (gen8_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd)) < 0)
+				break;
+		}
 
 		switch (type) {
 		case HFI_MSG_ACK:
@@ -1095,8 +1097,10 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 				gen8_receive_ack_async(adreno_dev, rcvd);
 			break;
 		case F2H_MSG_CONTEXT_BAD:
-			gen8_hfi_queue_read(gmu, HFI_MSG_ID, (u32 *)adreno_dev->hwsched.ctxt_bad,
-						HFI_MAX_MSG_SIZE);
+			if (gen8_hfi_queue_read(gmu, HFI_MSG_ID,
+						(u32 *)adreno_dev->hwsched.ctxt_bad,
+						HFI_MAX_MSG_SIZE) < 0)
+				break;
 			process_ctx_bad(adreno_dev);
 			break;
 		case F2H_MSG_TS_RETIRE:
@@ -1113,7 +1117,7 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 			adreno_perfcounter_put(adreno_dev,
 				cmd->group_id, cmd->countable, PERFCOUNTER_FLAG_KERNEL);
 
-			adreno_mark_for_coldboot(adreno_dev);
+			gmu_core_mark_for_coldboot(KGSL_DEVICE(adreno_dev));
 			}
 			break;
 		case F2H_MSG_PLATFORM:
@@ -1563,10 +1567,12 @@ static int gmu_cntr_register_reply(struct adreno_device *adreno_dev, void *rcvd)
 
 static int send_warmboot_start_msg(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	int ret = 0;
 	struct hfi_start_cmd cmd;
 
-	if (!adreno_dev->warmboot_enabled)
+	if (!gmu_core->warmboot_enabled)
 		return ret;
 
 	ret = CMD_MSG_HDR(cmd, H2F_MSG_START);
@@ -1944,10 +1950,12 @@ static void gen8_spin_idle_debug_lpac(struct adreno_device *adreno_dev,
 static bool gen8_hwsched_warmboot_possible(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 
-	if (adreno_dev->warmboot_enabled && test_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags)
+	if (gmu_core->warmboot_enabled && test_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags)
 		&& test_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags) &&
-		!test_bit(ADRENO_DEVICE_FORCE_COLDBOOT, &adreno_dev->priv))
+		!test_bit(GMU_FORCE_COLDBOOT, &device->gmu_core.flags))
 		return true;
 
 	return false;
@@ -1956,10 +1964,12 @@ static bool gen8_hwsched_warmboot_possible(struct adreno_device *adreno_dev)
 static int gen8_hwsched_hfi_send_warmboot_cmd(struct adreno_device *adreno_dev,
 		struct kgsl_memdesc *desc, u32 flag, bool async, struct pending_cmd *ack)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct hfi_warmboot_scratch_cmd cmd = {0};
 	int ret;
 
-	if (!adreno_dev->warmboot_enabled)
+	if (!gmu_core->warmboot_enabled)
 		return 0;
 
 	cmd.scratch_addr = desc->gmuaddr;
@@ -1979,6 +1989,8 @@ static int gen8_hwsched_hfi_send_warmboot_cmd(struct adreno_device *adreno_dev,
 static int gen8_hwsched_hfi_warmboot_gpu_cmd(struct adreno_device *adreno_dev,
 		struct pending_cmd *ret_cmd)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct gen8_hwsched_hfi *hfi = to_gen8_hwsched_hfi(adreno_dev);
@@ -1990,7 +2002,7 @@ static int gen8_hwsched_hfi_warmboot_gpu_cmd(struct adreno_device *adreno_dev,
 	int ret = 0;
 	u32 seqnum;
 
-	if (!adreno_dev->warmboot_enabled)
+	if (!gmu_core->warmboot_enabled)
 		return 0;
 
 	ret = CMD_MSG_HDR(cmd, H2F_MSG_WARMBOOT_CMD);
@@ -2075,6 +2087,8 @@ err:
 
 static int gen8_hwsched_coldboot_gpu(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct gen8_hfi *hfi = to_gen8_hfi(adreno_dev);
 	struct pending_cmd ack = {0};
@@ -2098,7 +2112,7 @@ static int gen8_hwsched_coldboot_gpu(struct adreno_device *adreno_dev)
 	if (ret)
 		goto done;
 
-	if (adreno_dev->warmboot_enabled)
+	if (gmu_core->warmboot_enabled)
 		set_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
 
 done:
@@ -2128,6 +2142,21 @@ int gen8_hwsched_boot_gpu(struct adreno_device *adreno_dev)
 		return gen8_hwsched_coldboot_gpu(adreno_dev);
 }
 
+int gen8_hwsched_set_gmu_based_dcvs_value(struct adreno_device *adreno_dev, u32 type,
+		u32 subtype, u32 val, bool default_vote)
+{
+	int ret;
+
+	ret = gen8_hwsched_hfi_set_value(adreno_dev, type, subtype, val);
+
+	if (ret)
+		dev_err(GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev)),
+			"Failed to set %s for value %u for HFI type %u, ret: %d\n",
+			(default_vote ? "default" : ""), val, type, ret);
+
+	return ret;
+}
+
 static int gen8_hwsched_set_gmu_based_dcvs_votes(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2141,14 +2170,20 @@ static int gen8_hwsched_set_gmu_based_dcvs_votes(struct adreno_device *adreno_de
 	if (test_and_clear_bit(H2F_MSG_SET_VALUE, hfi->wb_set_record_bitmask))
 		reset = true;
 
-	if (thermal_pwrlevel != 0) {
-		ret = gen8_hwsched_hfi_set_value(adreno_dev, HFI_VALUE_MAX_GPU_THERMAL_INDEX, 0,
-				(pwr->num_pwrlevels - thermal_pwrlevel));
-		if (ret)
-			dev_err(GMU_PDEV_DEV(device),
-				"Failed to set default thermal level %u, ret: %d\n",
-				thermal_pwrlevel, ret);
-	}
+	if (thermal_pwrlevel != 0)
+		ret = gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev,
+				HFI_VALUE_MAX_GPU_THERMAL_INDEX, 0,
+				(pwr->num_pwrlevels - thermal_pwrlevel), true);
+
+	if (pwr->min_pwrlevel != (pwr->num_pwrlevels - 1))
+		ret = gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev,
+				HFI_VALUE_MIN_GPU_PERF_INDEX, 0,
+				(pwr->num_pwrlevels - pwr->min_pwrlevel), true);
+
+	if (pwr->max_pwrlevel != 0)
+		ret = gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev,
+				HFI_VALUE_MAX_GPU_PERF_INDEX, 0,
+				(pwr->num_pwrlevels - pwr->max_pwrlevel), true);
 
 	if (reset)
 		set_bit(H2F_MSG_SET_VALUE, hfi->wb_set_record_bitmask);
@@ -2196,9 +2231,11 @@ err:
 
 static void warmboot_init_message_record_bitmask(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct gen8_hfi *hfi = to_gen8_hfi(adreno_dev);
 
-	if (!adreno_dev->warmboot_enabled)
+	if (!gmu_core->warmboot_enabled)
 		return;
 
 	/* Set the record bit for all the messages */
@@ -2467,6 +2504,8 @@ static int gen8_hfi_send_gmu_dcvs_req(struct adreno_device *adreno_dev)
 
 int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct pending_cmd ack = {0};
 	int ret;
@@ -2483,7 +2522,7 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_WARMBOOT) &&
 		(!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags))) {
 		if (gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_WARMBOOT, 0) == 1)
-			adreno_dev->warmboot_enabled = true;
+			gmu_core->warmboot_enabled = true;
 	}
 
 	warmboot_init_message_record_bitmask(adreno_dev);
@@ -2611,7 +2650,7 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	if (adreno_dev->warmboot_enabled)
+	if (gmu_core->warmboot_enabled)
 		set_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
 
 	ret = gen8_hwsched_setup_default_votes(adreno_dev);
@@ -2994,6 +3033,11 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 
 	context->gmu_registered = true;
 	context->gmu_dispatch_queue = UINT_MAX;
+
+	if ((!device->host_based_dcvs) &&
+			(context->pwr_constraint.type) &&
+			(context->flags & KGSL_CONTEXT_PWR_CONSTRAINT))
+		gen8_hwsched_set_pwrconstraint(adreno_dev, context->id);
 
 	return 0;
 }

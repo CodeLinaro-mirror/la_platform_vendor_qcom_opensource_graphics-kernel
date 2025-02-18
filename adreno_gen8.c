@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -134,6 +134,10 @@ static const u32 gen8_pwrup_reglist[] = {
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_HI,
 	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_LO,
 	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_HI,
+	GEN8_UCHE_CCHE_TRAP_BASE_LO,
+	GEN8_UCHE_CCHE_TRAP_BASE_HI,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_LO,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_HI,
 	GEN8_UCHE_HW_DBG_CNTL,
 	GEN8_UCHE_WRITE_THRU_BASE_LO,
 	GEN8_UCHE_WRITE_THRU_BASE_HI,
@@ -161,6 +165,10 @@ static const u32 gen8_2_0_pwrup_reglist[] = {
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_HI,
 	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_LO,
 	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_HI,
+	GEN8_UCHE_CCHE_TRAP_BASE_LO,
+	GEN8_UCHE_CCHE_TRAP_BASE_HI,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_LO,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_HI,
 	GEN8_UCHE_HW_DBG_CNTL,
 	GEN8_UCHE_WRITE_THRU_BASE_LO,
 	GEN8_UCHE_WRITE_THRU_BASE_HI,
@@ -182,6 +190,10 @@ static const u32 gen8_3_0_pwrup_reglist[] = {
 	GEN8_UCHE_CCHE_CACHE_WAYS,
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_LO,
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_HI,
+	GEN8_UCHE_CCHE_TRAP_BASE_LO,
+	GEN8_UCHE_CCHE_TRAP_BASE_HI,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_LO,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_HI,
 	GEN8_UCHE_HW_DBG_CNTL,
 	GEN8_UCHE_WRITE_THRU_BASE_LO,
 	GEN8_UCHE_WRITE_THRU_BASE_HI,
@@ -297,7 +309,6 @@ static const u32 gen8_2_0_ifpc_pwrup_reglist[] = {
 	GEN8_SP_HLSQ_DBG_ECO_CNTL_2,
 	GEN8_SP_HLSQ_LPAC_GMEM_RANGE_MIN_LO,
 	GEN8_SP_HLSQ_LPAC_GMEM_RANGE_MIN_HI,
-	GEN8_SP_CHICKEN_BITS_1,
 	GEN8_CP_INTERRUPT_STATUS_MASK_GLOBAL,
 	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_0,
 	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_1,
@@ -492,14 +503,17 @@ static const struct gen8_pwrup_extlist gen8_2_0_pwrup_extlist[] = {
 	{ GEN8_GRAS_TSEFE_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_GRAS_NC_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_GRAS_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
-	{ GEN8_PC_CHICKEN_BITS_3, BIT(PIPE_BV) | BIT(PIPE_BR) },
-	{ GEN8_PC_CHICKEN_BITS_4, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_AUTO_VERTEX_STRIDE, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_PC_CHICKEN_BITS_1, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_PC_CHICKEN_BITS_2, BIT(PIPE_BV) | BIT(PIPE_BR) },
-	{ GEN8_RB_RBP_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_CHICKEN_BITS_3, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_CHICKEN_BITS_4, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_CONTEXT_SWITCH_STABILIZE_CNTL_1, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_VIS_STREAM_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_CCU_CNTL, BIT(PIPE_BR) },
 	{ GEN8_RB_CCU_NC_MODE_CNTL, BIT(PIPE_BR) },
 	{ GEN8_RB_CMP_NC_MODE_CNTL, BIT(PIPE_BR) },
+	{ GEN8_RB_RBP_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, BIT(PIPE_BR) },
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, BIT(PIPE_BR) },
 	{ GEN8_VFD_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
@@ -1584,13 +1598,17 @@ int gen8_start(struct adreno_device *adreno_dev)
 	}
 
 	/*
-	 * Set UCHE_WRITE_THRU_BASE to the UCHE_TRAP_BASE effectively
-	 * disabling L2 bypass
+	 * Set UCHE_WRITE_THRU_BASE and UCHE_CCHE_WRITE_THRU_BASE to the UCHE_TRAP_BASE
+	 * and UCHE_CCHE_TRAP_BASE respectively, effectively disabling L2 bypass
 	 */
 	kgsl_regwrite(device, GEN8_UCHE_TRAP_BASE_LO, lower_32_bits(uche_trap_base));
 	kgsl_regwrite(device, GEN8_UCHE_TRAP_BASE_HI, upper_32_bits(uche_trap_base));
 	kgsl_regwrite(device, GEN8_UCHE_WRITE_THRU_BASE_LO, lower_32_bits(uche_trap_base));
 	kgsl_regwrite(device, GEN8_UCHE_WRITE_THRU_BASE_HI, upper_32_bits(uche_trap_base));
+	kgsl_regwrite(device, GEN8_UCHE_CCHE_TRAP_BASE_LO, lower_32_bits(uche_trap_base));
+	kgsl_regwrite(device, GEN8_UCHE_CCHE_TRAP_BASE_HI, upper_32_bits(uche_trap_base));
+	kgsl_regwrite(device, GEN8_UCHE_CCHE_WRITE_THRU_BASE_LO, lower_32_bits(uche_trap_base));
+	kgsl_regwrite(device, GEN8_UCHE_CCHE_WRITE_THRU_BASE_HI, upper_32_bits(uche_trap_base));
 
 	/*
 	 * CP takes care of the restore during IFPC exit. We need to restore at slumber

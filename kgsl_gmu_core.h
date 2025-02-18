@@ -71,6 +71,7 @@ enum gmu_core_flags {
 	GMU_RSCC_SLEEP_SEQ_DONE,
 	GMU_DISABLE_SLUMBER,
 	GMU_THERMAL_MITIGATION,
+	GMU_FORCE_COLDBOOT,
 };
 
 /*
@@ -318,6 +319,7 @@ enum gmu_trace_id {
 	GMU_TRACE_DCVS_PWRLVL = 5,
 	GMU_TRACE_DCVS_BUSLVL = 6,
 	GMU_TRACE_DCVS_PWRSTATS = 7,
+	GMU_TRACE_PWR_CONSTRAINT = 8,
 	GMU_TRACE_MAX,
 };
 
@@ -362,6 +364,11 @@ struct trace_dcvs_pwrstats {
 	u64 ram_time;
 } __packed;
 
+struct trace_pwr_constraint {
+	u32 type;
+	u32 value;
+	u32 status;
+} __packed;
 /**
  * struct kgsl_gmu_trace  - wrapper for gmu trace memory object
  */
@@ -529,6 +536,8 @@ struct gmu_core_device {
 		u32 pwr_dev;
 		u32 hfi;
 	} ver;
+	/** @warmboot_enabled: True if warmboot is enabled */
+	bool warmboot_enabled;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -806,4 +815,11 @@ int gmu_core_soccp_vote(struct device *dev, unsigned long *flags, bool pwr_on);
  * Return: true if capabilities value is being set otherwise false
  */
 bool gmu_core_capabilities_enabled(struct firmware_capabilities *caps, u32 field);
+
+/**
+ * gmu_core_mark_for_coldboot - Set a flag to coldboot gpu in the slumber exit
+ * @device: Pointer to KGSL device
+ *
+ */
+void gmu_core_mark_for_coldboot(struct kgsl_device *device);
 #endif /* __KGSL_GMU_CORE_H */

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -2512,6 +2512,21 @@ static int adreno_query_property_list(struct kgsl_device *device, u32 *list,
 	return i;
 }
 
+static int adreno_gmu_based_dcvs_pwr_ops(struct kgsl_device *device, u32 arg,
+		enum gpu_pwrlevel_op op)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
+
+	if (device->host_based_dcvs)
+		return -EOPNOTSUPP;
+
+	if (ops->gmu_based_dcvs_pwr_ops)
+		ops->gmu_based_dcvs_pwr_ops(adreno_dev, arg, op);
+
+	return 0;
+}
+
 int adreno_set_constraint(struct kgsl_device *device,
 				struct kgsl_context *context,
 				struct kgsl_device_constraint *constraint)
@@ -2541,19 +2556,29 @@ int adreno_set_constraint(struct kgsl_device *device,
 		context->pwr_constraint.type =
 				KGSL_CONSTRAINT_PWRLEVEL;
 		context->pwr_constraint.sub_type = pwr.level;
+
+		adreno_gmu_based_dcvs_pwr_ops(device, context->id, GPU_PWRLEVEL_OP_PERF_HINT);
+
 		trace_kgsl_user_pwrlevel_constraint(device,
 			context->id,
 			context->pwr_constraint.type,
 			context->pwr_constraint.sub_type);
 		}
 		break;
-	case KGSL_CONSTRAINT_NONE:
-		if (context->pwr_constraint.type == KGSL_CONSTRAINT_PWRLEVEL)
+	case KGSL_CONSTRAINT_NONE: {
+		if (context->pwr_constraint.type == KGSL_CONSTRAINT_PWRLEVEL) {
 			trace_kgsl_user_pwrlevel_constraint(device,
 				context->id,
 				KGSL_CONSTRAINT_NONE,
 				context->pwr_constraint.sub_type);
-		context->pwr_constraint.type = KGSL_CONSTRAINT_NONE;
+
+			context->pwr_constraint.type = KGSL_CONSTRAINT_NONE;
+			adreno_gmu_based_dcvs_pwr_ops(device, context->id,
+				GPU_PWRLEVEL_OP_PERF_HINT);
+		} else {
+			context->pwr_constraint.type = KGSL_CONSTRAINT_NONE;
+		}
+		}
 		break;
 	case KGSL_CONSTRAINT_L3_PWRLEVEL: {
 		struct kgsl_device_constraint_pwrlevel pwr;
@@ -2601,7 +2626,7 @@ int adreno_set_constraint(struct kgsl_device *device,
 	if ((status == 0) &&
 		(context->id == device->pwrctrl.constraint.owner_id)) {
 		trace_kgsl_constraint(device, device->pwrctrl.constraint.type,
-					device->pwrctrl.active_pwrlevel, 0);
+					device->pwrctrl.active_pwrlevel, 0, 0);
 		device->pwrctrl.constraint.type = KGSL_CONSTRAINT_NONE;
 	}
 
@@ -3381,21 +3406,6 @@ static void adreno_set_isdb_breakpoint_registers(struct kgsl_device *device)
 		gpudev->set_isdb_breakpoint_registers(adreno_dev);
 }
 
-static int adreno_gmu_based_dcvs_pwr_ops(struct kgsl_device *device, u32 arg,
-		enum gpu_pwrlevel_op op)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
-
-	if (device->host_based_dcvs)
-		return -EOPNOTSUPP;
-
-	if (ops->gmu_based_dcvs_pwr_ops)
-		ops->gmu_based_dcvs_pwr_ops(adreno_dev, arg, op);
-
-	return 0;
-}
-
 static void adreno_drawctxt_sched(struct kgsl_device *device,
 		struct kgsl_context *context)
 {
@@ -3406,14 +3416,6 @@ static void adreno_drawctxt_sched(struct kgsl_device *device,
 
 	adreno_dev->dispatch_ops->queue_context(adreno_dev,
 		ADRENO_CONTEXT(context));
-}
-
-void adreno_mark_for_coldboot(struct adreno_device *adreno_dev)
-{
-	if (!adreno_dev->warmboot_enabled)
-		return;
-
-	set_bit(ADRENO_DEVICE_FORCE_COLDBOOT, &adreno_dev->priv);
 }
 
 bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev)
@@ -3451,7 +3453,7 @@ int adreno_power_cycle(struct adreno_device *adreno_dev,
 
 	if (!ret) {
 		callback(adreno_dev, priv);
-		adreno_mark_for_coldboot(adreno_dev);
+		gmu_core_mark_for_coldboot(device);
 		ops->pm_resume(adreno_dev);
 	}
 
@@ -3501,16 +3503,25 @@ static int adreno_gpu_clock_set(struct kgsl_device *device, u32 pwrlevel)
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct kgsl_pwrlevel *pl = &pwr->pwrlevels[pwrlevel];
+	u32 prev_pwrlevel = pwr->previous_pwrlevel;
 	int ret;
 
-	if (ops->gpu_clock_set)
-		return ops->gpu_clock_set(adreno_dev, pwrlevel);
+	if (ops->gpu_clock_set) {
+		ret = ops->gpu_clock_set(adreno_dev, pwrlevel);
+	} else {
+		ret = clk_set_rate(pwr->grp_clks[0], pl->gpu_freq);
+		if (ret)
+			dev_err(device->dev, "GPU clk freq set failure: %d\n", ret);
+	}
 
-	ret = clk_set_rate(pwr->grp_clks[0], pl->gpu_freq);
 	if (ret)
-		dev_err(device->dev, "GPU clk freq set failure: %d\n", ret);
+		return ret;
 
-	return ret;
+	trace_kgsl_pwrlevel(device, pwrlevel, pl->gpu_freq,
+		prev_pwrlevel, pwr->pwrlevels[prev_pwrlevel].gpu_freq, 0);
+
+	trace_gpu_frequency(pl->gpu_freq/1000, 0, 0);
+	return 0;
 }
 
 static int adreno_interconnect_bus_set(struct adreno_device *adreno_dev,

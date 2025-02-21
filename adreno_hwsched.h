@@ -93,6 +93,11 @@ struct adreno_hwsched_ops {
 	 */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev,
 		struct kgsl_sync_fence *kfence);
+	/**
+	 * @set_dcvs_profile - Set dcvs profile for a process
+	 */
+	int (*set_dcvs_profile)(struct adreno_device *adreno_dev,
+		struct kgsl_process_private *proc_priv);
 };
 
 enum gpu_reset_type {

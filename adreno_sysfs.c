@@ -586,6 +586,20 @@ ssize_t adreno_sysfs_show_bool(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%d\n", _attr->show(adreno_dev));
 }
 
+static int _dcvs_profile_enabled_store(struct adreno_device *adreno_dev, bool val)
+{
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_DCVS_PROFILE) ||
+			adreno_dev->dcvs_profile_enabled == val)
+		return 0;
+
+	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->dcvs_profile_enabled, val);
+}
+
+static bool _dcvs_profile_enabled_show(struct adreno_device *adreno_dev)
+{
+	return adreno_dev->dcvs_profile_enabled;
+}
+
 static ADRENO_SYSFS_U32(ft_policy);
 static ADRENO_SYSFS_U32(ft_pagefault_policy);
 static ADRENO_SYSFS_U32(rt_bus_hint);
@@ -612,6 +626,7 @@ static ADRENO_SYSFS_BOOL(lpac);
 static ADRENO_SYSFS_BOOL(dms);
 static ADRENO_SYSFS_BOOL(touch_wake);
 static ADRENO_SYSFS_BOOL(gmu_ab);
+static ADRENO_SYSFS_BOOL(dcvs_profile_enabled);
 
 static DEVICE_ATTR_RO(gpu_model);
 static DEVICE_ATTR_RO(gpufaults);
@@ -654,6 +669,7 @@ static const struct attribute *_attr_list[] = {
 	&adreno_attr_dcvs_tuning_penalty.attr.attr,
 	&adreno_attr_dcvs_tuning_numbusy.attr.attr,
 	&adreno_attr_dcvs_mode.attr.attr,
+	&adreno_attr_dcvs_profile_enabled.attr.attr,
 	NULL,
 };
 

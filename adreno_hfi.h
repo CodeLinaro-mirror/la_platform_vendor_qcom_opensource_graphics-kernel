@@ -83,6 +83,7 @@
 #define HFI_FEATURE_DCE		31
 #define HFI_FEATURE_IFF_PCLX		32
 #define HFI_FEATURE_SOFT_RESET		0x10000001
+#define HFI_FEATURE_DCVS_PROFILE	0x10000002
 
 /*
  * MINBW_HYST_MASK = 0xffff
@@ -520,7 +521,10 @@ enum hfi_msg_type {
 	F2H_MSG_SYNCOBJ_QUERY		= 153,
 	H2F_MSG_WARMBOOT_CMD		= 154,
 	F2H_MSG_PROCESS_TRACE		= 155,
-	F2H_MSG_PLATFORM		= 200,
+	F2H_MSG_PLATFORM_LA		= 200,
+	H2F_MSG_PLATFORM_LA		= 201,
+	F2H_MSG_PLATFORM_WIN		= 202, /* Reserved */
+	H2F_MSG_PLATFORM_WIN		= 203, /* Reserved */
 	HFI_MAX_ID,
 };
 
@@ -979,6 +983,7 @@ struct hfi_context_pointers_cmd {
 	u64 user_ctxt_record_addr;
 	u32 version;
 	u32 gmu_context_queue_addr;
+	u32 dcvs_profile_addr;
 } __packed;
 
 /* H2F */
@@ -1171,17 +1176,34 @@ struct pending_cmd {
 };
 
 struct hfi_msg_platform {
-	/** @header: Header for the platform specific msg */
-	u32 header;
+	/** @hdr: Header for the platform specific msg */
+	u32 hdr;
 	/** @sub_type: Sub type for the platform msg */
 	u32 sub_type;
-	/** @cmd: Pointer to the HFI platform cmd */
-	u32 cmd[];
 } __packed;
 
 struct hfi_scale_gmu_cmd {
+	/** @header: Header for the scale gmu packet */
+	struct hfi_msg_platform header;
 	/** @gmu_pwrlevel: Gmu index of gmu power level to scale to */
 	u32 gmu_pwrlevel;
+} __packed;
+
+/* Platform specific H2F subtype message for GMU */
+enum h2f_platform_action {
+	H2F_ST_MSG_PROFILE_REGISTER,
+};
+
+/* H2F */
+struct hfi_profile_register {
+	/** @header: Header for the profile register packet */
+	struct hfi_msg_platform header;
+	/** @version: Version of the profile register packet */
+	u32 version;
+	/** @gmu_addr: Address of the GMU to store DCVS profile */
+	u32 gmu_addr;
+	/** @attrs_addr: Address of the KGSL shared profile attrs */
+	u32 attrs_addr;
 } __packed;
 
 static inline int _CMD_MSG_HDR(u32 *hdr, int id, size_t size)

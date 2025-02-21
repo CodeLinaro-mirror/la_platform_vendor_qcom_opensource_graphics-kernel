@@ -1690,6 +1690,7 @@ const struct adreno_hwsched_ops gen8_hwsched_ops = {
 	.preempt_count = gen8_hwsched_preempt_count_get,
 	.preempt_info = gen8_hwsched_preempt_info_get,
 	.create_hw_fence = gen8_hwsched_create_hw_fence,
+	.set_dcvs_profile = gen8_hwsched_set_dcvs_profile,
 };
 
 int gen8_hwsched_probe(struct platform_device *pdev,

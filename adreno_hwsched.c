@@ -1858,7 +1858,8 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 			ctx_guilty = true;
 		}
 
-		ret = gpudev->soft_reset(adreno_dev, context, ctx_guilty);
+		if (gpudev->soft_reset)
+			ret = gpudev->soft_reset(adreno_dev, context, ctx_guilty);
 
 		if (ctx_guilty)
 			adreno_drawctxt_set_guilty(device, context);
@@ -1880,7 +1881,8 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 			ctx_guilty = true;
 		}
 
-		ret = gpudev->soft_reset(adreno_dev, context_lpac, ctx_guilty);
+		if (gpudev->soft_reset)
+			ret = gpudev->soft_reset(adreno_dev, context_lpac, ctx_guilty);
 
 		if (ctx_guilty)
 			adreno_drawctxt_set_guilty(device, context_lpac);
@@ -1891,13 +1893,13 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 		kgsl_drawobj_put(drawobj_lpac);
 	}
 done:
-	if (!drawobj && !drawobj_lpac)
+	if (gpudev->soft_reset && !drawobj && !drawobj_lpac)
 		ret = gpudev->soft_reset(adreno_dev, NULL, ctx_guilty);
 
 	memset(hwsched->ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
 	clear_bit(ADRENO_HWSCHED_GPU_SOFT_RESET, &adreno_dev->hwsched.flags);
 	adreno_dev->hwsched.reset_type = GMU_GPU_RESET_NONE;
-	if (ret)
+	if (ret && gpudev->reset)
 		gpudev->reset(adreno_dev);
 }
 

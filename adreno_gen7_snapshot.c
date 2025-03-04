@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -308,9 +308,9 @@ static bool _gen7_do_crashdump(struct kgsl_device *device)
 			break;
 		if (ktime_compare(ktime_get(), timeout) > 0)
 			break;
-		/* Wait 1msec to avoid unnecessary looping */
+		/* Wait 50us to avoid unnecessary looping */
 		if (!device->snapshot_atomic)
-			usleep_range(100, 1000);
+			usleep_range(5, 50);
 	}
 
 	kgsl_regread(device, GEN7_CP_CRASH_DUMP_STATUS, &reg);

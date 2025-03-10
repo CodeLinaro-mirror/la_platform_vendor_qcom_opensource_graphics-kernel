@@ -589,7 +589,7 @@ static int gen8_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 		goto err;
 	}
 
-	if (adreno_is_gen8_2_0(adreno_dev))
+	if (adreno_is_gen8_2_x(adreno_dev))
 		gen8_hwcg_set(adreno_dev, true);
 
 	/*

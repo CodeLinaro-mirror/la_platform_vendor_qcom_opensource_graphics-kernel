@@ -298,7 +298,7 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto err;
 	}
 
-	if (gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE) == 1 &&
+	if (gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1 &&
 		!WARN_ONCE(!adreno_dev->gpucore->num_ddr_channels,
 			"Number of DDR channel is not specified in gpu core")) {
 		adreno_dev->gmu_ab = true;
@@ -1652,6 +1652,85 @@ static void gen8_hwsched_set_maxpwrlevel(struct adreno_device *adreno_dev, u32 v
 	}
 }
 
+static void gen8_hwsched_set_tuning_param(struct adreno_device *adreno_dev, u32 attr)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+
+	if (device->state == KGSL_STATE_ACTIVE) {
+		/* If GMU is up, send the HFI */
+		gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev, HFI_VALUE_DCVS_TUNING_PARAM,
+				attr, hwsched->dcvs_tunables[attr].value, false);
+	} else {
+		/* Mark for updating GMU in the slumber exit path */
+		hwsched->dcvs_tunables[attr].update = true;
+	}
+}
+
+struct adreno_dcvs_tuning_attribute {
+	struct kobj_attribute attr;
+	u32 tuning_attr;
+};
+
+#define DCVS_TUNABLES_SYSFS_WO(_name, param) \
+	static struct adreno_dcvs_tuning_attribute dcvs_attr_##_name = \
+	{ \
+		.attr = __ATTR(_name, 0200, NULL, dcvs_tuning_store), \
+		.tuning_attr = param, \
+	}
+
+static ssize_t dcvs_tuning_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct adreno_dcvs_tuning_attribute *pattr = container_of(attr,
+						struct adreno_dcvs_tuning_attribute, attr);
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 val = 0;
+	int ret;
+
+	ret = kstrtou32(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	mutex_lock(&device->mutex);
+	hwsched->dcvs_tunables[pattr->tuning_attr].value = val;
+	device->ftbl->gmu_based_dcvs_pwr_ops(device,  pattr->tuning_attr,
+			GPU_PWRLEVEL_OP_TUNING_ATTR);
+	mutex_unlock(&device->mutex);
+
+	return count;
+}
+
+DCVS_TUNABLES_SYSFS_WO(penalty_up, GPU_TUNING_KEY_BUSY_PENALTY_UP);
+DCVS_TUNABLES_SYSFS_WO(penalty_down, GPU_TUNING_KEY_BUSY_PENALTY_DOWN);
+DCVS_TUNABLES_SYSFS_WO(first_step_down, GPU_TUNING_KEY_FIRST_STEP_DOWN_COUNT);
+DCVS_TUNABLES_SYSFS_WO(subsequent_step_down, GPU_TUNING_KEY_SUBSEQUENT_STEP_DOWN_COUNT);
+DCVS_TUNABLES_SYSFS_WO(target_fps, GPU_TUNING_KEY_TARGET_FPS);
+DCVS_TUNABLES_SYSFS_WO(num_samples_up, GPU_TUNING_KEY_NUM_SAMPLES_UP);
+DCVS_TUNABLES_SYSFS_WO(num_samples_down, GPU_TUNING_KEY_NUM_SAMPLES_DOWN);
+DCVS_TUNABLES_SYSFS_WO(strict_frame, GPU_TUNING_KEY_STRICT_FRAME);
+
+static struct attribute *dcvs_attrs[] = {
+	&dcvs_attr_penalty_up.attr.attr,
+	&dcvs_attr_penalty_down.attr.attr,
+	&dcvs_attr_first_step_down.attr.attr,
+	&dcvs_attr_subsequent_step_down.attr.attr,
+	&dcvs_attr_target_fps.attr.attr,
+	&dcvs_attr_num_samples_up.attr.attr,
+	&dcvs_attr_num_samples_down.attr.attr,
+	&dcvs_attr_strict_frame.attr.attr,
+	NULL,
+};
+
+ATTRIBUTE_GROUPS(dcvs);
+
+static struct kobj_type ktype_dcvs = {
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = dcvs_groups,
+};
+
 static void gen8_hwsched_gmu_based_dcvs_pwr_ops(struct adreno_device *adreno_dev, u32 arg,
 		enum gpu_pwrlevel_op op)
 {
@@ -1679,6 +1758,9 @@ static void gen8_hwsched_gmu_based_dcvs_pwr_ops(struct adreno_device *adreno_dev
 		break;
 	case GPU_PWRLEVEL_OP_DCVS_ENABLE:
 		gen8_hwsched_set_dcvs_enable(adreno_dev, arg);
+		break;
+	case GPU_PWRLEVEL_OP_TUNING_ATTR:
+		gen8_hwsched_set_tuning_param(adreno_dev, arg);
 		break;
 	}
 }
@@ -1709,6 +1791,7 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 	struct adreno_device *adreno_dev;
 	struct kgsl_device *device;
 	struct gen8_hwsched_device *gen8_hwsched_dev;
+	struct device *gmu_dev;
 	int ret;
 
 	gen8_hwsched_dev = devm_kzalloc(&pdev->dev, sizeof(*gen8_hwsched_dev),
@@ -1741,7 +1824,15 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 		device->max_syncobj_hw_fence_count = min_t(u32, HFI_SYNCOBJ_HW_FENCE_MAX,
 			MAX_SYNCOBJ_QUERY_BITS);
 
-	return adreno_hwsched_init(adreno_dev, &gen8_hwsched_ops);
+	ret = adreno_hwsched_init(adreno_dev, &gen8_hwsched_ops);
+	if (ret)
+		return ret;
+
+	gmu_dev = GMU_PDEV_DEV(device);
+	WARN_ON(kobject_init_and_add(&adreno_dev->hwsched.dcvs_kobj, &ktype_dcvs, &gmu_dev->kobj,
+				"dcvs_tunables"));
+
+	return ret;
 }
 
 int gen8_hwsched_add_to_minidump(struct adreno_device *adreno_dev)

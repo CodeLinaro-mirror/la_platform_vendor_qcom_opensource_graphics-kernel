@@ -1657,7 +1657,7 @@ static int gen8_hfi_send_perfcounter_feature_ctrl(struct adreno_device *adreno_d
 	return 0;
 }
 
-u32 gen8_hwsched_hfi_get_value(struct adreno_device *adreno_dev, u32 prop)
+u32 gen8_hwsched_hfi_get_value(struct adreno_device *adreno_dev, u32 prop, u32 subtype)
 {
 	struct hfi_get_value_cmd cmd;
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
@@ -1674,7 +1674,7 @@ u32 gen8_hwsched_hfi_get_value(struct adreno_device *adreno_dev, u32 prop)
 	seqnum = atomic_inc_return(&gmu->hfi.seqnum);
 	cmd.hdr = MSG_HDR_SET_SEQNUM_SIZE(cmd.hdr, seqnum, sizeof(cmd) >> 2);
 	cmd.type = prop;
-	cmd.subtype = 0;
+	cmd.subtype = subtype;
 
 	add_waiter(hfi, cmd.hdr, &pending_ack);
 
@@ -2019,6 +2019,51 @@ int gen8_hwsched_set_gmu_based_dcvs_value(struct adreno_device *adreno_dev, u32 
 	return ret;
 }
 
+static void gen8_hwsched_set_tuning_attrs(struct adreno_device *adreno_dev, u32 type,
+		u32 subtype, u32 val)
+{
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	int ret;
+
+	ret = gen8_hwsched_hfi_set_value(adreno_dev, type, subtype, val);
+
+	if (ret) {
+		dev_err(GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev)),
+			"Failed to set value %u for HFI type %u, ret: %d\n",
+			val, type, ret);
+		return;
+	}
+
+	hwsched->dcvs_tunables[subtype].update = false;
+}
+
+static void gen8_hwsched_send_tuning_attrs(struct adreno_device *adreno_dev)
+{
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	u32 i;
+
+	for (i = 0; i < GPU_TUNING_KEY_MAX; i++) {
+		switch (i) {
+		/* Handle only a subset of tunables and ignore the rest */
+		case GPU_TUNING_KEY_BUSY_PENALTY_UP:
+		case GPU_TUNING_KEY_BUSY_PENALTY_DOWN:
+		case GPU_TUNING_KEY_FIRST_STEP_DOWN_COUNT:
+		case GPU_TUNING_KEY_SUBSEQUENT_STEP_DOWN_COUNT:
+		case GPU_TUNING_KEY_TARGET_FPS:
+		case GPU_TUNING_KEY_NUM_SAMPLES_UP:
+		case GPU_TUNING_KEY_NUM_SAMPLES_DOWN:
+		case GPU_TUNING_KEY_STRICT_FRAME:
+			if (hwsched->dcvs_tunables[i].update == true) {
+				gen8_hwsched_set_tuning_attrs(adreno_dev,
+						HFI_VALUE_DCVS_TUNING_PARAM,
+						i,
+						hwsched->dcvs_tunables[i].value);
+			}
+			break;
+		}
+	}
+}
+
 static int gen8_hwsched_set_gmu_based_dcvs_votes(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2053,6 +2098,8 @@ static int gen8_hwsched_set_gmu_based_dcvs_votes(struct adreno_device *adreno_de
 		ret = gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev,
 				HFI_VALUE_MAX_GPU_PERF_INDEX, 0,
 				(pwr->num_pwrlevels - pwr->max_pwrlevel), true);
+
+	gen8_hwsched_send_tuning_attrs(adreno_dev);
 
 	if (reset)
 		set_bit(H2F_MSG_SET_VALUE, hfi->wb_set_record_bitmask);
@@ -4129,7 +4176,7 @@ u32 gen8_hwsched_preempt_count_get(struct adreno_device *adreno_dev)
 	if ((preempt_count != 0) || (device->state != KGSL_STATE_ACTIVE))
 		return preempt_count;
 
-	return gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_PREEMPT_COUNT);
+	return gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_PREEMPT_COUNT, 0);
 }
 
 void gen8_hwsched_context_destroy(struct adreno_device *adreno_dev,

@@ -1729,6 +1729,8 @@ static void adreno_hwsched_dispatcher_close(struct adreno_device *adreno_dev)
 
 	if (hwsched->global_ctxtq.hostptr)
 		kgsl_sharedmem_free(&hwsched->global_ctxtq);
+
+	kobject_put(&hwsched->dcvs_kobj);
 }
 
 static void force_retire_timestamp(struct kgsl_device *device,

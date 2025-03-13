@@ -695,7 +695,7 @@ static bool gen8_snapshot_shader(struct kgsl_device *device,
 	u32 offset = 0;
 	struct gen8_shader_block *shader_blocks = gen8_snapshot_block_list->shader_blocks;
 	size_t num_shader_blocks = gen8_snapshot_block_list->num_shader_blocks;
-	u32 i, sp, usptp, ctxt, slice;
+	u32 i, sp, ctxt, slice;
 	u32 slice_mask = gen8_get_slice_mask(ADRENO_DEVICE(device));
 
 	if (!CD_SCRIPT_CHECK(device))
@@ -706,21 +706,19 @@ static bool gen8_snapshot_shader(struct kgsl_device *device,
 
 		FOR_EACH_SLICE(slice, block->slice_region, slice_mask) {
 			for (sp = 0; sp < block->num_sps; sp++) {
-				for (usptp = 0; usptp < block->num_usptps; usptp++) {
-					for (ctxt = 0; ctxt < block->num_ctx; ctxt++) {
-						info.block = block;
-						info.sp_id = sp;
-						info.usptp = usptp;
-						info.slice_id = slice;
-						info.offset = offset;
-						info.context_id = ctxt;
-						offset += block->size << 2;
+				for (ctxt = 0; ctxt < block->num_ctx; ctxt++) {
+					info.block = block;
+					info.sp_id = sp;
+					info.usptp = block->usptp_id;
+					info.slice_id = slice;
+					info.offset = offset;
+					info.context_id = ctxt;
+					offset += block->size << 2;
 
-						/* Shader working/shadow memory */
-						kgsl_snapshot_add_section(device,
-							KGSL_SNAPSHOT_SECTION_SHADER_V3, snapshot,
-							gen8_legacy_snapshot_shader, &info);
-					}
+					/* Shader working/shadow memory */
+					kgsl_snapshot_add_section(device,
+						KGSL_SNAPSHOT_SECTION_SHADER_V3, snapshot,
+						gen8_legacy_snapshot_shader, &info);
 				}
 			}
 		}
@@ -737,20 +735,18 @@ crashdumper:
 
 		FOR_EACH_SLICE(slice, block->slice_region, slice_mask) {
 			for (sp = 0; sp < block->num_sps; sp++) {
-				for (usptp = 0; usptp < block->num_usptps; usptp++) {
-					for (ctxt = 0; ctxt < block->num_ctx; ctxt++) {
-						/* Program the aperture */
-						ptr += CD_WRITE(ptr, GEN8_SP_READ_SEL,
-							GEN8_SP_READ_SEL_VAL(ctxt, slice,
-							block->location, block->pipeid,
-							block->statetype, usptp, sp));
+				for (ctxt = 0; ctxt < block->num_ctx; ctxt++) {
+					/* Program the aperture */
+					ptr += CD_WRITE(ptr, GEN8_SP_READ_SEL,
+						GEN8_SP_READ_SEL_VAL(ctxt, slice,
+						block->location, block->pipeid,
+						block->statetype, block->usptp_id, sp));
 
-						/* Read all the data in one chunk */
-						ptr += CD_READ(ptr, GEN8_SP_AHB_READ_APERTURE,
-							block->size,
-							gen8_crashdump_registers->gpuaddr + offset);
-						offset += block->size << 2;
-					}
+					/* Read all the data in one chunk */
+					ptr += CD_READ(ptr, GEN8_SP_AHB_READ_APERTURE,
+						block->size,
+						gen8_crashdump_registers->gpuaddr + offset);
+					offset += block->size << 2;
 				}
 			}
 		}
@@ -764,21 +760,19 @@ crashdumper:
 		offset = 0;
 		FOR_EACH_SLICE(slice, block->slice_region, slice_mask) {
 			for (sp = 0; sp < block->num_sps; sp++) {
-				for (usptp = 0; usptp < block->num_usptps; usptp++) {
-					for (ctxt = 0; ctxt < block->num_ctx; ctxt++) {
-						info.block = block;
-						info.sp_id = sp;
-						info.usptp = usptp;
-						info.slice_id = slice;
-						info.offset = offset;
-						info.context_id = ctxt;
-						offset += block->size << 2;
+				for (ctxt = 0; ctxt < block->num_ctx; ctxt++) {
+					info.block = block;
+					info.sp_id = sp;
+					info.usptp = block->usptp_id;
+					info.slice_id = slice;
+					info.offset = offset;
+					info.context_id = ctxt;
+					offset += block->size << 2;
 
-						/* Shader working/shadow memory */
-						kgsl_snapshot_add_section(device,
-						KGSL_SNAPSHOT_SECTION_SHADER_V3, snapshot,
-						gen8_snapshot_shader_memory, &info);
-					}
+					/* Shader working/shadow memory */
+					kgsl_snapshot_add_section(device,
+					KGSL_SNAPSHOT_SECTION_SHADER_V3, snapshot,
+					gen8_snapshot_shader_memory, &info);
 				}
 			}
 		}

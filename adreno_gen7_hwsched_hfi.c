@@ -5,7 +5,6 @@
  */
 
 #include <linux/iommu.h>
-#include <soc/qcom/msm_performance.h>
 
 #include "adreno.h"
 #include "adreno_gen7.h"

@@ -5,7 +5,6 @@
  */
 
 #include <linux/clk.h>
-#include <linux/component.h>
 #include <linux/interconnect.h>
 
 #include "adreno.h"

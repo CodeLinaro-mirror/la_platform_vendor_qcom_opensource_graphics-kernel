@@ -28,7 +28,6 @@
 #endif
 
 #include "adreno.h"
-#include "adreno_a5xx.h"
 #include "adreno_a6xx.h"
 #include "adreno_compat.h"
 #include "adreno_pm4types.h"

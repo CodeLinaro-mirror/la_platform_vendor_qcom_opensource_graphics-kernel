@@ -865,40 +865,6 @@ void a6xx_start(struct adreno_device *adreno_dev)
 
 }
 
-/* Offsets into the MX/CX mapped register regions */
-#define RDPM_MX_OFFSET 0xf00
-#define RDPM_CX_OFFSET 0xf18
-
-void a6xx_rdpm_mx_freq_update(struct a6xx_gmu_device *gmu,
-		u32 freq)
-{
-	if (gmu->rdpm_mx_virt) {
-		writel_relaxed(freq/1000,
-			(gmu->rdpm_mx_virt + RDPM_MX_OFFSET));
-
-		/*
-		 * ensure previous writes post before this one,
-		 * i.e. act like normal writel()
-		 */
-		wmb();
-	}
-}
-
-void a6xx_rdpm_cx_freq_update(struct a6xx_gmu_device *gmu,
-		u32 freq)
-{
-	if (gmu->rdpm_cx_virt) {
-		writel_relaxed(freq/1000,
-			(gmu->rdpm_cx_virt + RDPM_CX_OFFSET));
-
-		/*
-		 * ensure previous writes post before this one,
-		 * i.e. act like normal writel()
-		 */
-		wmb();
-	}
-}
-
 /* This is the start point for non GMU/RGMU targets */
 static int a6xx_nogmu_start(struct adreno_device *adreno_dev)
 {

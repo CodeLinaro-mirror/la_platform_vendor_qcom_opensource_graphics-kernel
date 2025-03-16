@@ -1795,36 +1795,6 @@ int gen8_start(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-/* Offsets into the MX/CX mapped register regions */
-#define GEN8_RDPM_MX_OFFSET 0xf00
-#define GEN8_RDPM_CX_OFFSET 0xf14
-
-void gen8_rdpm_mx_freq_update(struct gen8_gmu_device *gmu, u32 freq)
-{
-	if (gmu->rdpm_mx_virt) {
-		writel_relaxed(freq/1000, (gmu->rdpm_mx_virt + GEN8_RDPM_MX_OFFSET));
-
-		/*
-		 * ensure previous writes post before this one,
-		 * i.e. act like normal writel()
-		 */
-		wmb();
-	}
-}
-
-void gen8_rdpm_cx_freq_update(struct gen8_gmu_device *gmu, u32 freq)
-{
-	if (gmu->rdpm_cx_virt) {
-		writel_relaxed(freq/1000, (gmu->rdpm_cx_virt + GEN8_RDPM_CX_OFFSET));
-
-		/*
-		 * ensure previous writes post before this one,
-		 * i.e. act like normal writel()
-		 */
-		wmb();
-	}
-}
-
 int gen8_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);

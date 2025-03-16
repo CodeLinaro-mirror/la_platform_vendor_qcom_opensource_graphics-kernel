@@ -4,6 +4,7 @@
  * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <dt-bindings/power/qcom-rpmpd.h>
 #include <linux/of.h>
 #include <linux/io.h>
 
@@ -1009,4 +1010,191 @@ void gmu_core_mark_for_coldboot(struct kgsl_device *device)
 		return;
 
 	set_bit(GMU_FORCE_COLDBOOT, &gmu_core->flags);
+}
+
+void gmu_core_rdpm_probe(struct kgsl_device *device)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct resource *res;
+
+	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM, "rdpm_cx");
+	if (res)
+		gmu->rdpm_cx_virt = devm_ioremap(&device->pdev->dev,
+				res->start, resource_size(res));
+
+	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM, "rdpm_mx");
+	if (res)
+		gmu->rdpm_mx_virt = devm_ioremap(&device->pdev->dev,
+				res->start, resource_size(res));
+}
+
+void gmu_core_rdpm_mx_freq_update(struct kgsl_device *device, u32 freq)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+
+	if (!gmu->rdpm_mx_virt)
+		return;
+
+	writel_relaxed(freq / 1000, (gmu->rdpm_mx_virt + gmu->rdpm_mx_offset));
+
+	/* Ensure previous writes post before this one, i.e. act like normal writel() */
+	wmb();
+}
+
+void gmu_core_rdpm_cx_freq_update(struct kgsl_device *device, u32 freq)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+
+	if (!gmu->rdpm_cx_virt)
+		return;
+
+	writel_relaxed(freq / 1000, (gmu->rdpm_cx_virt + gmu->rdpm_cx_offset));
+
+	/* Ensure previous writes post before this one, i.e. act like normal writel() */
+	wmb();
+}
+
+int gmu_core_clk_probe(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct platform_device *gmu_pdev = GMU_PDEV(device);
+	struct gmu_core_device *gmu = &device->gmu_core;
+	int tbl_size, num_freqs, offset, ret, i;
+
+	ret = devm_clk_bulk_get_all(GMU_PDEV_DEV(device), &gmu->clks);
+	if (ret < 0)
+		return ret;
+
+	/*
+	 * Voting for apb_pclk will enable power and clocks required for
+	 * QDSS path to function. However, if QCOM_KGSL_QDSS_STM is not enabled,
+	 * QDSS is essentially unusable. Hence, if QDSS cannot be used,
+	 * don't vote for this clock.
+	 */
+	if (!IS_ENABLED(CONFIG_QCOM_KGSL_QDSS_STM)) {
+		for (i = 0; i < ret; i++) {
+			if (!strcmp(gmu->clks[i].id, "apb_pclk")) {
+				gmu->clks[i].clk = NULL;
+				break;
+			}
+		}
+	}
+
+	gmu->num_clks = ret;
+
+	of_property_read_u32(GMU_PDEV(device)->dev.of_node,
+		"qcom,gmu-perf-ddr-bw", &gmu->perf_ddr_bw);
+
+	/* Read the optional list of GMU frequencies */
+	if (of_get_property(gmu_pdev->dev.of_node,
+		"qcom,gmu-freq-table", &tbl_size) == NULL)
+		goto default_gmu_freq;
+
+	num_freqs = (tbl_size / sizeof(u32)) / 2;
+	if (num_freqs != ARRAY_SIZE(gmu->freqs))
+		goto default_gmu_freq;
+
+	for (i = 0; i < num_freqs; i++) {
+		offset = i * 2;
+		ret = of_property_read_u32_index(gmu_pdev->dev.of_node,
+			"qcom,gmu-freq-table", offset, &gmu->freqs[i]);
+		if (ret)
+			goto default_gmu_freq;
+		ret = of_property_read_u32_index(gmu_pdev->dev.of_node,
+			"qcom,gmu-freq-table", offset + 1, &gmu->vlvls[i]);
+		if (ret)
+			goto default_gmu_freq;
+	}
+
+	return 0;
+
+default_gmu_freq:
+	/* The GMU frequency table is missing or invalid. Go with a default */
+	gmu->freqs[0] = GMU_FREQ_MIN;
+	gmu->vlvls[0] = RPMH_REGULATOR_LEVEL_LOW_SVS;
+	gmu->freqs[1] = GMU_FREQ_MAX;
+	gmu->vlvls[1] = RPMH_REGULATOR_LEVEL_SVS;
+
+	if (adreno_is_a6xx(adreno_dev) && !adreno_is_a660(adreno_dev))
+		gmu->vlvls[0] = RPMH_REGULATOR_LEVEL_MIN_SVS;
+
+	return 0;
+}
+
+int gmu_core_clock_set_rate(struct kgsl_device *device, u32 req_freq)
+{
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+	int ret;
+
+	gmu_core_rdpm_cx_freq_update(device, req_freq / 1000);
+
+	ret = kgsl_clk_set_rate(gmu_core->clks, gmu_core->num_clks, "gmu_clk", req_freq);
+	if (ret) {
+		dev_err(GMU_PDEV_DEV(device), "GMU clock:%d set failed:%d\n", req_freq, ret);
+		return ret;
+	}
+
+	trace_kgsl_gmu_pwrlevel(req_freq, gmu_core->cur_freq);
+
+	gmu_core->cur_freq = req_freq;
+
+	return ret;
+}
+
+int gmu_core_enable_clks(struct kgsl_device *device, u32 level)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	int ret;
+
+	ret = gmu_core_clock_set_rate(device, gmu->freqs[level]);
+	if (ret)
+		return ret;
+
+	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "hub_clk",
+			adreno_dev->gmu_hub_clk_freq);
+	if (ret && ret != -ENODEV) {
+		dev_err(GMU_PDEV_DEV(device), "Unable to set the HUB clock ret %d\n", ret);
+		return ret;
+	}
+
+	ret = clk_bulk_prepare_enable(gmu->num_clks, gmu->clks);
+	if (ret) {
+		dev_err(GMU_PDEV_DEV(device), "Cannot enable GMU clocks ret %d\n", ret);
+		return ret;
+	}
+
+	device->state = KGSL_STATE_AWARE;
+
+	return 0;
+}
+
+void gmu_core_disable_clks(struct kgsl_device *device)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+
+	clk_bulk_disable_unprepare(gmu->num_clks, gmu->clks);
+}
+
+void gmu_core_scale_gmu_frequency(struct kgsl_device *device, int buslevel)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 cur_freq = gmu->cur_freq;
+	u32 req_freq = gmu->freqs[0];
+
+	if (!gmu->perf_ddr_bw)
+		return;
+
+	/*
+	 * Scale the GMU if DDR is at a CX corner at which GMU can run at
+	 * a higher frequency
+	 */
+	if (pwr->ddr_table[buslevel] >= gmu->perf_ddr_bw)
+		req_freq = gmu->freqs[GMU_MAX_PWRLEVELS - 1];
+
+	if (cur_freq == req_freq)
+		return;
+
+	gmu_core_clock_set_rate(device, req_freq);
 }

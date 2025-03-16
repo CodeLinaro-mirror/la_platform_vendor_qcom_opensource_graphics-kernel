@@ -1050,12 +1050,12 @@ static void gen8_process_f2h_platform_msg(struct adreno_device *adreno_dev, u32 
 	struct hfi_msg_platform *msg = (struct hfi_msg_platform *)rcvd;
 
 	if (msg->sub_type == F2H_ST_MSG_SCALE_GMU) {
-		struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 		struct hfi_scale_gmu_cmd *cmd = (struct hfi_scale_gmu_cmd *)&(msg->cmd);
 		u32 index = cmd->gmu_pwrlevel;
 
 		if ((index > 0) && (index <= GMU_MAX_PWRLEVELS))
-			gen8_gmu_clock_set_rate(adreno_dev, gmu->freqs[index - 1]);
+			gmu_core_clock_set_rate(device, device->gmu_core.freqs[index - 1]);
 	}
 }
 
@@ -2222,6 +2222,7 @@ static int gen8_hwsched_build_dcvs_table(struct adreno_device *adreno_dev)
 static u32 gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct hfi_table_cmd *cmd;
@@ -2237,7 +2238,7 @@ static u32 gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev
 	 * Return early if the scaling table is already generated or if the ddr threshold
 	 * to scale is not set for the target
 	 */
-	if (gmu->gmu_scaling_cmdbuf || !gmu->perf_ddr_bw)
+	if (gmu->gmu_scaling_cmdbuf || !gmu_core->perf_ddr_bw)
 		return 0;
 
 	/*
@@ -2294,7 +2295,7 @@ static u32 gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev
 
 	/* Find the ddr index for gmu level 1 */
 	for (ddr_index = 0; ddr_index < pwr->ddr_table_count; ddr_index++) {
-		if (pwr->ddr_table[ddr_index] >= gmu->perf_ddr_bw)
+		if (pwr->ddr_table[ddr_index] >= gmu_core->perf_ddr_bw)
 			break;
 	}
 	entry->data[0] = 0;

@@ -2652,6 +2652,9 @@ int gen8_probe_common(struct platform_device *pdev,
 		return ret;
 
 	if (adreno_preemption_feature_set(adreno_dev)) {
+		adreno_dev->total_ctxt_record_sz = gen8_core->ctxt_record_size ?
+			gen8_core->ctxt_record_size : GEN8_CP_CTXRECORD_SIZE_IN_BYTES;
+
 		adreno_dev->preempt.preempt_level = gen8_core->preempt_level;
 		adreno_dev->preempt.skipsaverestore = true;
 		adreno_dev->preempt.usesgmem = true;

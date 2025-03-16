@@ -62,20 +62,6 @@ void gen7_hwsched_fault(struct adreno_device *adreno_dev, u32 fault)
 	adreno_scheduler_fault(adreno_dev, fault);
 }
 
-static void gen7_hwsched_snapshot_preemption_records(struct kgsl_device *device,
-	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md)
-{
-	u64 ctxt_record_size = md->size;
-	u64 offset;
-
-	do_div(ctxt_record_size, KGSL_PRIORITY_MAX_RB_LEVELS);
-
-	/* All preemption records exist as a single mem alloc entry */
-	for (offset = 0; offset < md->size; offset += ctxt_record_size)
-		adreno_hwsched_snapshot_preemption_record(device, snapshot, md,
-				offset, ctxt_record_size);
-}
-
 void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
@@ -131,7 +117,7 @@ void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 				entry->md);
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_CSW_PRIV_NON_SECURE)
-			gen7_hwsched_snapshot_preemption_records(device, snapshot,
+			adreno_hwsched_snapshot_preemption_records(device, snapshot,
 				entry->md);
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_PREEMPT_SCRATCH)

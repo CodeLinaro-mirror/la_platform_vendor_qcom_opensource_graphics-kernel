@@ -819,6 +819,8 @@ struct adreno_device {
 	u32 dcvs_tuning_penalty_lvl;
 	/** @dcvs_tuning_numbusy_lvl: Current DCVS tuning level for numbusy */
 	u32 dcvs_tuning_numbusy_lvl;
+	/** @total_ctxt_record_sz: Size of the total preemption record in bytes */
+	u64 total_ctxt_record_sz;
 };
 
 /* Time to wait for suspend recovery gate to complete */

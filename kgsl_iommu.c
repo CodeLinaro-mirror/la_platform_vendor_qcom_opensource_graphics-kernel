@@ -1184,7 +1184,7 @@ static bool kgsl_iommu_check_stall_on_fault(struct kgsl_iommu_context *ctx,
 	if (ctx->stalled_on_fault)
 		return false;
 
-	if (!mutex_trylock(&device->mutex))
+	if (!kgsl_mutex_trylock(&device->mutex))
 		return true;
 
 	/*
@@ -1196,7 +1196,7 @@ static bool kgsl_iommu_check_stall_on_fault(struct kgsl_iommu_context *ctx,
 	else
 		kgsl_pwrctrl_change_state(device, KGSL_STATE_AWARE);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 	return true;
 }
 

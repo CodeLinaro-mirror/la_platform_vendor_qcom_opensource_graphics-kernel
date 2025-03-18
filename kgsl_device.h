@@ -6,6 +6,7 @@
 #ifndef __KGSL_DEVICE_H
 #define __KGSL_DEVICE_H
 
+#include <linux/rtmutex.h>
 #include <linux/sched/mm.h>
 #include <linux/sched/task.h>
 #include <trace/events/gpu_mem.h>
@@ -18,6 +19,26 @@
 #define KGSL_IOCTL_FUNC(_cmd, _func) \
 	[_IOC_NR((_cmd))] = \
 		{ .cmd = (_cmd), .func = (_func) }
+
+#if IS_ENABLED(CONFIG_QCOM_KGSL_RT_MUTEX)
+#define kgsl_mutex_init(mutex)		rt_mutex_init(mutex)
+#define kgsl_mutex_lock(mutex)		rt_mutex_lock(mutex)
+#define kgsl_mutex_unlock(mutex)	rt_mutex_unlock(mutex)
+#define kgsl_mutex_trylock(mutex)	rt_mutex_trylock(mutex)
+
+#if (KERNEL_VERSION(5, 10, 0) >= LINUX_VERSION_CODE)
+#define kgsl_mutex_is_locked(mutex)	rt_mutex_is_locked(mutex)
+#else
+#define kgsl_mutex_is_locked(mutex)	((mutex)->rtmutex.owner != NULL)
+#endif
+
+#else
+#define kgsl_mutex_init(mutex)		mutex_init(mutex)
+#define kgsl_mutex_lock(mutex)		mutex_lock(mutex)
+#define kgsl_mutex_unlock(mutex)		mutex_unlock(mutex)
+#define kgsl_mutex_trylock(mutex)	mutex_trylock(mutex)
+#define kgsl_mutex_is_locked(mutex)	mutex_is_locked(mutex)
+#endif
 
 /*
  * KGSL device state is initialized to INIT when platform_probe		*
@@ -251,7 +272,11 @@ struct kgsl_device {
 	/** @skip_inline_submit: Track if user threads should make an inline submission or not */
 	bool skip_inline_submit;
 
+#if IS_ENABLED(CONFIG_QCOM_KGSL_RT_MUTEX)
+	struct rt_mutex mutex;
+#else
 	struct mutex mutex;
+#endif
 	uint32_t state;
 	uint32_t requested_state;
 

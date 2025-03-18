@@ -174,11 +174,11 @@ static int _prealloc_atomic_snap_mem_set(void *data, u64 val)
 {
 	struct kgsl_device *device = data;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	/* Allocate atomic snapshot memory if it's not allocated yet */
 	if (!val || device->snapshot_memory_atomic.ptr) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		return 0;
 	}
 
@@ -203,12 +203,12 @@ static int _prealloc_atomic_snap_mem_set(void *data, u64 val)
 	}
 
 	if (!device->snapshot_memory_atomic.ptr) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		dev_err(device->dev, "Failed to allocate memory for atomic snapshot\n");
 		return -ENOMEM;
 	}
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	return 0;
 }
@@ -728,9 +728,9 @@ static int _gmu_fp_store(void *data, u64 val)
 	if (val == device->gmu_core.gf_panic)
 		return 0;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	device->gmu_core.gf_panic = val;
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	return 0;
 }

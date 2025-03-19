@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _GEN8_REG_H
@@ -37,6 +37,8 @@
 
 /* RBBM registers */
 #define GEN8_RBBM_GBIF_CLIENT_QOS_CNTL           0x008
+#define GEN8_RBBM_GBIF_HALT                      0x00a
+#define GEN8_RBBM_GBIF_HALT_ACK                  0x00b
 #define GEN8_RBBM_WAIT_IDLE_CLOCKS_CNTL          0x010
 #define GEN8_RBBM_WAIT_IDLE_CLOCKS_CNTL2         0x011
 #define GEN8_RBBM_STATUS                         0x012
@@ -766,6 +768,7 @@
 #define GEN8_CP_APERTURE_CNTL_GMU                              0x81d
 #define GEN8_CP_APERTURE_CNTL_CD                               0x81e
 #define GEN8_CP_CP2GMU_STATUS                                  0x822
+#define GEN8_CP_SEMAPHORE_REG_0                                0x825
 #define GEN8_CP_RL_ERROR_DETAILS_0                             0x840
 #define GEN8_CP_RL_ERROR_DETAILS_1                             0x841
 #define GEN8_CP_CRASH_DUMP_SCRIPT_BASE_LO                      0x842
@@ -881,6 +884,7 @@
 #define GEN8_CP_ROQ_SDS_STATUS_PIPE                            0x924
 #define GEN8_CP_ROQ_MRB_STATUS_PIPE                            0x925
 #define GEN8_CP_ROQ_VSD_STATUS_PIPE                            0x926
+#define GEN8_CP_RESERVED_REG_0                                 0x958
 #define GEN8_CP_SLICE_MEM_POOL_DBG_ADDR_PIPE                   0xb00
 #define GEN8_CP_SLICE_MEM_POOL_DBG_DATA_PIPE                   0xb01
 #define GEN8_CP_SLICE_CHICKEN_DBG_PIPE                         0xb93
@@ -1293,6 +1297,7 @@
 
 #define GEN8_GBIF_CLIENT_HALT_MASK        BIT(0)
 #define GEN8_GBIF_ARB_HALT_MASK           BIT(1)
+#define GEN8_GBIF_GX_HALT_MASK            BIT(0)
 #define GEN8_GBIF_REINIT_GX_IDLE_MASK     BIT(0)
 
 #define GEN8_GBIF_PERF_PWR_CNT_EN                0x3cc0

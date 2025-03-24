@@ -1321,7 +1321,7 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 	struct kgsl_context *context = NULL;
 	int id, ret = 0;
 	struct list_head hw_fence_list;
-	struct adreno_hw_fence_entry *entry, *tmp;
+	struct adreno_hw_fence_entry *entry;
 
 	/*
 	 * Since we need to wait for ack from GMU when sending each inflight fence back to GMU, we
@@ -1338,7 +1338,9 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 	}
 	read_unlock(&device->context_lock);
 
-	list_for_each_entry_safe(entry, tmp, &hw_fence_list, reset_node) {
+	list_for_each_entry(entry, &hw_fence_list, reset_node) {
+		struct adreno_context *drawctxt = entry->drawctxt;
+		struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
 
 		/*
 		 * This is part of the reset sequence and any error in this path will be handled by
@@ -1347,6 +1349,13 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 		ret = gen7_send_hw_fence_hfi_wait_ack(adreno_dev, entry, 0);
 		if (ret)
 			break;
+		/*
+		 * If HW_FENCE_FLAG_SKIP_MEMSTORE is set, then GMU context queue header will not be
+		 * updated for this fence. Hence, update it here.
+		 */
+		if (((entry->cmd.flags & HW_FENCE_FLAG_SKIP_MEMSTORE) != 0) &&
+			(timestamp_cmp((u32)entry->cmd.ts, hdr->out_fence_ts) > 0))
+			hdr->out_fence_ts = (u32)entry->cmd.ts;
 	}
 
 	return ret;

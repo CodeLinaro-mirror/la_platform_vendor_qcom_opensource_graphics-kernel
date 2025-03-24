@@ -1397,6 +1397,8 @@ int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 		} else {
 			dev_err(device->dev, "GPU CX wait timeout\n");
 		}
+		KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
+			GMU_PDEV(device), 0ULL, GMU_FAULT_CX_WAIT_TIMEOUT);
 	}
 
 	if (pwr->cx_regulator)

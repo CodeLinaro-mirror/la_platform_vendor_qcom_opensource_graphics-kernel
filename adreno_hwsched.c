@@ -256,7 +256,7 @@ static int _retire_syncobj(struct adreno_device *adreno_dev,
 	 * send it to the GMU
 	 */
 	if (test_bit(ADRENO_HWSCHED_HW_FENCE, &hwsched->flags) &&
-		((syncobj->flags & KGSL_SYNCOBJ_HW)))
+		test_bit(KGSL_SYNCOBJ_HW, &syncobj->flags))
 		return 1;
 
 	/*
@@ -1303,25 +1303,28 @@ void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj)
 	}
 }
 
+static bool _retire_hw_syncobj(struct kgsl_drawobj *drawobj)
+{
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
+	struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
+
+	if (timestamp_cmp(drawobj->timestamp, hdr->sync_obj_ts) > 0)
+		return false;
+
+	adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
+	kgsl_drawobj_destroy(drawobj);
+	return true;
+}
+
 static bool drawobj_retired(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj)
 {
-	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_drawobj_cmd *cmdobj;
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 
-	if ((drawobj->type & SYNCOBJ_TYPE) != 0) {
-		struct gmu_context_queue_header *hdr =
-			drawctxt->gmu_context_queue.hostptr;
-
-		if (timestamp_cmp(drawobj->timestamp, hdr->sync_obj_ts) > 0)
-			return false;
-
-		adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
-		kgsl_drawobj_destroy(drawobj);
-		return true;
-	}
+	if ((drawobj->type & SYNCOBJ_TYPE) != 0)
+		return _retire_hw_syncobj(drawobj);
 
 	cmdobj = CMDOBJ(drawobj);
 
@@ -1530,15 +1533,8 @@ bool adreno_hwsched_drawobj_replay(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj_cmd *cmdobj;
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 
-	if ((drawobj->type & SYNCOBJ_TYPE) != 0) {
-
-		if (kgsl_drawobj_events_pending(SYNCOBJ(drawobj)))
-			return true;
-
-		adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
-		kgsl_drawobj_destroy(drawobj);
-		return false;
-	}
+	if ((drawobj->type & SYNCOBJ_TYPE) != 0)
+		return _retire_hw_syncobj(drawobj);
 
 	cmdobj = CMDOBJ(drawobj);
 

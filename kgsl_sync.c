@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2019, 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/soc/qcom,ipcc.h>
@@ -796,7 +796,7 @@ static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct d
 	struct kgsl_drawobj_sync *syncobj = event->syncobj;
 	u32 max_hw_fence = event->device->max_syncobj_hw_fence_count;
 
-	if (syncobj->flags & KGSL_SYNCOBJ_SW)
+	if (test_bit(KGSL_SYNCOBJ_SW, &syncobj->flags))
 		return;
 
 	if (!kgsl_is_hw_fence(fence)) {
@@ -805,14 +805,14 @@ static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct d
 		 * fence in this sync object means we can't send this sync object to the hardware
 		 */
 		if (!dma_fence_is_signaled(fence))
-			syncobj->flags |= KGSL_SYNCOBJ_SW;
+			set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
 		return;
 	}
 
 	if (!syncobj->hw_fences) {
 		syncobj->hw_fences = kcalloc(max_hw_fence, sizeof(*syncobj->hw_fences), GFP_KERNEL);
 		if (!syncobj->hw_fences) {
-			syncobj->flags |= KGSL_SYNCOBJ_SW;
+			set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
 			return;
 		}
 	}
@@ -820,7 +820,7 @@ static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct d
 	if (syncobj->num_hw_fence < max_hw_fence)
 		syncobj->hw_fences[syncobj->num_hw_fence++].fence = fence;
 	else
-		syncobj->flags |= KGSL_SYNCOBJ_SW;
+		set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
 }
 
 void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size)

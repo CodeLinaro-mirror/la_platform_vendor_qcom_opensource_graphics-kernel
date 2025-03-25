@@ -563,6 +563,10 @@ static const struct gen8_pwrup_extlist gen8_3_0_pwrup_extlist[] = {
 
 struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
 	{ GEN8_CP_RESERVED_REG_0, BIT(PIPE_NONE), 0, 0, 1, },
+	{ GEN8_CP_CHICKEN_DBG_PIPE, BIT(PIPE_BV) | BIT(PIPE_BR) | BIT(PIPE_LPAC) | BIT(PIPE_AQE0) |
+		BIT(PIPE_AQE1) | BIT(PIPE_DDE_BR) | BIT(PIPE_DDE_BV), 0, 0, 0, },
+	{ GEN8_GPU_CX_MISC_SMMU_INTR_MASK0, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_GPU_CX_MISC_SMMU_INTR_MASK1, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_UCHE_MODE_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_UCHE_CACHE_WAYS, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_UCHE_CLIENT_PF, BIT(PIPE_NONE), 0, 0, 0, },

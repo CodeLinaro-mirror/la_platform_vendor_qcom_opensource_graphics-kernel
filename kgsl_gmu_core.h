@@ -72,6 +72,7 @@ enum gmu_core_flags {
 	GMU_DISABLE_SLUMBER,
 	GMU_THERMAL_MITIGATION,
 	GMU_FORCE_COLDBOOT,
+	GMU_SOCCP_VOTE_ON,
 };
 
 /*
@@ -447,8 +448,6 @@ enum {
 	GMU_PRIV_WARMBOOT_GMU_INIT_DONE,
 	/* Indicates if GPU BOOT HFI messages are recorded successfully */
 	GMU_PRIV_WARMBOOT_GPU_BOOT_DONE,
-	/* Indicates if soccp was voted on for hardware fences */
-	GMU_PRIV_SOCCP_VOTE_ON,
 };
 
 struct device_node;
@@ -799,13 +798,12 @@ void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace);
 
 /**
  * gmu_core_soccp_vote - vote for soccp power
- * @dev: Pointer to gmu pdev device
- * @flags: Pointer to gmu flags
+ * @device: Pointer to kgsl device
  * @pwr_on: Boolean to indicate vote on or off
 
  * Return: Negative error on failure and zero on success.
  */
-int gmu_core_soccp_vote(struct device *dev, unsigned long *flags, bool pwr_on);
+int gmu_core_soccp_vote(struct kgsl_device *device, bool pwr_on);
 
 /**
  * gmu_core_capabilities_enabled - Check specific capabilities are enabled or not

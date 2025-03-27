@@ -13,6 +13,7 @@
 #include "adreno_trace.h"
 #include "kgsl_device.h"
 #include "kgsl_gmu_core.h"
+#include "kgsl_power_trace.h"
 #include "kgsl_sync.h"
 #include "kgsl_trace.h"
 
@@ -735,7 +736,7 @@ static void _gmu_trace_dcvs_pwrlevel(struct kgsl_device *device, struct gmu_trac
 					data->prev_pwrlvl,
 					pwr->pwrlevels[data->prev_pwrlvl].gpu_freq,
 					pkt->ticks);
-		trace_gpu_frequency(pwr->pwrlevels[data->new_pwrlvl].gpu_freq/1000,
+		KGSL_TRACE_GPU_FREQ(pwr->pwrlevels[data->new_pwrlvl].gpu_freq/1000,
 					0, pkt->ticks);
 	}
 

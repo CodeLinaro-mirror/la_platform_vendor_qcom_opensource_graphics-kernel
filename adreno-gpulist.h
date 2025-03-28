@@ -3275,6 +3275,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 	.ctxt_record_size = (19708 * SZ_1K),
 	.therm_profile = &therm_profile_8_2_0,
 	.limits_mit_cfg = &gen8_2_0_limits_mit_cfg,
+	.preempt_level = 1,
 };
 
 /* GEN8_4_0 noncontext register list */

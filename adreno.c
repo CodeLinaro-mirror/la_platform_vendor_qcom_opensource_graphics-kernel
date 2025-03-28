@@ -2663,7 +2663,11 @@ static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
 		else
 			device->pwrctrl.ctrl_flags = 0;
 
-		kgsl_pwrscale_enable(device);
+		if (device->host_based_dcvs)
+			kgsl_pwrscale_enable(device);
+		else
+			device->ftbl->gmu_based_dcvs_pwr_ops(device, enable,
+					GPU_PWRLEVEL_OP_DCVS_ENABLE);
 	} else {
 		if (gmu_core_isenabled(device)) {
 			set_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
@@ -2674,7 +2678,13 @@ static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
 			kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
 			device->pwrctrl.ctrl_flags = KGSL_PWR_ON;
 		}
-		kgsl_pwrscale_disable(device, true);
+		if (device->host_based_dcvs) {
+			kgsl_pwrscale_disable(device, true);
+		} else {
+			device->ftbl->gmu_based_dcvs_pwr_ops(device, enable,
+					GPU_PWRLEVEL_OP_DCVS_ENABLE);
+			device->ftbl->gmu_based_dcvs_pwr_ops(device, 0, GPU_PWRLEVEL_OP_GPUCLK);
+		}
 	}
 
 	mutex_unlock(&device->mutex);

@@ -122,6 +122,8 @@
 	 BIT(CP_SW_LRZRTREFCNTOVF) |		\
 	 BIT(CP_SW_LRZRTCLRRESMISS))
 
+extern u32 adreno_slice_mask_override;
+
 /* IFPC & Preemption static powerup restore list */
 static const u32 gen8_pwrup_reglist[] = {
 	GEN8_UCHE_MODE_CNTL,
@@ -571,6 +573,7 @@ struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
 	{ GEN8_UCHE_CCHE_HW_DBG_CNTL, BIT(PIPE_NONE), 0, 0, 2, },
 	{ GEN8_GRAS_NC_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
 	{ GEN8_GRAS_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_RB_RBP_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
 	{ GEN8_RB_DBG_ECO_CNTL, BIT(PIPE_BR), 0, 0, 3, },
 	{ GEN8_RB_CCU_DBG_ECO_CNTL, BIT(PIPE_BR), 0, 0, 3, },
 	{ GEN8_RB_CCU_CNTL, BIT(PIPE_BR), 0, 0, 0, },
@@ -979,6 +982,10 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
 
 	if (adreno_is_gen8_2_0(adreno_dev)) {
+		if (adreno_slice_mask_override != U32_MAX)
+			kgsl_regwrite(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_TEST,
+					adreno_slice_mask_override);
+
 		kgsl_regread(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_FINAL, &slice_mask);
 		slice_mask = FIELD_GET(GENMASK(3, 0), slice_mask);
 
@@ -3256,6 +3263,21 @@ done:
 		rptr, wptr, ib1base, ib1sz, ib2base, ib2sz, rb_id);
 }
 
+/**
+ * gen8_get_gmem_size - Returns the GMEM size
+ * @adreno_dev: Handle to the adreno device
+ *
+ * Return: GMEM size in bytes
+ */
+u32 gen8_get_gmem_size(struct adreno_device *adreno_dev)
+{
+	if (adreno_is_gen8_2_0(adreno_dev))
+		return (adreno_dev->gpucore->gmem_size / GEN8_2_0_NUM_PHYSICAL_SLICES) *
+			gen8_get_num_slices(adreno_dev);
+
+	return adreno_dev->gpucore->gmem_size;
+}
+
 const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 	.base = {
 		.reg_offsets = gen8_register_offsets,
@@ -3283,6 +3305,7 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.power_feature_stats = gen8_power_feature_stats,
 		.acquire_cp_semaphore = gen8_acquire_cp_semaphore,
 		.release_cp_semaphore = gen8_release_cp_semaphore,
+		.get_gmem_size = gen8_get_gmem_size,
 	},
 	.hfi_probe = gen8_hwsched_hfi_probe,
 	.hfi_remove = gen8_hwsched_hfi_remove,
@@ -3315,6 +3338,7 @@ const struct gen8_gpudev adreno_gen8_gmu_gpudev = {
 		.fault_header = gen8_fault_header,
 		.acquire_cp_semaphore = gen8_acquire_cp_semaphore,
 		.release_cp_semaphore = gen8_release_cp_semaphore,
+		.get_gmem_size = gen8_get_gmem_size,
 	},
 	.hfi_probe = gen8_gmu_hfi_probe,
 	.handle_watchdog = gen8_gmu_handle_watchdog,

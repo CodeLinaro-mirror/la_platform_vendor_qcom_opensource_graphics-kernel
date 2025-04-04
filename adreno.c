@@ -53,6 +53,7 @@ static struct adreno_device device_3d0;
 static bool adreno_preemption_enable;
 static u32 kgsl_gpu_sku_override = U32_MAX;
 static u32 kgsl_gpu_speed_bin_override = U32_MAX;
+u32 adreno_slice_mask_override = U32_MAX;
 
 /* Nice level for the higher priority GPU start thread */
 int adreno_wake_nice = -7;
@@ -2291,7 +2292,7 @@ static int adreno_prop_device_info(struct kgsl_device *device,
 		.chip_id = adreno_dev->chipid,
 		.mmu_enabled = kgsl_mmu_has_feature(device, KGSL_MMU_PAGED),
 		.gmem_gpubaseaddr = 0,
-		.gmem_sizebytes = adreno_dev->gpucore->gmem_size,
+		.gmem_sizebytes = adreno_gmem_size(adreno_dev),
 	};
 
 	return copy_prop(param, &devinfo, sizeof(devinfo));
@@ -3721,6 +3722,15 @@ void adreno_gpufault_stats(struct adreno_device *adreno_dev,
 	}
 }
 
+static void adreno_set_thermal_index(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
+
+	if (ops->set_thermal_index)
+		ops->set_thermal_index(adreno_dev);
+}
+
 static const struct kgsl_functable adreno_functable = {
 	/* Mandatory functions */
 	.check_idle = adreno_check_idle,
@@ -3763,6 +3773,7 @@ static const struct kgsl_functable adreno_functable = {
 	.set_isdb_breakpoint_registers = adreno_set_isdb_breakpoint_registers,
 	.create_hw_fence = adreno_create_hw_fence,
 	.gmu_based_dcvs_pwr_ops = adreno_gmu_based_dcvs_pwr_ops,
+	.set_thermal_index = adreno_set_thermal_index,
 };
 
 static const struct component_master_ops adreno_ops = {
@@ -4103,6 +4114,9 @@ MODULE_PARM_DESC(gpu_sku_override, "Override SKU code identifier for GPU driver"
 
 module_param_named(gpu_speed_bin_override, kgsl_gpu_speed_bin_override, uint, 0600);
 MODULE_PARM_DESC(gpu_speed_bin_override, "Override GPU speed bin");
+
+module_param_named(slice_mask_override, adreno_slice_mask_override, uint, 0600);
+MODULE_PARM_DESC(slice_mask_override, "Override GPU slice mask");
 
 module_init(kgsl_3d_init);
 module_exit(kgsl_3d_exit);

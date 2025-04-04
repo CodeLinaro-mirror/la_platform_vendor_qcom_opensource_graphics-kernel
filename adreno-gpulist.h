@@ -2627,7 +2627,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
 				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
 		.compatible = "qcom,adreno-gpu-gen7-17-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_CONTENT_PROTECTION |
-			ADRENO_IFPC | ADRENO_PREEMPTION,
+			ADRENO_IFPC | ADRENO_PREEMPTION | ADRENO_BCL,
 		.gpudev = &adreno_gen7_gmu_gpudev.base,
 		.perfcounters = &adreno_gen7_no_cb_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
@@ -3275,6 +3275,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 	.ctxt_record_size = (19708 * SZ_1K),
 	.therm_profile = &therm_profile_8_2_0,
 	.limits_mit_cfg = &gen8_2_0_limits_mit_cfg,
+	.preempt_level = 1,
 };
 
 /* GEN8_4_0 noncontext register list */

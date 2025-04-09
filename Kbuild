@@ -73,11 +73,12 @@ endif
 ifeq ($(CONFIG_ARCH_SCUBA), y)
 	include $(KGSL_PATH)/config/gki_scuba.conf
 endif
-ifeq ($(CONFIG_ARCH_SUN), y)
-       include $(KGSL_PATH)/config/gki_sun.conf
-endif
 ifeq ($(CONFIG_ARCH_SM6150), y)
 	include $(KGSL_PATH)/config/gki_sm6150.conf
+	subdir-ccflags-y += $(LE_EXTRA_CFLAGS)
+endif
+ifeq ($(CONFIG_ARCH_SUN), y)
+	include $(KGSL_PATH)/config/gki_sun.conf
 	subdir-ccflags-y += $(LE_EXTRA_CFLAGS)
 endif
 

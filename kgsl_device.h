@@ -276,6 +276,7 @@ struct kgsl_device {
 	struct notifier_block panic_nb;
 	struct {
 		void *ptr;
+		dma_addr_t dma_handle;
 		u32 size;
 	} snapshot_memory_atomic;
 

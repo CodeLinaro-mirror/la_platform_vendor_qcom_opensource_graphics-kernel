@@ -3278,7 +3278,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 			ADRENO_PREEMPTION | ADRENO_LPAC | ADRENO_AQE |
 			ADRENO_GMU_WARMBOOT | ADRENO_IFPC | ADRENO_CONTENT_PROTECTION |
 			ADRENO_HW_FENCE | ADRENO_BCL | ADRENO_ACD | ADRENO_GMU_BASED_DCVS |
-			ADRENO_GMU_THERMAL_MITIGATION | ADRENO_CLX | ADRENO_DEFER_GMEM_ALLOC,
+			ADRENO_GMU_THERMAL_MITIGATION | ADRENO_CLX | ADRENO_DEFER_GMEM_ALLOC |
+			ADRENO_GMU_MINBW,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,

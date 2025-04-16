@@ -3176,6 +3176,8 @@ static const struct gen8_nonctxt_regs gen8_2_0_nonctxt_regs[] = {
 	/* Disable Dead Draw Merge scheme on RB-HLSQ */
 	{ GEN8_RB_RBP_CNTL, BIT(5), BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_CCU_CNTL, 0x00000068, BIT(PIPE_BR) },
+	/* Partially enable perf clear */
+	{ GEN8_RB_CCU_DBG_ECO_CNTL, 0x00002000, BIT(PIPE_BR) },
 	{ GEN8_RB_GC_GMEM_PROTECT, 0x12000000, BIT(PIPE_BR) },
 	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, 0x00000007, BIT(PIPE_BR) },
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, 0x00004000, BIT(PIPE_BR) },

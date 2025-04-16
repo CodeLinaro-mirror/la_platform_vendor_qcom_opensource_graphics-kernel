@@ -634,6 +634,8 @@ struct adreno_fault_proc {
  * @gpu_llc_slice_enable: To enable the GPU system cache slice or not
  * @gpuhtw_llc_slice: GPU pagetables system cache slice descriptor
  * @gpuhtw_llc_slice_enable: To enable the GPUHTW system cache slice or not
+ * @gpumv_llc_slice: GPU MV buffer system cache slice descriptor
+ * @gpumv_llc_slice_enable: To enable GPUMV buffer system cache slice or not
  * @zap_loaded: Used to track if zap was successfully loaded or not
  */
 struct adreno_device {
@@ -726,6 +728,8 @@ struct adreno_device {
 	bool gpu_llc_slice_enable;
 	void *gpuhtw_llc_slice;
 	bool gpuhtw_llc_slice_enable;
+	void *gpumv_llc_slice;
+	bool gpumv_llc_slice_enable;
 	unsigned int zap_loaded;
 	/**
 	 * @critpkts: Memory descriptor for 5xx critical packets if applicable
@@ -2141,6 +2145,9 @@ static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev
 
 	if (adreno_dev->gpuhtw_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
 		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+
+	if (adreno_dev->gpumv_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpumv_llc_slice))
+		llcc_slice_deactivate(adreno_dev->gpumv_llc_slice);
 }
 
 /**

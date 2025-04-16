@@ -1771,7 +1771,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a642l = {
 		.compatible = "qcom,adreno-gpu-a642l",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
 				ADRENO_CONTENT_PROTECTION |
-				ADRENO_PREEMPTION | ADRENO_IFPC | ADRENO_BCL |
+				ADRENO_PREEMPTION | ADRENO_IFPC |
 				ADRENO_ACD,
 		.gpudev = &adreno_a6xx_gmu_gpudev.base,
 		.perfcounters = &adreno_a6xx_perfcounters,
@@ -1805,7 +1805,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a643 = {
 		.compatible = "qcom,adreno-gpu-a643",
 		.features = ADRENO_APRIV |
 				ADRENO_IOCOHERENT | ADRENO_CONTENT_PROTECTION |
-				ADRENO_PREEMPTION | ADRENO_IFPC | ADRENO_BCL,
+				ADRENO_PREEMPTION | ADRENO_IFPC,
 		.gpudev = &adreno_a6xx_gmu_gpudev.base,
 		.perfcounters = &adreno_a6xx_perfcounters,
 		.uche_gmem_alignment = 0,

@@ -430,6 +430,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 	int ret;
 	struct cmd_list_obj *obj;
 	int is_current_rt = rt_task(current);
+	int nice = task_nice(current);
 
 	obj = kmem_cache_alloc(obj_cache, GFP_KERNEL);
 	if (!obj)
@@ -504,7 +505,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 
 done:
 	if (!is_current_rt)
-		sched_set_normal(current, 0);
+		sched_set_normal(current, nice);
 	mutex_unlock(&device->mutex);
 	if (ret)
 		kmem_cache_free(obj_cache, obj);

@@ -473,6 +473,7 @@ enum gmu_fault_panic_policy {
 	GMU_FAULT_HW_FENCE,
 	GMU_FAULT_WAIT_FOR_CX,
 	GMU_FAULT_CX_WAIT_TIMEOUT,
+	GMU_FAULT_CM3,
 	GMU_FAULT_MAX,
 };
 

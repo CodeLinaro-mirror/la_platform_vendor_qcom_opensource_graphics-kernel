@@ -816,12 +816,6 @@ void a6xx_hwsched_hfi_stop(struct adreno_device *adreno_dev)
 	kgsl_pwrctrl_axi(KGSL_DEVICE(adreno_dev), false);
 
 	clear_bit(GMU_PRIV_HFI_STARTED, &gmu->flags);
-
-	/*
-	 * Reset the hfi host access memory records, As GMU expects hfi memory
-	 * records to be clear in bootup.
-	 */
-	adreno_hwsched_reset_hfi_mem(adreno_dev);
 }
 
 static void enable_async_hfi(struct adreno_device *adreno_dev)

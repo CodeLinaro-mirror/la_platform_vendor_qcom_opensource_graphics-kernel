@@ -1711,6 +1711,8 @@ DCVS_TUNABLES_SYSFS_WO(target_fps, GPU_TUNING_KEY_TARGET_FPS);
 DCVS_TUNABLES_SYSFS_WO(num_samples_up, GPU_TUNING_KEY_NUM_SAMPLES_UP);
 DCVS_TUNABLES_SYSFS_WO(num_samples_down, GPU_TUNING_KEY_NUM_SAMPLES_DOWN);
 DCVS_TUNABLES_SYSFS_WO(strict_frame, GPU_TUNING_KEY_STRICT_FRAME);
+DCVS_TUNABLES_SYSFS_WO(non_linear_ramp_up, GPU_TUNING_KEY_NON_LINEAR_RAMP_UP);
+DCVS_TUNABLES_SYSFS_WO(non_linear_ramp_down, GPU_TUNING_KEY_NON_LINEAR_RAMP_DOWN);
 
 static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_penalty_up.attr.attr,
@@ -1721,6 +1723,8 @@ static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_num_samples_up.attr.attr,
 	&dcvs_attr_num_samples_down.attr.attr,
 	&dcvs_attr_strict_frame.attr.attr,
+	&dcvs_attr_non_linear_ramp_up.attr.attr,
+	&dcvs_attr_non_linear_ramp_down.attr.attr,
 	NULL,
 };
 

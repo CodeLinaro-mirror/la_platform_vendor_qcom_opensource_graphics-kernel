@@ -666,12 +666,24 @@ static int gmu_core_iommu_fault_handler(struct iommu_domain *domain,
 	return 0;
 }
 
+#if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
+static struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
+{
+	return iommu_paging_domain_alloc(dev);
+}
+#else
+static struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
+{
+	return iommu_domain_alloc(&platform_bus_type);
+}
+#endif
+
 int gmu_core_iommu_init(struct kgsl_device *device)
 {
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
 	int ret;
 
-	device->gmu_core.domain = iommu_domain_alloc(&platform_bus_type);
+	device->gmu_core.domain = gmu_core_iommu_domain_alloc(gmu_pdev_dev);
 	if (!device->gmu_core.domain) {
 		dev_err(gmu_pdev_dev, "Unable to allocate GMU IOMMU domain\n");
 		return -ENODEV;

@@ -2414,6 +2414,10 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	ret = gen8_hfi_send_minbw_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
+
 	ret = gen8_hfi_send_thermal_feature_ctrl(adreno_dev);
 	if (ret)
 		goto err;

@@ -84,6 +84,17 @@
 #define HFI_FEATURE_IFF_PCLX		32
 #define HFI_FEATURE_SOFT_RESET		0x10000001
 
+/*
+ * MINBW_HYST_MASK = 0xffff
+ * (7680 xo ticks which is 400us)
+ */
+#define DEFAULT_MINBW_HYST 0x1e00
+
+/* MINBW_IDX_MASK = 0xff0000*/
+#define DEFAULT_MINBW_IDX  0x1
+
+#define HFI_MINBW_DEFAULT (DEFAULT_MINBW_HYST | (DEFAULT_MINBW_IDX << 16))
+
 /* Types to be used with H2F_MSG_TABLE */
 enum hfi_table_type {
 	HFI_TABLE_BW_VOTE	= 0,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/interconnect.h>
@@ -1680,8 +1680,8 @@ static void gen8_hwsched_set_tuning_param(struct adreno_device *adreno_dev, u32 
 
 	if (device->state == KGSL_STATE_ACTIVE) {
 		/* If GMU is up, send the HFI */
-		gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev, HFI_VALUE_DCVS_TUNING_PARAM,
-				attr, hwsched->dcvs_tunables[attr].value, false);
+		gen8_hwsched_set_tuning_attrs(adreno_dev, HFI_VALUE_DCVS_TUNING_PARAM,
+				attr, hwsched->dcvs_tunables[attr].value);
 	} else {
 		/* Mark for updating GMU in the slumber exit path */
 		hwsched->dcvs_tunables[attr].update = true;
@@ -1693,12 +1693,22 @@ struct adreno_dcvs_tuning_attribute {
 	u32 tuning_attr;
 };
 
-#define DCVS_TUNABLES_SYSFS_WO(_name, param) \
+#define DCVS_TUNABLES_SYSFS(_name, param) \
 	static struct adreno_dcvs_tuning_attribute dcvs_attr_##_name = \
 	{ \
-		.attr = __ATTR(_name, 0200, NULL, dcvs_tuning_store), \
+		.attr = __ATTR(_name, 0644, dcvs_tuning_show, dcvs_tuning_store), \
 		.tuning_attr = param, \
 	}
+
+static ssize_t dcvs_tuning_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct adreno_dcvs_tuning_attribute *pattr = container_of(attr,
+						struct adreno_dcvs_tuning_attribute, attr);
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+				hwsched->dcvs_tunables[pattr->tuning_attr].value);
+}
 
 static ssize_t dcvs_tuning_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
@@ -1708,15 +1718,24 @@ static ssize_t dcvs_tuning_store(struct kobject *kobj,
 	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
 	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	u32 val = 0;
+	s64 val = 0;
 	int ret;
 
-	ret = kstrtou32(buf, 0, &val);
+	/* Since UINT_MAX and -1 can both be a valid input, parse in to s64 */
+	ret = kstrtos64(buf, 0, &val);
 	if (ret)
 		return ret;
 
+	/*
+	 * To reset a tunable, a user can either write a -1 or UINT_MAX. Both values can be
+	 * represented as UINT_MAX in a u32 variable. Hence store the value as a u32 and
+	 * make sure the input is within allowed range.
+	 */
+	if ((val < -1) || (val > UINT_MAX))
+		return -ERANGE;
+
 	kgsl_mutex_lock(&device->mutex);
-	hwsched->dcvs_tunables[pattr->tuning_attr].value = val;
+	hwsched->dcvs_tunables[pattr->tuning_attr].value = (u32) val;
 	device->ftbl->gmu_based_dcvs_pwr_ops(device,  pattr->tuning_attr,
 			GPU_PWRLEVEL_OP_TUNING_ATTR);
 	kgsl_mutex_unlock(&device->mutex);
@@ -1724,16 +1743,16 @@ static ssize_t dcvs_tuning_store(struct kobject *kobj,
 	return count;
 }
 
-DCVS_TUNABLES_SYSFS_WO(penalty_up, GPU_TUNING_KEY_BUSY_PENALTY_UP);
-DCVS_TUNABLES_SYSFS_WO(penalty_down, GPU_TUNING_KEY_BUSY_PENALTY_DOWN);
-DCVS_TUNABLES_SYSFS_WO(first_step_down, GPU_TUNING_KEY_FIRST_STEP_DOWN_COUNT);
-DCVS_TUNABLES_SYSFS_WO(subsequent_step_down, GPU_TUNING_KEY_SUBSEQUENT_STEP_DOWN_COUNT);
-DCVS_TUNABLES_SYSFS_WO(target_fps, GPU_TUNING_KEY_TARGET_FPS);
-DCVS_TUNABLES_SYSFS_WO(num_samples_up, GPU_TUNING_KEY_NUM_SAMPLES_UP);
-DCVS_TUNABLES_SYSFS_WO(num_samples_down, GPU_TUNING_KEY_NUM_SAMPLES_DOWN);
-DCVS_TUNABLES_SYSFS_WO(strict_frame, GPU_TUNING_KEY_STRICT_FRAME);
-DCVS_TUNABLES_SYSFS_WO(non_linear_ramp_up, GPU_TUNING_KEY_NON_LINEAR_RAMP_UP);
-DCVS_TUNABLES_SYSFS_WO(non_linear_ramp_down, GPU_TUNING_KEY_NON_LINEAR_RAMP_DOWN);
+DCVS_TUNABLES_SYSFS(penalty_up, GPU_TUNING_KEY_BUSY_PENALTY_UP);
+DCVS_TUNABLES_SYSFS(penalty_down, GPU_TUNING_KEY_BUSY_PENALTY_DOWN);
+DCVS_TUNABLES_SYSFS(first_step_down, GPU_TUNING_KEY_FIRST_STEP_DOWN_COUNT);
+DCVS_TUNABLES_SYSFS(subsequent_step_down, GPU_TUNING_KEY_SUBSEQUENT_STEP_DOWN_COUNT);
+DCVS_TUNABLES_SYSFS(target_fps, GPU_TUNING_KEY_TARGET_FPS);
+DCVS_TUNABLES_SYSFS(num_samples_up, GPU_TUNING_KEY_NUM_SAMPLES_UP);
+DCVS_TUNABLES_SYSFS(num_samples_down, GPU_TUNING_KEY_NUM_SAMPLES_DOWN);
+DCVS_TUNABLES_SYSFS(strict_frame, GPU_TUNING_KEY_STRICT_FRAME);
+DCVS_TUNABLES_SYSFS(non_linear_ramp_up, GPU_TUNING_KEY_NON_LINEAR_RAMP_UP);
+DCVS_TUNABLES_SYSFS(non_linear_ramp_down, GPU_TUNING_KEY_NON_LINEAR_RAMP_DOWN);
 
 static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_penalty_up.attr.attr,
@@ -1818,6 +1837,7 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 	struct gen8_hwsched_device *gen8_hwsched_dev;
 	struct device *gmu_dev;
 	int ret;
+	int i;
 
 	gen8_hwsched_dev = devm_kzalloc(&pdev->dev, sizeof(*gen8_hwsched_dev),
 				GFP_KERNEL);
@@ -1856,6 +1876,9 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 	gmu_dev = GMU_PDEV_DEV(device);
 	WARN_ON(kobject_init_and_add(&adreno_dev->hwsched.dcvs_kobj, &ktype_dcvs, &gmu_dev->kobj,
 				"dcvs_tunables"));
+	/* Initialize the dcvs tunables */
+	for (i = 0; i < GPU_TUNING_KEY_MAX; i++)
+		adreno_dev->hwsched.dcvs_tunables[i].value = GPU_DCVS_TUNING_INVALID_VALUE;
 
 	return ret;
 }

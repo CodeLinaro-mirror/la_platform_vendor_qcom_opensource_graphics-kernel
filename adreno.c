@@ -912,9 +912,9 @@ static int adreno_of_get_power(struct adreno_device *adreno_dev,
 }
 
 /* Read the fuse through the new and fancy nvmem method */
-static int adreno_read_speed_bin(struct platform_device *pdev)
+static int adreno_read_fuse(struct platform_device *pdev, const char *fuse)
 {
-	struct nvmem_cell *cell = nvmem_cell_get(&pdev->dev, "speed_bin");
+	struct nvmem_cell *cell = nvmem_cell_get(&pdev->dev, fuse);
 	int ret = PTR_ERR_OR_ZERO(cell);
 	void *buf;
 	int val = 0;
@@ -1342,11 +1342,17 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	adreno_update_soc_hw_revision_quirks(adreno_dev, pdev);
 
-	status = adreno_read_speed_bin(pdev);
+	status = adreno_read_fuse(pdev, "speed_bin");
 	if (status < 0)
 		goto err;
 
 	device->speed_bin = status;
+
+	status = adreno_read_fuse(pdev, "gpu_debug_bus_bin");
+	if (status < 0)
+		dev_err(device->dev, "failed to read gpu_debug_bus_bin nvmem cell\n");
+
+	device->debug_bus_bin = status;
 
 	adreno_read_soc_code(device);
 

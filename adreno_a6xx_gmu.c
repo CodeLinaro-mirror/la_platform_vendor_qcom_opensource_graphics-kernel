@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/component.h>
@@ -23,6 +23,7 @@
 #include "adreno_trace.h"
 #include "kgsl_bus.h"
 #include "kgsl_device.h"
+#include "kgsl_gmu_core.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
 
@@ -611,11 +612,10 @@ void a6xx_gmu_disable_gdsc(struct adreno_device *adreno_dev)
 int a6xx_gmu_device_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	u32 val = 0x00000100;
 	u32 mask = 0x000001FF;
 
-	gmu_core_reset_trace_header(&gmu->trace);
+	gmu_core_reset_trace_header(&device->gmu_core.trace);
 	gmu_ao_sync_event(adreno_dev);
 
 	/* Check for 0xBABEFACE on legacy targets */
@@ -1506,8 +1506,8 @@ void a6xx_gmu_register_config(struct adreno_device *adreno_dev)
 		kgsl_regwrite(device, A6XX_GBIF_HALT, 0x0);
 
 	/* Set vrb address before starting GMU */
-	if (!IS_ERR_OR_NULL(gmu->vrb))
-		gmu_core_regwrite(device, A6XX_GMU_GENERAL_11, gmu->vrb->gmuaddr);
+	if (!IS_ERR_OR_NULL(device->gmu_core.vrb))
+		gmu_core_regwrite(device, A6XX_GMU_GENERAL_11, device->gmu_core.vrb->gmuaddr);
 
 	/* Set the log wptr index */
 	gmu_core_regwrite(device, A6XX_GPU_GMU_CX_GMU_PWR_COL_CP_RESP,
@@ -2670,7 +2670,7 @@ int a6xx_gmu_probe(struct kgsl_device *device,
 	set_bit(GMU_ENABLED, &device->gmu_core.flags);
 
 	/* Initialize to zero to detect trace packet loss */
-	gmu->trace.seq_num = 0;
+	device->gmu_core.trace.seq_num = 0;
 
 	device->gmu_core.dev_ops = &a6xx_gmudev;
 

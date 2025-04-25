@@ -576,6 +576,10 @@ struct gmu_core_device {
 	u32 cur_level;
 	/** @gpu_pwrscale_enable: Flag to toggle GMU based DCVS pwrscale */
 	bool gpu_pwrscale_enable;
+	/** @vrb: GMU virtual register bank memory */
+	struct kgsl_memdesc *vrb;
+	/** @trace: gmu trace container */
+	struct kgsl_gmu_trace trace;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -950,4 +954,16 @@ void gmu_core_disable_clks(struct kgsl_device *device);
  * @buslevel: DDR bus level to determine the required GMU frequency
  */
 void gmu_core_scale_gmu_frequency(struct kgsl_device *device, int buslevel);
+
+/**
+ * gmu_core_hwsched_memory_init() - Initialize GMU hardware-scheduler memory
+ * @device: Pointer to the kgsl device
+ *
+ * This function initializes the GMU hardware-scheduler memory
+ * by setting up the GMU virtual bank and GMU trace log.
+ *
+ * Return: 0 on success or negative error on failure.
+ */
+int gmu_core_hwsched_memory_init(struct kgsl_device *device);
+
 #endif /* __KGSL_GMU_CORE_H */

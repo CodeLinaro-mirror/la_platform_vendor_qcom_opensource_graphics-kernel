@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -12,6 +12,7 @@
 #include "adreno_gen8_gmu.h"
 #include "adreno_gen8_hfi.h"
 #include "kgsl_device.h"
+#include "kgsl_gmu_core.h"
 #include "kgsl_trace.h"
 
 /* Below section is for all structures related to HFI queues */
@@ -539,7 +540,8 @@ int gen8_hfi_process_queue(struct gen8_gmu_device *gmu,
 			adreno_gen8_receive_debug_req(gmu, rcvd);
 			break;
 		case F2H_MSG_PROCESS_TRACE:
-			gmu_core_process_trace_data(device, GMU_PDEV_DEV(device), &gmu->trace);
+			gmu_core_process_trace_data(device,
+					GMU_PDEV_DEV(device), &device->gmu_core.trace);
 			break;
 		default: /* No Reply */
 			dev_err(GMU_PDEV_DEV(device),

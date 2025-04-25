@@ -2102,25 +2102,11 @@ static void gen8_hwsched_send_tuning_attrs(struct adreno_device *adreno_dev)
 	u32 i;
 
 	for (i = 0; i < GPU_TUNING_KEY_MAX; i++) {
-		switch (i) {
-		/* Handle only a subset of tunables and ignore the rest */
-		case GPU_TUNING_KEY_BUSY_PENALTY_UP:
-		case GPU_TUNING_KEY_BUSY_PENALTY_DOWN:
-		case GPU_TUNING_KEY_FIRST_STEP_DOWN_COUNT:
-		case GPU_TUNING_KEY_SUBSEQUENT_STEP_DOWN_COUNT:
-		case GPU_TUNING_KEY_TARGET_FPS:
-		case GPU_TUNING_KEY_NUM_SAMPLES_UP:
-		case GPU_TUNING_KEY_NUM_SAMPLES_DOWN:
-		case GPU_TUNING_KEY_STRICT_FRAME:
-		case GPU_TUNING_KEY_NON_LINEAR_RAMP_UP:
-		case GPU_TUNING_KEY_NON_LINEAR_RAMP_DOWN:
-			if (hwsched->dcvs_tunables[i].update == true) {
-				gen8_hwsched_set_tuning_attrs(adreno_dev,
-						HFI_VALUE_DCVS_TUNING_PARAM,
-						i,
-						hwsched->dcvs_tunables[i].value);
-			}
-			break;
+		if (hwsched->dcvs_tunables[i].update == true) {
+			gen8_hwsched_set_tuning_attrs(adreno_dev,
+					HFI_VALUE_DCVS_TUNING_PARAM,
+					i,
+					hwsched->dcvs_tunables[i].value);
 		}
 	}
 }

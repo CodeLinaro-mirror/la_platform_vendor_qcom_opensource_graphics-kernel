@@ -1104,9 +1104,9 @@ static ssize_t pwrscale_store(struct device *dev,
 
 	if (device->ftbl->gmu_based_dcvs_pwr_ops(device, enable, GPU_PWRLEVEL_OP_DCVS_ENABLE)) {
 		if (enable)
-			kgsl_pwrscale_enable(device);
+			kgsl_pwrscale_tz_enable(device);
 		else
-			kgsl_pwrscale_disable(device, false);
+			kgsl_pwrscale_tz_disable(device, false);
 	}
 
 	kgsl_mutex_unlock(&device->mutex);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
@@ -175,6 +175,11 @@ static const u32 gen7_9_x_ifpc_pwrup_reglist[] = {
 	GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_2,
 	GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_3,
 	GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_4,
+};
+
+static const u32 gen7_2_0_ifpc_pwrup_reglist[] = {
+	GEN7_SP_CHICKEN_BITS_2,
+	GEN7_SP_LPAC_CHICKEN_BITS_2,
 };
 
 static const struct gen7_pwrup_extlist gen7_pwrup_extlist_cb[] = {
@@ -643,6 +648,16 @@ static void gen7_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	lock->ifpc_list_len = reglist[items].count;
 	items++;
 
+	if (adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
+		adreno_is_gen7_6_0(adreno_dev)) {
+		if (adreno_dev->lpac_enabled) {
+			reglist[items].regs = gen7_2_0_ifpc_pwrup_reglist;
+			reglist[items].count = ARRAY_SIZE(gen7_2_0_ifpc_pwrup_reglist);
+			lock->ifpc_list_len += reglist[items].count;
+			items++;
+		}
+	}
+
 	if (adreno_is_gen7_9_x(adreno_dev)) {
 		reglist[items].regs = gen7_9_x_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen7_9_x_ifpc_pwrup_reglist);
@@ -1022,6 +1037,15 @@ int gen7_start(struct adreno_device *adreno_dev)
 		/* Avoid configuring LPAC pipe on targets which do not have LPAC. */
 		if (adreno_dev->lpac_enabled)
 			kgsl_regwrite(device, GEN7_CP_LPAC_CHICKEN_DBG, 0x1);
+	}
+
+	/* Disable L0 STCHE to avoid deadlock in GPU pipeline */
+	if (adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
+		adreno_is_gen7_6_0(adreno_dev)) {
+		if (adreno_dev->lpac_enabled) {
+			kgsl_regwrite(device, GEN7_SP_CHICKEN_BITS_2, BIT(4));
+			kgsl_regwrite(device, GEN7_SP_LPAC_CHICKEN_BITS_2, BIT(4));
+		}
 	}
 
 	_set_secvid(device);

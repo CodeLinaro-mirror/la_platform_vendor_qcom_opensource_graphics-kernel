@@ -2796,8 +2796,7 @@ int adreno_hwsched_ctxt_unregister_wait_completion(
 	start = gpudev->read_alwayson(adreno_dev);
 	mutex_unlock(&device->mutex);
 
-	ret = wait_for_completion_timeout(&ack->complete,
-		msecs_to_jiffies(msecs_to_jiffies(30 * 1000)));
+	ret = wait_for_completion_timeout(&ack->complete, msecs_to_jiffies(30 * 1000));
 
 	mutex_lock(&device->mutex);
 	if (ret)

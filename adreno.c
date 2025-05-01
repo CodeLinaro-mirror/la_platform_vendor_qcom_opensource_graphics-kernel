@@ -1326,6 +1326,7 @@ int adreno_device_probe(struct platform_device *pdev,
 		struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct device *dev = &pdev->dev;
 	unsigned int priv = 0;
 	int status;
@@ -1490,6 +1491,8 @@ int adreno_device_probe(struct platform_device *pdev,
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS)) {
 		/* Ignore return value, as driver can still function without pwrscale enabled */
 		kgsl_pwrscale_init(device, pdev, CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR);
+	} else {
+		gmu_core->gpu_pwrscale_enable = true;
 	}
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_L3_VOTE))

@@ -548,24 +548,6 @@ to_gen8_gpudev(const struct adreno_gpudev *gpudev)
 void gen8_reset_preempt_records(struct adreno_device *adreno_dev);
 
 /**
- * gen8_rdpm_mx_freq_update - Update the mx frequency
- * @gmu: An Adreno GMU handle
- * @freq: Frequency in KHz
- *
- * This function communicates GPU mx frequency(in Mhz) changes to rdpm.
- */
-void gen8_rdpm_mx_freq_update(struct gen8_gmu_device *gmu, u32 freq);
-
-/**
- * gen8_rdpm_cx_freq_update - Update the cx frequency
- * @gmu: An Adreno GMU handle
- * @freq: Frequency in KHz
- *
- * This function communicates GPU cx frequency(in Mhz) changes to rdpm.
- */
-void gen8_rdpm_cx_freq_update(struct gen8_gmu_device *gmu, u32 freq);
-
-/**
  * gen8_scm_gpu_init_cx_regs - Program gpu regs for feature support
  * @adreno_dev: Handle to the adreno device
  *

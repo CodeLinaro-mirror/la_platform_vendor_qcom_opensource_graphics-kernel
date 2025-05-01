@@ -540,6 +540,31 @@ struct gmu_core_device {
 	} ver;
 	/** @warmboot_enabled: True if warmboot is enabled */
 	bool warmboot_enabled;
+	/** @rdpm_cx_virt: Pointer where the RDPM CX block is mapped */
+	void __iomem *rdpm_cx_virt;
+	/** @rdpm_mx_virt: Pointer where the RDPM MX block is mapped */
+	void __iomem *rdpm_mx_virt;
+	/** @rdpm_cx_offset: Offset of RDPM CX register */
+	u32 rdpm_cx_offset;
+	/** @rdpm_mx_offset: Offset of RDPM MX register */
+	u32 rdpm_mx_offset;
+	/** @clks: GPU subsystem clocks required for GMU functionality */
+	struct clk_bulk_data *clks;
+	/** @num_clks: Number of entries in the @clks array */
+	int num_clks;
+	/** @freqs: Array of GMU frequencies */
+	u32 freqs[GMU_MAX_PWRLEVELS];
+	/** @vlvls: Array of GMU voltage levels */
+	u32 vlvls[GMU_MAX_PWRLEVELS];
+	/*
+	 * @perf_ddr_bw: The lowest ddr bandwidth that puts CX at a corner at
+	 * which GMU can run at higher frequency.
+	 */
+	u32 perf_ddr_bw;
+	/** @cur_freq: Tracks scaled frequency for GMU */
+	u32 cur_freq;
+	/** @gpu_pwrscale_enable: Flag to toggle GMU based DCVS pwrscale */
+	bool gpu_pwrscale_enable;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -852,4 +877,66 @@ void gmu_core_mark_for_coldboot(struct kgsl_device *device);
 int gmu_core_reserve_gmuaddr(struct kgsl_device *device, struct kgsl_memdesc *md,
 		u32 vma_id, u32 align);
 
+/**
+ * gmu_core_rdpm_probe - Probe GMU RDPM resources
+ * @device: Pointer to KGSL device
+ */
+void gmu_core_rdpm_probe(struct kgsl_device *device);
+
+/**
+ * gmu_core_rdpm_mx_freq_update - Update the mx frequency
+ * @device: Pointer to KGSL device
+ * @freq: Frequency in KHz
+ *
+ * This function communicates GPU mx frequency(in Mhz) changes to rdpm.
+ */
+void gmu_core_rdpm_mx_freq_update(struct kgsl_device *device, u32 freq);
+
+/**
+ * gmu_core_rdpm_cx_freq_update - Update the cx frequency
+ * @device: Pointer to KGSL device
+ * @freq: Frequency in KHz
+ *
+ * This function communicates GPU cx frequency(in Mhz) changes to rdpm.
+ */
+void gmu_core_rdpm_cx_freq_update(struct kgsl_device *device, u32 freq);
+
+/**
+ * gmu_core_clk_probe - Probe gmu clocks
+ * @device: Pointer to KGSL device
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int gmu_core_clk_probe(struct kgsl_device *device);
+
+/**
+ * gmu_core_clock_set_rate - Set the gmu clock rate
+ * @device: Pointer to KGSL device
+ * @req_freq: Requested freq to set gmu to
+ *
+ * Returns 0 on success or error on clock set rate failure
+ */
+int gmu_core_clock_set_rate(struct kgsl_device *device, u32 req_freq);
+
+/**
+ * gmu_core_enable_clks - Enable gmu clocks
+ * @device: Pointer to KGSL device
+ * @level: GMU frequency level
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int gmu_core_enable_clks(struct kgsl_device *device, u32 level);
+
+/**
+ * gmu_core_disable_clks - Disable gmu clocks
+ * @device: Pointer to KGSL device
+ */
+void gmu_core_disable_clks(struct kgsl_device *device);
+
+/**
+ * gmu_core_scale_gmu_frequency - Scale GMU frequency based on DDR bus level
+ * @device: Pointer to KGSL device
+ * @buslevel: DDR bus level to determine the required GMU frequency
+ */
+void gmu_core_scale_gmu_frequency(struct kgsl_device *device, int buslevel);
 #endif /* __KGSL_GMU_CORE_H */

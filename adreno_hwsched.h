@@ -167,6 +167,8 @@ struct adreno_hwsched {
 	 * preemption records. No gmem buffer needed for rb0 preemption record.
 	 */
 	struct kgsl_memdesc *secure_preempt_rec_gmem[KGSL_PRIORITY_MAX_RB_LEVELS - 1];
+	/** @dcvs_param_update: True if dcvs params have to be sent to GMU at slumber exit */
+	bool dcvs_param_update;
 };
 
 /*

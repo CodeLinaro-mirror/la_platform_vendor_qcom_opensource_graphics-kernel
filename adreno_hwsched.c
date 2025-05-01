@@ -1116,6 +1116,7 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 
 	mutex_unlock(&hwsched->mutex);
 	_decrement_submit_now(device);
+	return;
 
 done:
 	adreno_scheduler_queue(adreno_dev);

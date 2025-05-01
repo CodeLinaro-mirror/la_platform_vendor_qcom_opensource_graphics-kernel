@@ -972,20 +972,20 @@ void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace)
 	trace->reset_hdr = false;
 }
 
-int gmu_core_soccp_vote(struct device *dev, unsigned long *gmu_flags, bool pwr_on)
+int gmu_core_soccp_vote(struct kgsl_device *device, bool pwr_on)
 {
 	int ret;
 
-	if (!(test_bit(GMU_PRIV_SOCCP_VOTE_ON, gmu_flags) ^ pwr_on))
+	if (!(test_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags) ^ pwr_on))
 		return 0;
 
 	ret = kgsl_hw_fence_soccp_vote(pwr_on);
 	if (!ret) {
-		change_bit(GMU_PRIV_SOCCP_VOTE_ON, gmu_flags);
+		change_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags);
 		return 0;
 	}
 
-	dev_err(dev, "soccp power %s failed: %d. Disabling hw fences\n",
+	dev_err(GMU_PDEV_DEV(device), "soccp power %s failed: %d. Disabling hw fences\n",
 		pwr_on ? "on" : "off", ret);
 
 	return ret;

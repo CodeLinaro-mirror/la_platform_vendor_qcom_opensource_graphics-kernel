@@ -2994,7 +2994,9 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 
 			if (ret) {
 				adreno_hwsched_syncobj_kfence_put(syncobj);
-				syncobj->flags &= ~KGSL_SYNCOBJ_HW;
+				clear_bit(KGSL_SYNCOBJ_HW, &syncobj->flags);
+				drawobj->timestamp = 0;
+				clear_bit(KGSL_SYNCOBJ_HW_TS, &syncobj->flags);
 				return ret;
 			}
 
@@ -3017,7 +3019,9 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 	 * Attach a timestamp to this SYNCOBJ to keep track whether GMU has deemed it signaled
 	 * or not.
 	 */
-	drawobj->timestamp = ++drawctxt->syncobj_timestamp;
+	if (!test_and_set_bit(KGSL_SYNCOBJ_HW_TS, &syncobj->flags))
+		drawobj->timestamp = ++drawctxt->syncobj_timestamp;
+
 	cmd->timestamp = drawobj->timestamp;
 
 	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_ISSUE_SYNCOBJ, HFI_MSG_CMD);

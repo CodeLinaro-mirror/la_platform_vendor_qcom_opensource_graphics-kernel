@@ -179,7 +179,7 @@ void _hw_fence_destroy(struct kgsl_sync_fence *kfence)
 void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
 {
 	/* soccp should be powered on */
-	WARN_RATELIMIT(!test_bit(GMU_PRIV_SOCCP_VOTE_ON, &device->gmu_core.flags),
+	WARN_RATELIMIT(!test_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags),
 		"signaling hw fence via cpu without soccp powered up\n");
 
 	synx_signal(kgsl_synx.handle, (u32)kfence->hw_fence_index, SYNX_STATE_SIGNALED_SUCCESS);
@@ -798,7 +798,7 @@ static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct d
 	struct kgsl_drawobj_sync *syncobj = event->syncobj;
 	u32 max_hw_fence = event->device->max_syncobj_hw_fence_count;
 
-	if (syncobj->flags & KGSL_SYNCOBJ_SW)
+	if (test_bit(KGSL_SYNCOBJ_SW, &syncobj->flags))
 		return;
 
 	if (!kgsl_is_hw_fence(fence)) {
@@ -807,14 +807,14 @@ static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct d
 		 * fence in this sync object means we can't send this sync object to the hardware
 		 */
 		if (!dma_fence_is_signaled(fence))
-			syncobj->flags |= KGSL_SYNCOBJ_SW;
+			set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
 		return;
 	}
 
 	if (!syncobj->hw_fences) {
 		syncobj->hw_fences = kcalloc(max_hw_fence, sizeof(*syncobj->hw_fences), GFP_KERNEL);
 		if (!syncobj->hw_fences) {
-			syncobj->flags |= KGSL_SYNCOBJ_SW;
+			set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
 			return;
 		}
 	}
@@ -822,7 +822,7 @@ static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct d
 	if (syncobj->num_hw_fence < max_hw_fence)
 		syncobj->hw_fences[syncobj->num_hw_fence++].fence = fence;
 	else
-		syncobj->flags |= KGSL_SYNCOBJ_SW;
+		set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
 }
 
 void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size)

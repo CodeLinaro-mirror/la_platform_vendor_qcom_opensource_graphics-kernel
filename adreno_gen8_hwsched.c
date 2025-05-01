@@ -176,14 +176,14 @@ static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
 
 void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
 {
-	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
 	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 
 	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
 		return;
 
-	if (!gmu_core_soccp_vote(gmu_pdev_dev, &gmu->flags, pwr_on))
+	if (!gmu_core_soccp_vote(device, pwr_on))
 		return;
 
 	/* Make sure no more hardware fences are created */

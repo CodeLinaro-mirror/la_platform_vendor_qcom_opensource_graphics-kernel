@@ -4,10 +4,8 @@
  * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
-#include <linux/iopoll.h>
 #include <linux/of.h>
 #include <linux/io.h>
-#include <linux/iopoll.h>
 
 #include "adreno.h"
 #include "adreno_trace.h"

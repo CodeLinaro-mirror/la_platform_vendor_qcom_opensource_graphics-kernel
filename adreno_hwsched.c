@@ -10,7 +10,6 @@
 #include "adreno_sysfs.h"
 #include "adreno_trace.h"
 #include "kgsl_eventlog.h"
-#include "kgsl_timeline.h"
 #include "kgsl_trace.h"
 #include <linux/msm_kgsl.h>
 #include <linux/sched/clock.h>

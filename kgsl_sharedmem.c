@@ -8,7 +8,6 @@
 #include <linux/of_platform.h>
 #include <linux/highmem.h>
 #include <linux/slab.h>
-#include <linux/random.h>
 #include <linux/shmem_fs.h>
 #include <linux/sched/signal.h>
 #include <linux/version.h>

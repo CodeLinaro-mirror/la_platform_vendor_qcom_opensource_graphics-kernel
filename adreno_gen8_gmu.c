@@ -14,11 +14,9 @@
 #include <linux/io.h>
 #include <linux/kobject.h>
 #include <linux/of_platform.h>
-#include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/sysfs.h>
 #include <linux/vmalloc.h>
-#include <soc/qcom/cmd-db.h>
 
 #include "adreno.h"
 #include "adreno_gen8.h"

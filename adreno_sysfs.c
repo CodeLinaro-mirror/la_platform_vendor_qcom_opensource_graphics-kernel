@@ -243,6 +243,19 @@ static u32 _dcvs_tuning_numbusy_show(struct adreno_device *adreno_dev)
 	return adreno_dev->dcvs_tuning_numbusy_lvl;
 }
 
+static unsigned int _dcvs_mode_show(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 mode;
+
+	if (device->host_based_dcvs)
+		mode = 0;
+	else
+		mode = 1;
+
+	return mode;
+}
+
 static int _gpu_llc_slice_enable_store(struct adreno_device *adreno_dev,
 		bool val)
 {
@@ -607,6 +620,7 @@ static DEVICE_ATTR_RO(gpufault_procs);
 static ADRENO_SYSFS_U32(dcvs_tuning_mingap);
 static ADRENO_SYSFS_U32(dcvs_tuning_penalty);
 static ADRENO_SYSFS_U32(dcvs_tuning_numbusy);
+static ADRENO_SYSFS_RO_U32(dcvs_mode);
 
 static const struct attribute *_attr_list[] = {
 	&adreno_attr_ft_policy.attr.attr,
@@ -639,6 +653,7 @@ static const struct attribute *_attr_list[] = {
 	&adreno_attr_dcvs_tuning_mingap.attr.attr,
 	&adreno_attr_dcvs_tuning_penalty.attr.attr,
 	&adreno_attr_dcvs_tuning_numbusy.attr.attr,
+	&adreno_attr_dcvs_mode.attr.attr,
 	NULL,
 };
 

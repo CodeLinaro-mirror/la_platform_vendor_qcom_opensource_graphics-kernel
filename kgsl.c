@@ -5127,15 +5127,6 @@ static int _register_device(struct kgsl_device *device)
 	device->dev->dma_mask = &dma_mask;
 	device->dev->dma_parms = &dma_parms;
 
-	/*
-	 * Mark KGSL device as dma coherent when io-coherency
-	 * is enabled to skip cache operations for imported dma
-	 * buffers.
-	 */
-	if (kgsl_mmu_has_feature(device, KGSL_MMU_IO_COHERENT) &&
-		IS_ENABLED(CONFIG_QCOM_KGSL_IOCOHERENCY_DEFAULT))
-		device->dev->dma_coherent = true;
-
 	dma_set_max_seg_size(device->dev, (u32)DMA_BIT_MASK(32));
 
 	set_dma_ops(device->dev, NULL);
@@ -5343,6 +5334,8 @@ void kgsl_core_exit(void)
 
 int __init kgsl_core_init(void)
 {
+	static u64 dma_mask = (u64)DMA_BIT_MASK(64);
+	static struct device_dma_parameters dma_parms;
 	int result = 0;
 
 	KGSL_BOOT_MARKER("KGSL Init");
@@ -5392,6 +5385,13 @@ int __init kgsl_core_init(void)
 		pr_err("kgsl: driver_register failed\n");
 		goto err;
 	}
+
+	kgsl_driver.virtdev.dma_mask = &dma_mask;
+	kgsl_driver.virtdev.dma_parms = &dma_parms;
+
+	dma_set_max_seg_size(&kgsl_driver.virtdev, (u32)DMA_BIT_MASK(32));
+
+	set_dma_ops(&kgsl_driver.virtdev, NULL);
 
 	/* Make kobjects in the virtual device for storing statistics */
 

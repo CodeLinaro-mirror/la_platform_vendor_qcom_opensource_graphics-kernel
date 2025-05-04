@@ -2627,13 +2627,13 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
 				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
 		.compatible = "qcom,adreno-gpu-gen7-17-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_CONTENT_PROTECTION |
-			ADRENO_IFPC | ADRENO_PREEMPTION,
+			ADRENO_IFPC | ADRENO_PREEMPTION | ADRENO_BCL | ADRENO_ACD,
 		.gpudev = &adreno_gen7_gmu_gpudev.base,
 		.perfcounters = &adreno_gen7_no_cb_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = SZ_1M,
 		.bus_width = 32,
-		.snapshot_size = SZ_4M,
+		.snapshot_size = SZ_2M,
 	},
 	.sqefw_name = "gen70e00_sqe.fw",
 	.gmufw_name = "gen71700_gmu.bin",
@@ -2648,7 +2648,8 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
 	.protected_regs = gen7_0_0_protected_regs,
 	.highest_bank_bit = 15,
 	.gen7_snapshot_block_list = &gen7_17_0_snapshot_block_list,
-	.ctxt_record_size = 1536 * 1024
+	.ctxt_record_size = 1536 * 1024,
+	.preempt_level = 1,
 };
 
 static const struct kgsl_regmap_list a663_hwcg_regs[] = {
@@ -3297,7 +3298,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_6_0 = {
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
 			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_AQE |
 			ADRENO_GMU_WARMBOOT | ADRENO_L3_VOTE | ADRENO_IFPC |
-			ADRENO_PREEMPTION,
+			ADRENO_PREEMPTION | ADRENO_BCL | ADRENO_ACD,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -3308,7 +3309,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_6_0 = {
 	},
 	.aqefw_name = "gen80000_aqe.fw",
 	.sqefw_name = "gen80000_sqe.fw",
-	.gmufw_name = "gen80000_gmu.bin",
+	.gmufw_name = "gen80600_gmu.bin",
 	.zap_name = "gen80000_zap.mbn",
 	.ao_hwcg = gen8_ao_hwcg_regs,
 	.ao_hwcg_count = ARRAY_SIZE(gen8_ao_hwcg_regs),
@@ -3324,6 +3325,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_6_0 = {
 	.ctxt_record_size = (3372 * SZ_1K),
 	.preempt_level = 1,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
+	.bcl_data = 1,
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {

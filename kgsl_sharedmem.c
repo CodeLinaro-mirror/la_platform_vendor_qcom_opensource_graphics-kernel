@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
@@ -256,19 +256,19 @@ imported_mem_show(struct kgsl_process_private *priv,
 
 		m = &entry->memdesc;
 		if (kgsl_memdesc_usermem_type(m) == KGSL_MEM_ENTRY_ION) {
+			u64 size = m->size;
+			int total_egl_count;
+
 			kgsl_get_egl_counts(entry, &egl_surface_count,
 					&egl_image_count);
+			total_egl_count = egl_surface_count + egl_image_count;
 
-			if ((kgsl_memdesc_get_memtype(m) == KGSL_MEMTYPE_EGL_SURFACE) ||
-				(kgsl_memdesc_get_memtype(m) == KGSL_MEMTYPE_SURFACE))
-				imported_mem += m->size;
-			else if (egl_surface_count == 0) {
-				uint64_t size = m->size;
-
-				do_div(size, (egl_image_count ?
-							egl_image_count : 1));
-				imported_mem += size;
-			}
+			/*
+			 * Divide the total buffer size uniformly across all the
+			 * processes that imported the buffer.
+			 */
+			do_div(size, (total_egl_count ? total_egl_count : 1));
+			imported_mem += size;
 		}
 
 		kgsl_mem_entry_put(entry);
@@ -823,14 +823,13 @@ void kgsl_memdesc_init(struct kgsl_device *device,
 		memdesc->priv |= KGSL_MEMDESC_SECURE;
 
 	memdesc->flags = flags;
-	memdesc->kgsl_dev = device->dev;
 
 	/*
 	 * For io-coherent buffers don't set memdesc->dev, so that we skip DMA
 	 * cache operations at allocation time
 	 */
 	if (!(flags & KGSL_MEMFLAGS_IOCOHERENT))
-		memdesc->dev = &device->pdev->dev;
+		memdesc->dev = &kgsl_driver.virtdev;
 
 	align = max_t(unsigned int,
 		kgsl_memdesc_get_align(memdesc), ilog2(PAGE_SIZE));
@@ -1138,7 +1137,7 @@ static int kgsl_alloc_page(struct kgsl_memdesc *memdesc, int *page_size,
 	    (list_empty(&memdesc->shmem_page_list) && (pcount > 1)))
 		clear_highpage(page);
 
-	kgsl_page_sync(memdesc->kgsl_dev, page, PAGE_SIZE, DMA_TO_DEVICE);
+	kgsl_page_sync(memdesc->dev, page, PAGE_SIZE, DMA_TO_DEVICE);
 
 	*page_size = PAGE_SIZE;
 	*pages = page;
@@ -1211,7 +1210,7 @@ static int kgsl_alloc_page(struct kgsl_memdesc *memdesc, int *page_size,
 		return -EINTR;
 
 	return kgsl_pool_alloc_page(page_size, pages,
-			pages_len, align, memdesc->kgsl_dev);
+			pages_len, align, memdesc->dev);
 }
 
 static int kgsl_memdesc_file_setup(struct kgsl_memdesc *memdesc)
@@ -1653,7 +1652,7 @@ static int kgsl_system_alloc_pages(struct kgsl_memdesc *memdesc, struct page ***
 		}
 
 		/* Make sure the cache is clean */
-		kgsl_page_sync(memdesc->kgsl_dev, local[i], PAGE_SIZE, DMA_TO_DEVICE);
+		kgsl_page_sync(memdesc->dev, local[i], PAGE_SIZE, DMA_TO_DEVICE);
 	}
 
 	*pages = local;

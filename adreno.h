@@ -178,7 +178,8 @@
 #define ADRENO_GMU_BASED_DCVS BIT(22)
 /* RT hint feature for RB0 workloads */
 #define ADRENO_RT_HINT BIT(23)
-
+/* Defer allocation of preemption record gmem memory when needed */
+#define ADRENO_DEFER_GMEM_ALLOC BIT(24)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -558,7 +559,7 @@ struct adreno_dispatch_ops {
 	/* @queue_context: Queue a context to be dispatched */
 	void (*queue_context)(struct adreno_device *adreno_dev,
 			struct adreno_context *drawctxt);
-	void (*setup_context)(struct adreno_device *adreno_dev,
+	int (*setup_context)(struct adreno_device *adreno_dev,
 			struct adreno_context *drawctxt);
 	/* @create_hw_fence: Create a hardware fence */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev, struct kgsl_sync_fence *kfence);
@@ -820,6 +821,8 @@ struct adreno_device {
 	u32 dcvs_tuning_penalty_lvl;
 	/** @dcvs_tuning_numbusy_lvl: Current DCVS tuning level for numbusy */
 	u32 dcvs_tuning_numbusy_lvl;
+	/** @total_ctxt_record_sz: Size of the total preemption record in bytes */
+	u64 total_ctxt_record_sz;
 };
 
 /* Time to wait for suspend recovery gate to complete */

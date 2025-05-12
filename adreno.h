@@ -180,6 +180,10 @@
 #define ADRENO_RT_HINT BIT(23)
 /* Defer allocation of preemption record gmem memory when needed */
 #define ADRENO_DEFER_GMEM_ALLOC BIT(24)
+/* The GMU supports MINBW voting */
+#define ADRENO_GMU_MINBW BIT(25)
+/* Enable GMU Based DCVS profile */
+#define ADRENO_DCVS_PROFILE BIT(26)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -690,6 +694,8 @@ struct adreno_device {
 	bool lpac_enabled;
 	/** @dms_enabled: True if DMS is enabled */
 	bool dms_enabled;
+	/** @minbw_enabled: True if minbw vote is enabled */
+	bool minbw_enabled;
 	/** @preempt_override: True if command line param enables preemption */
 	bool preempt_override;
 	struct kgsl_memdesc *profile_buffer;
@@ -761,6 +767,8 @@ struct adreno_device {
 	 * throttle level for bcl alarm levels 0-2. If not set, gmu fw sets default throttle levels.
 	 */
 	u32 bcl_data;
+	/* @minbw_data: Min bw level to vote for when entering ifpc */
+	u32 minbw_data;
 	/*
 	 * @bcl_debugfs_dir: Debugfs directory node for bcl related nodes
 	 */
@@ -824,6 +832,8 @@ struct adreno_device {
 	u32 dcvs_tuning_numbusy_lvl;
 	/** @total_ctxt_record_sz: Size of the total preemption record in bytes */
 	u64 total_ctxt_record_sz;
+	/** @dcvs_profile_enabled: True if DCVS profile is enabled */
+	bool dcvs_profile_enabled;
 };
 
 /* Time to wait for suspend recovery gate to complete */

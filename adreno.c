@@ -2692,6 +2692,89 @@ static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
 	return 0;
 }
 
+static void adreno_alloc_dcvs_profile_memory(struct kgsl_device *device,
+		struct kgsl_process_private *proc_priv)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_memdesc *md = &proc_priv->profile.md;
+	u32 sizebytes;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_DCVS_PROFILE))
+		return;
+
+	if (!gmu_core_alloc_kernel_block(device, md,
+			SZ_4K, GMU_NONCACHED_KERNEL,
+			IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV)) {
+		/* KMD need to initialize KGSL region to KGSL_DCVS_ATTR_UNUSED for
+		 * torn state handling as per design and second half region to 0 so that
+		 * if there is no profile ever registered for a process, GMU can skip
+		 * tracking for this profile.
+		 */
+		sizebytes = md->size >> 1;
+		memset(md->hostptr, KGSL_DCVS_ATTR_UNUSED, sizebytes);
+		memset(md->hostptr + sizebytes, 0, sizebytes);
+	}
+}
+
+static int adreno_set_dcvs_profile(struct kgsl_device_private *dev_priv,
+		void __user *data, u32 sizebytes)
+{
+	struct kgsl_device *device = dev_priv->device;
+	struct kgsl_process_private *proc_priv = dev_priv->process_priv;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_hwsched_ops *hwsched_ops = adreno_dev->hwsched.hwsched_ops;
+	struct kgsl_memdesc *md = &proc_priv->profile.md;
+	struct kgsl_dcvs_profile param = {0};
+	struct kgsl_dcvs_attrs attrs;
+	u32 size;
+	int ret = 0;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_DCVS_PROFILE))
+		return -EOPNOTSUPP;
+
+	/* Restrict to one profile per process */
+	mutex_lock(&proc_priv->profile.profile_mutex);
+	if (proc_priv->profile.user_profile_registered) {
+		ret = -EINVAL;
+		goto done;
+	}
+
+	/* Not enough allocated GMU memory */
+	if ((!md->hostptr) || (sizeof(attrs) > (md->size >> 1))) {
+		ret = -ENOMEM;
+		goto done;
+	}
+
+	size = min_t(u32, sizeof(param), sizebytes);
+	if (copy_from_user(&param, data, size)) {
+		ret = -EFAULT;
+		goto done;
+	}
+
+	/*
+	 * Divide shared buffer into two equal parts and first part addresses
+	 * should be reserved for KGSL to copy profile buffer and second
+	 * part addresses for GMU Internal usage.
+	 */
+	size = min_t(u32, sizeof(attrs), param.attrs_size);
+
+	if (copy_from_user(md->hostptr, u64_to_user_ptr(param.attrs), size)) {
+		memset(md->hostptr, KGSL_DCVS_ATTR_UNUSED, size);
+		ret = -EFAULT;
+		goto done;
+	}
+
+	if (hwsched_ops->set_dcvs_profile && adreno_dev->dcvs_profile_enabled) {
+		mutex_lock(&device->mutex);
+		ret = hwsched_ops->set_dcvs_profile(adreno_dev, proc_priv);
+		mutex_unlock(&device->mutex);
+	}
+
+done:
+	mutex_unlock(&proc_priv->profile.profile_mutex);
+	return ret;
+}
+
 static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 				unsigned int type,
 				void __user *value,
@@ -2726,6 +2809,9 @@ static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 
 			kgsl_context_put(context);
 		}
+		break;
+	case KGSL_PROP_DCVS_PROFILE:
+		status = adreno_set_dcvs_profile(dev_priv, value, sizebytes);
 		break;
 	default:
 		status = adreno_default_setproperty(dev_priv, type, value, sizebytes);
@@ -3789,6 +3875,7 @@ static const struct kgsl_functable adreno_functable = {
 	.create_hw_fence = adreno_create_hw_fence,
 	.gmu_based_dcvs_pwr_ops = adreno_gmu_based_dcvs_pwr_ops,
 	.set_thermal_index = adreno_set_thermal_index,
+	.alloc_dcvs_profile_memory = adreno_alloc_dcvs_profile_memory,
 };
 
 static const struct component_master_ops adreno_ops = {

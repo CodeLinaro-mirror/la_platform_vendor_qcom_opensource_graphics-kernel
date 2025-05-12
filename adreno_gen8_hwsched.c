@@ -200,6 +200,12 @@ void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
 	adreno_hwsched_deregister_hw_fence(adreno_dev);
 }
 
+static void gen8_hwsched_gmu_suspend(struct adreno_device *adreno_dev, bool force)
+{
+	gen8_gmu_suspend(adreno_dev, force);
+	adreno_hwsched_reset_hfi_mem(adreno_dev);
+}
+
 static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -312,10 +318,11 @@ err:
 	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	if (device->gmu_fault) {
-		gen8_gmu_suspend(adreno_dev, false);
-
+		gen8_hwsched_gmu_suspend(adreno_dev, false);
 		return ret;
 	}
+
+	adreno_hwsched_reset_hfi_mem(adreno_dev);
 
 clks_gdsc_off:
 	gmu_core_disable_clks(device);
@@ -394,10 +401,11 @@ err:
 	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	if (device->gmu_fault) {
-		gen8_gmu_suspend(adreno_dev, false);
-
+		gen8_hwsched_gmu_suspend(adreno_dev, false);
 		return ret;
 	}
+
+	adreno_hwsched_reset_hfi_mem(adreno_dev);
 
 clks_gdsc_off:
 	gmu_core_disable_clks(device);
@@ -479,12 +487,14 @@ static int gen8_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_NONE);
 
+	adreno_hwsched_reset_hfi_mem(adreno_dev);
+
 	return ret;
 
 error:
 	gen8_gmu_irq_disable(adreno_dev);
 	gen8_hwsched_hfi_stop(adreno_dev);
-	gen8_gmu_suspend(adreno_dev, false);
+	gen8_hwsched_gmu_suspend(adreno_dev, false);
 
 	return ret;
 }
@@ -1475,7 +1485,7 @@ int gen8_hwsched_reset_replay(struct adreno_device *adreno_dev)
 
 	gen8_hwsched_hfi_stop(adreno_dev);
 
-	gen8_gmu_suspend(adreno_dev, true);
+	gen8_hwsched_gmu_suspend(adreno_dev, true);
 
 	adreno_hwsched_unregister_contexts(adreno_dev);
 
@@ -1690,6 +1700,7 @@ const struct adreno_hwsched_ops gen8_hwsched_ops = {
 	.preempt_count = gen8_hwsched_preempt_count_get,
 	.preempt_info = gen8_hwsched_preempt_info_get,
 	.create_hw_fence = gen8_hwsched_create_hw_fence,
+	.set_dcvs_profile = gen8_hwsched_set_dcvs_profile,
 };
 
 int gen8_hwsched_probe(struct platform_device *pdev,

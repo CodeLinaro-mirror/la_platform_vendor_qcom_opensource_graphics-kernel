@@ -664,6 +664,8 @@ static const char *idle_level_name(int level)
 		return "GPU_HW_ACTIVE";
 	else if (level == GPU_HW_IFPC)
 		return "GPU_HW_IFPC";
+	else if (level == GPU_HW_MINBW)
+		return "GPU_HW_MINBW";
 
 	return "(Unknown)";
 }
@@ -677,6 +679,7 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	u32 reg, reg1, reg2, reg3, reg4;
 	unsigned long t;
 	u64 ts1, ts2;
+	u32 wait_level = adreno_dev->minbw_enabled ? GPU_HW_MINBW : GPU_HW_IFPC;
 
 	ts1 = gpudev->read_alwayson(adreno_dev);
 
@@ -688,10 +691,10 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 
 		/*
 		 * Check that we are at lowest level. If lowest level is IFPC
-		 * double check that GFX clock is off.
+		 * or MINBW double check that GFX clock is off.
 		 */
 		if (gmu->idle_level == reg)
-			if (!(gmu->idle_level == GPU_HW_IFPC && is_on(reg1)))
+			if (!(gmu->idle_level == wait_level && is_on(reg1)))
 				return 0;
 
 		/* Wait 100us to reduce unnecessary AHB bus traffic */
@@ -704,10 +707,10 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 
 	/*
 	 * Check that we are at lowest level. If lowest level is IFPC
-	 * double check that GFX clock is off.
+	 * or MINBW double check that GFX clock is off.
 	 */
 	if (gmu->idle_level == reg)
-		if (!(gmu->idle_level == GPU_HW_IFPC && is_on(reg1)))
+		if (!(gmu->idle_level == wait_level && is_on(reg1)))
 			return 0;
 
 	ts2 = gpudev->read_alwayson(adreno_dev);
@@ -720,8 +723,8 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	dev_err(gmu_pdev_dev,
 		"----------------------[ GMU error ]----------------------\n");
 	dev_err(gmu_pdev_dev,
-		"Timeout waiting for lowest idle level %s\n",
-		idle_level_name(gmu->idle_level));
+		"Timeout waiting for lowest idle level %s : wait level %s\n",
+		idle_level_name(gmu->idle_level), idle_level_name(reg));
 	dev_err(gmu_pdev_dev, "Start: %llx (absolute ticks)\n", ts1);
 	dev_err(gmu_pdev_dev,
 		"Poll: %llx (ticks relative to start)\n", ts2-ts1);
@@ -1308,10 +1311,14 @@ static int gen8_gmu_ifpc_store(struct kgsl_device *device,
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_IFPC))
 		return -EINVAL;
 
-	if (val)
-		requested_idle_level = GPU_HW_IFPC;
-	else
+	if (val) {
+		if (adreno_dev->minbw_enabled)
+			requested_idle_level = GPU_HW_MINBW;
+		else
+			requested_idle_level = GPU_HW_IFPC;
+	} else {
 		requested_idle_level = GPU_HW_ACTIVE;
+	}
 
 	if (gmu->idle_level == requested_idle_level)
 		return 0;
@@ -1321,11 +1328,30 @@ static int gen8_gmu_ifpc_store(struct kgsl_device *device,
 		requested_idle_level);
 }
 
+static void gen8_minbw_idle_level_set(struct kgsl_device *device, u32 val)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_IFPC) ||
+		(!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_MINBW)) ||
+			(gmu->idle_level == GPU_HW_ACTIVE))
+		return;
+
+	if (val)
+		gmu->idle_level = GPU_HW_MINBW;
+	else
+		gmu->idle_level = GPU_HW_IFPC;
+
+	adreno_dev->minbw_data = val;
+	adreno_dev->minbw_enabled = val ? true : false;
+}
+
 static u32 gen8_gmu_ifpc_isenabled(struct kgsl_device *device)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(ADRENO_DEVICE(device));
 
-	return gmu->idle_level == GPU_HW_IFPC;
+	return (gmu->idle_level == GPU_HW_IFPC) || (gmu->idle_level == GPU_HW_MINBW);
 }
 
 /* Send an NMI to the GMU */
@@ -1786,6 +1812,7 @@ static const struct gmu_dev_ops gen8_gmudev = {
 	.bcl_sid_set = gen8_bcl_sid_set,
 	.bcl_sid_get = gen8_bcl_sid_get,
 	.send_nmi = gen8_gmu_send_nmi,
+	.minbw_idle_level_set = gen8_minbw_idle_level_set,
 };
 
 static int gen8_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
@@ -2001,7 +2028,12 @@ int gen8_gmu_probe(struct kgsl_device *device,
 
 	/* Set up GMU idle state */
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_IFPC)) {
-		gmu->idle_level = GPU_HW_IFPC;
+		if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_MINBW)) {
+			gmu->idle_level = GPU_HW_MINBW;
+			adreno_dev->minbw_enabled = true;
+			adreno_dev->minbw_data = HFI_MINBW_DEFAULT;
+		} else
+			gmu->idle_level = GPU_HW_IFPC;
 		adreno_dev->ifpc_hyst = GEN8_GMU_LONG_IFPC_HYST;
 		adreno_dev->ifpc_hyst_floor = GEN8_GMU_LONG_IFPC_HYST_FLOOR;
 	} else {

@@ -1369,6 +1369,7 @@
 #define GEN8_CX_DBGC_CFG_DBGBUS_OVER                    0x18426
 #define GEN8_CX_DBGC_CFG_DBGBUS_TRACE_BUF1              0x1842f
 #define GEN8_CX_DBGC_CFG_DBGBUS_TRACE_BUF2              0x18430
+#define GEN8_CX_DBGC_CFG_DBGBUS_TRACE_BUF3              0x18431
 #define GEN8_CX_DBGC_EVT_CFG                            0x18435
 #define GEN8_CX_DBGC_EVT_INTF_SEL_0                     0x18436
 #define GEN8_CX_DBGC_EVT_INTF_SEL_1                     0x18437

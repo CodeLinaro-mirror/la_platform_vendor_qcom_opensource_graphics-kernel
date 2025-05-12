@@ -190,10 +190,15 @@ bool kgsl_hw_fence_signaled(struct dma_fence *fence)
 	return test_bit(SYNX_HW_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
 }
 
-bool kgsl_is_hw_fence(struct dma_fence *fence)
+static bool kgsl_is_input_hw_fence(struct dma_fence *fence)
 {
 	return test_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags) ||
 		test_bit(SYNX_NATIVE_FENCE_FLAG_ENABLED_BIT, &fence->flags);
+}
+
+static bool kgsl_is_output_hw_fence(struct dma_fence *fence)
+{
+	return test_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags);
 }
 
 #else
@@ -340,7 +345,12 @@ bool kgsl_hw_fence_signaled(struct dma_fence *fence)
 	return test_bit(MSM_HW_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
 }
 
-bool kgsl_is_hw_fence(struct dma_fence *fence)
+static bool kgsl_is_output_hw_fence(struct dma_fence *fence)
+{
+	return test_bit(MSM_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags);
+}
+
+static bool kgsl_is_input_hw_fence(struct dma_fence *fence)
 {
 	return test_bit(MSM_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags);
 }
@@ -396,7 +406,7 @@ static void kgsl_sync_fence_release(struct dma_fence *fence)
 {
 	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
 
-	if (kgsl_is_hw_fence(fence))
+	if (kgsl_is_output_hw_fence(fence))
 		kgsl_hw_fence_destroy(kfence);
 
 	kgsl_sync_timeline_put(kfence->parent);
@@ -801,7 +811,7 @@ static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct d
 	if (test_bit(KGSL_SYNCOBJ_SW, &syncobj->flags))
 		return;
 
-	if (!kgsl_is_hw_fence(fence)) {
+	if (!kgsl_is_input_hw_fence(fence)) {
 		/*
 		 * Ignore software fences that are already signaled. Even one unsignaled sw-only
 		 * fence in this sync object means we can't send this sync object to the hardware

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/interconnect.h>
@@ -1289,7 +1289,8 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 	struct kgsl_context *context = NULL;
 	int id, ret = 0;
 	struct list_head hw_fence_list;
-	struct adreno_hw_fence_entry *entry;
+	struct adreno_hw_fence_entry *entry, *tmp;
+	bool update_out_fence_ts = false;
 
 	/*
 	 * Since we need to wait for ack from GMU when sending each inflight fence back to GMU, we
@@ -1306,9 +1307,31 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 	}
 	read_unlock(&device->context_lock);
 
-	list_for_each_entry(entry, &hw_fence_list, reset_node) {
+	/*
+	 * Although we are not destroying the entries here, they can get destroyed concurrently
+	 * in f2h_main thread once they have been sent to GMU. Hence, to be safe against entry
+	 * destroy, use list_for_each_entry_safe.
+	 */
+	list_for_each_entry_safe(entry, tmp, &hw_fence_list, reset_node) {
 		struct adreno_context *drawctxt = entry->drawctxt;
 		struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
+		u32 entry_ts = (u32)entry->cmd.ts;
+
+		/*
+		 * We must remove this entry from hw_fence_list before sending it to GMU to avoid
+		 * racing with the f2h_main thread
+		 */
+		list_del_init(&entry->reset_node);
+
+		/*
+		 * We must access the hw fence entry before sending it to GMU as once it is
+		 * sent to GMU, it may be freed by f2h_main thread concurrently
+		 */
+		if (((entry->cmd.flags & HW_FENCE_FLAG_SKIP_MEMSTORE) != 0) &&
+			(timestamp_cmp(entry_ts, hdr->out_fence_ts) > 0)) {
+			if (_kgsl_context_get(&drawctxt->base))
+				update_out_fence_ts = true;
+		}
 
 		/*
 		 * This is part of the reset sequence and any error in this path will be handled by
@@ -1321,9 +1344,18 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 		 * If HW_FENCE_FLAG_SKIP_MEMSTORE is set, then GMU context queue header will not be
 		 * updated for this fence. Hence, update it here.
 		 */
-		if (((entry->cmd.flags & HW_FENCE_FLAG_SKIP_MEMSTORE) != 0) &&
-			(timestamp_cmp((u32)entry->cmd.ts, hdr->out_fence_ts) > 0))
-			hdr->out_fence_ts = (u32)entry->cmd.ts;
+		if (update_out_fence_ts) {
+			hdr->out_fence_ts = entry_ts;
+			kgsl_context_put(&drawctxt->base);
+			update_out_fence_ts = false;
+		}
+	}
+
+	/* Remove remaining entries from the list if we hit an error */
+	if (ret) {
+		list_for_each_entry_safe(entry, tmp, &hw_fence_list, reset_node) {
+			list_del_init(&entry->reset_node);
+		}
 	}
 
 	return ret;

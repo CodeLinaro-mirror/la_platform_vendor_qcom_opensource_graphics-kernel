@@ -1974,11 +1974,34 @@ done:
 
 int gen8_hwsched_boot_gpu(struct adreno_device *adreno_dev)
 {
+	int ret;
+
 	/* If warmboot is possible just send the warmboot command else coldboot */
 	if (gen8_hwsched_warmboot_possible(adreno_dev))
-		return gen8_hwsched_warmboot_gpu(adreno_dev);
+		ret = gen8_hwsched_warmboot_gpu(adreno_dev);
 	else
-		return gen8_hwsched_coldboot_gpu(adreno_dev);
+		ret = gen8_hwsched_coldboot_gpu(adreno_dev);
+
+	/*
+	 * When the GPU is in secure mode, any writes to the RB_GC_GMEM_PROTECT
+	 * register are ignored. At this point, the GPU should be in unsecure
+	 * mode, so program the RB_GC_GMEM_PROTECT register.
+	 */
+	if (!ret)
+		gen8_set_gmem_protect(adreno_dev);
+
+	/*
+	 * All registers must be written before this point so that we don't
+	 * miss any register programming when we patch the power up register
+	 * list.
+	 */
+	if (!adreno_dev->patch_reglist &&
+		(adreno_dev->pwrup_reglist->gpuaddr != 0)) {
+		gen8_patch_pwrup_reglist(adreno_dev);
+		adreno_dev->patch_reglist = true;
+	}
+
+	return ret;
 }
 
 int gen8_hwsched_set_gmu_based_dcvs_value(struct adreno_device *adreno_dev, u32 type,

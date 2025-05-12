@@ -1208,6 +1208,42 @@ static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
 	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 }
 
+void gen8_set_gmem_protect(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	const struct gen8_nonctxt_regs *regs = gen8_core->nonctxt_regs;
+	static const struct gen8_nonctxt_regs *gmem_protect;
+	unsigned long pipe;
+
+	/*
+	 * If gmem_protect is not yet initialized, find the
+	 * GEN8_RB_GC_GMEM_PROTECT register in the nonctxt_regs.
+	 */
+	if (!gmem_protect) {
+		u32 i;
+
+		for (i = 0; regs[i].offset; i++) {
+			if (regs[i].offset == GEN8_RB_GC_GMEM_PROTECT) {
+				gmem_protect = &regs[i];
+				break;
+			}
+		}
+		if (!gmem_protect) {
+			dev_err(device->dev, "RB_GC_GMEM_PROTECT is not defined\n");
+			return;
+		}
+	}
+
+	for_each_set_bit(pipe,
+		(const unsigned long *)&gmem_protect->pipelines, PIPE_DDE_BV + 1)
+		gen8_regwrite_aperture(device, gmem_protect->offset,
+			gmem_protect->val, pipe, 0, 0);
+
+	/* Clear the aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+}
+
 #define RBBM_CLOCK_CNTL_ON 0x8aa8aa82
 
 void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on)
@@ -1262,7 +1298,7 @@ void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	}
 }
 
-static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
+void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_device *gen8_dev = container_of(adreno_dev,
@@ -1779,17 +1815,6 @@ int gen8_start(struct adreno_device *adreno_dev)
 	if (!adreno_is_gen8_2_x(adreno_dev))
 		gen8_hwcg_set(adreno_dev, true);
 
-	/*
-	 * All registers must be written before this point so that we don't
-	 * miss any register programming when we patch the power up register
-	 * list.
-	 */
-	if (!adreno_dev->patch_reglist &&
-		(adreno_dev->pwrup_reglist->gpuaddr != 0)) {
-		gen8_patch_pwrup_reglist(adreno_dev);
-		adreno_dev->patch_reglist = true;
-	}
-
 	/* Ensure very last register write is finished before we return from this function */
 	mb();
 	device->regmap.use_relaxed = true;
@@ -2030,6 +2055,24 @@ int gen8_rb_start(struct adreno_device *adreno_dev)
 				return ret;
 			}
 		}
+	}
+
+	/*
+	 * When the GPU is in secure mode, any writes to the RB_GC_GMEM_PROTECT
+	 * register are ignored. At this point, the GPU should be in unsecure
+	 * mode, so program the RB_GC_GMEM_PROTECT register.
+	 */
+	gen8_set_gmem_protect(adreno_dev);
+
+	/*
+	 * All registers must be written before this point so that we don't
+	 * miss any register programming when we patch the power up register
+	 * list.
+	 */
+	if (!adreno_dev->patch_reglist &&
+		(adreno_dev->pwrup_reglist->gpuaddr != 0)) {
+		gen8_patch_pwrup_reglist(adreno_dev);
+		adreno_dev->patch_reglist = true;
 	}
 
 	ret = gen8_post_start(adreno_dev);

@@ -1427,6 +1427,9 @@ static void gen8_snapshot_cx_debugbus(struct adreno_device *adreno_dev,
 	u32 i;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
+	if (device->debug_bus_bin)
+		return;
+
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_CNTLT,
 			FIELD_PREP(GENMASK(31, 28), 0xf));
 
@@ -1482,6 +1485,9 @@ static void gen8_snapshot_debugbus(struct adreno_device *adreno_dev,
 {
 	u32 i;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (device->debug_bus_bin)
+		return;
 
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_CNTLT,
 			FIELD_PREP(GENMASK(31, 28), 0xf));

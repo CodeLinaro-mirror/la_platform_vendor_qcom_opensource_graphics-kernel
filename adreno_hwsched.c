@@ -1530,7 +1530,39 @@ void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj)
 	}
 }
 
-static bool _retire_hw_syncobj(struct kgsl_drawobj *drawobj)
+static void adreno_hwsched_hw_syncobj_cancel_callbacks(struct kgsl_drawobj_sync *syncobj)
+{
+	u32 i;
+
+	for (i = 0; i < syncobj->numsyncs; i++) {
+		struct kgsl_drawobj_sync_event *event = &syncobj->synclist[i];
+
+		if (event->type != KGSL_CMD_SYNCPOINT_TYPE_FENCE)
+			continue;
+
+		kgsl_sync_fence_async_cancel(event->handle);
+
+		/*
+		 * Now that we know the callback is removed, we can safely put back the
+		 * refcount if it isn't already put back
+		 */
+		if (test_and_clear_bit(i, &syncobj->pending))
+			kgsl_drawobj_put(DRAWOBJ(syncobj));
+	}
+}
+
+static void adreno_hwsched_hw_syncobj_destroy(struct kgsl_drawobj *drawobj)
+{
+	/*
+	 * It is still possible that the dma fence callbacks may not yet have
+	 * been invoked. Make sure we cancel the callbacks before we destroy the sync object
+	 */
+	adreno_hwsched_hw_syncobj_cancel_callbacks(SYNCOBJ(drawobj));
+	adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
+	kgsl_drawobj_destroy(drawobj);
+}
+
+static bool adreno_hwsched_hw_syncobj_retired(struct kgsl_drawobj *drawobj)
 {
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
 	struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
@@ -1538,8 +1570,6 @@ static bool _retire_hw_syncobj(struct kgsl_drawobj *drawobj)
 	if (timestamp_cmp(drawobj->timestamp, hdr->sync_obj_ts) > 0)
 		return false;
 
-	adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
-	kgsl_drawobj_destroy(drawobj);
 	return true;
 }
 
@@ -1550,8 +1580,14 @@ static bool drawobj_retired(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj_cmd *cmdobj;
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 
-	if ((drawobj->type & SYNCOBJ_TYPE) != 0)
-		return _retire_hw_syncobj(drawobj);
+	if ((drawobj->type & SYNCOBJ_TYPE) != 0) {
+		if (adreno_hwsched_hw_syncobj_retired(drawobj)) {
+			adreno_hwsched_hw_syncobj_destroy(drawobj);
+			return true;
+		}
+
+		return false;
+	}
 
 	cmdobj = CMDOBJ(drawobj);
 
@@ -1763,8 +1799,15 @@ bool adreno_hwsched_drawobj_replay(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj_cmd *cmdobj;
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 
-	if ((drawobj->type & SYNCOBJ_TYPE) != 0)
-		return _retire_hw_syncobj(drawobj);
+	if ((drawobj->type & SYNCOBJ_TYPE) != 0) {
+		if (kgsl_context_is_bad(drawobj->context) ||
+			adreno_hwsched_hw_syncobj_retired(drawobj)) {
+			adreno_hwsched_hw_syncobj_destroy(drawobj);
+			return false;
+		}
+
+		return true;
+	}
 
 	cmdobj = CMDOBJ(drawobj);
 

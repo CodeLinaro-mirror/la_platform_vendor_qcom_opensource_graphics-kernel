@@ -1078,7 +1078,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a621 = {
 			ADRENO_APRIV | ADRENO_LSR | ADRENO_PREEMPTION |
 			ADRENO_IFPC | ADRENO_ACD | ADRENO_BCL,
 		.gpudev = &adreno_a6xx_hwsched_gpudev.base,
-		.perfcounters = &adreno_a6xx_hwsched_perfcounters,
+		.perfcounters = &adreno_a6xx_perfcounters,
 		.uche_gmem_alignment = 0,
 		.gmem_size = SZ_512K,
 		.bus_width = 32,
@@ -1110,7 +1110,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a622 = {
 		.features = ADRENO_CONTENT_PROTECTION | ADRENO_IOCOHERENT |
 			ADRENO_APRIV,
 		.gpudev = &adreno_a6xx_hwsched_gpudev.base,
-		.perfcounters = &adreno_a6xx_hwsched_perfcounters,
+		.perfcounters = &adreno_a6xx_perfcounters,
 		.uche_gmem_alignment = 0,
 		.gmem_size = SZ_512K,
 		.bus_width = 32,
@@ -2278,7 +2278,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_2_0 = {
 				ADRENO_LPAC | ADRENO_BCL | ADRENO_L3_VOTE |
 				ADRENO_PREEMPTION | ADRENO_DMS,
 		.gpudev = &adreno_gen7_hwsched_gpudev.base,
-		.perfcounters = &adreno_gen7_hwsched_perfcounters,
+		.perfcounters = &adreno_gen7_2_0_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = 3 * SZ_1M,
 		.bus_width = 32,
@@ -2315,7 +2315,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_2_1 = {
 				ADRENO_BCL | ADRENO_L3_VOTE | ADRENO_ACD |
 				ADRENO_PREEMPTION | ADRENO_DMS,
 		.gpudev = &adreno_gen7_hwsched_gpudev.base,
-		.perfcounters = &adreno_gen7_hwsched_perfcounters,
+		.perfcounters = &adreno_gen7_2_0_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = 3 * SZ_1M,
 		.bus_width = 32,
@@ -2421,7 +2421,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_6_0 = {
 				ADRENO_IFPC | ADRENO_PREEMPTION | ADRENO_BCL |
 				ADRENO_ACD | ADRENO_LPAC | ADRENO_DMS,
 		.gpudev = &adreno_gen7_hwsched_gpudev.base,
-		.perfcounters = &adreno_gen7_hwsched_perfcounters,
+		.perfcounters = &adreno_gen7_2_0_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = 3 * SZ_1M,
 		.bus_width = 32,
@@ -2514,7 +2514,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 			ADRENO_HW_FENCE | ADRENO_PREEMPTION | ADRENO_ACD |
 			ADRENO_GMU_WARMBOOT,
 		.gpudev = &adreno_gen7_9_0_hwsched_gpudev.base,
-		.perfcounters = &adreno_gen7_9_0_hwsched_perfcounters,
+		.perfcounters = &adreno_gen7_9_0_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = 3 * SZ_1M,
 		.bus_width = 32,
@@ -2553,7 +2553,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
 			ADRENO_HW_FENCE | ADRENO_PREEMPTION | ADRENO_ACD |
 			ADRENO_GMU_WARMBOOT,
 		.gpudev = &adreno_gen7_9_0_hwsched_gpudev.base,
-		.perfcounters = &adreno_gen7_9_0_hwsched_perfcounters,
+		.perfcounters = &adreno_gen7_9_0_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = 3 * SZ_1M,
 		.bus_width = 32,
@@ -2625,7 +2625,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_11_0 = {
 			ADRENO_IFPC | ADRENO_PREEMPTION | ADRENO_L3_VOTE |
 			ADRENO_DMS,
 		.gpudev = &adreno_gen7_hwsched_gpudev.base,
-		.perfcounters = &adreno_gen7_hwsched_perfcounters,
+		.perfcounters = &adreno_gen7_2_0_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = SZ_1M + SZ_512K,
 		.bus_width = 32,

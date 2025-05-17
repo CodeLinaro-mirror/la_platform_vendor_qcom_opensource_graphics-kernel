@@ -2133,10 +2133,10 @@ extern const struct gen7_snapshot_block_list gen7_2_0_snapshot_block_list;
 extern const struct gen7_snapshot_block_list gen7_6_0_snapshot_block_list;
 
 static const struct kgsl_regmap_list gen7_2_0_gbif_cx_regs[] = {
-	{ GEN7_GBIF_QSB_SIDE0, 0x00071620 },
-	{ GEN7_GBIF_QSB_SIDE1, 0x00071620 },
-	{ GEN7_GBIF_QSB_SIDE2, 0x00071620 },
-	{ GEN7_GBIF_QSB_SIDE3, 0x00071620 },
+	{ GEN7_GBIF_QSB_SIDE0, 0x00071e20 },
+	{ GEN7_GBIF_QSB_SIDE1, 0x00071e20 },
+	{ GEN7_GBIF_QSB_SIDE2, 0x00071e20 },
+	{ GEN7_GBIF_QSB_SIDE3, 0x00071e20 },
 	{ GEN7_GMU_CX_MRC_GBIF_QOS_CTRL, 0x33 },
 };
 

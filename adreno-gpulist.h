@@ -2142,13 +2142,6 @@ static const struct kgsl_regmap_list gen7_2_0_gbif_cx_regs[] = {
 
 extern const struct gen7_snapshot_block_list gen7_3_0_snapshot_block_list;
 
-static const struct kgsl_regmap_list gen7_3_0_gbif_cx_regs[] = {
-	{ GEN7_GBIF_QSB_SIDE0, 0x00071620 },
-	{ GEN7_GBIF_QSB_SIDE1, 0x00071620 },
-	{ GEN7_GBIF_QSB_SIDE2, 0x00071620 },
-	{ GEN7_GBIF_QSB_SIDE3, 0x00071620 },
-};
-
 static const u32 gen7_6_0_gbif_client_qos_values[KGSL_PRIORITY_MAX_RB_LEVELS] = {
 	0x03230323,
 };
@@ -2365,8 +2358,8 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_3_0 = {
 	.hwcg_count = ARRAY_SIZE(gen7_3_0_hwcg_regs),
 	.ao_hwcg = gen7_0_0_ao_hwcg_regs,
 	.ao_hwcg_count = ARRAY_SIZE(gen7_0_0_ao_hwcg_regs),
-	.gbif = gen7_3_0_gbif_cx_regs,
-	.gbif_count = ARRAY_SIZE(gen7_3_0_gbif_cx_regs),
+	.gbif = gen7_0_0_gbif_cx_regs,
+	.gbif_count = ARRAY_SIZE(gen7_0_0_gbif_cx_regs),
 	.hang_detect_cycles = 0xcfffff,
 	.protected_regs = gen7_0_0_protected_regs,
 	.highest_bank_bit = 15,

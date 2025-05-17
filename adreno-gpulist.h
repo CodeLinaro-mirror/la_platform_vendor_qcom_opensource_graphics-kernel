@@ -2503,6 +2503,13 @@ static const struct gen7_protected_regs gen7_9_0_protected_regs[] = {
 	{ 0 },
 };
 
+static const struct kgsl_regmap_list gen7_9_0_ao_hwcg_regs[] = {
+	{ GEN7_GPU_GMU_AO_GMU_CGC_MODE_CNTL, 0x00020222 },
+	{ GEN7_GPU_GMU_AO_GMU_CGC_DELAY_CNTL, 0x00010111 },
+	{ GEN7_GPU_GMU_AO_GMU_CGC_HYST_CNTL, 0x00005555 },
+	{ GEN7_GMU_CX_GMU_WFI_CONFIG, 0x00000003 },
+};
+
 static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN7_9_0,
@@ -2525,8 +2532,8 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 	.sqefw_name = "gen70900_sqe.fw",
 	.gmufw_name = "gmu_gen70900.bin",
 	.zap_name = "gen70900_zap.mbn",
-	.ao_hwcg = gen7_2_0_ao_hwcg_regs,
-	.ao_hwcg_count = ARRAY_SIZE(gen7_2_0_ao_hwcg_regs),
+	.ao_hwcg = gen7_9_0_ao_hwcg_regs,
+	.ao_hwcg_count = ARRAY_SIZE(gen7_9_0_ao_hwcg_regs),
 	.gbif = gen7_2_0_gbif_cx_regs,
 	.gbif_count = ARRAY_SIZE(gen7_2_0_gbif_cx_regs),
 	.hang_detect_cycles = 0xcfffff,
@@ -2564,8 +2571,8 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
 	.sqefw_name = "gen70900_sqe.fw",
 	.gmufw_name = "gmu_gen70900.bin",
 	.zap_name = "gen70900_zap.mbn",
-	.ao_hwcg = gen7_2_0_ao_hwcg_regs,
-	.ao_hwcg_count = ARRAY_SIZE(gen7_2_0_ao_hwcg_regs),
+	.ao_hwcg = gen7_9_0_ao_hwcg_regs,
+	.ao_hwcg_count = ARRAY_SIZE(gen7_9_0_ao_hwcg_regs),
 	.gbif = gen7_2_0_gbif_cx_regs,
 	.gbif_count = ARRAY_SIZE(gen7_2_0_gbif_cx_regs),
 	.hang_detect_cycles = 0xcfffff,
@@ -2638,8 +2645,8 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_11_0 = {
 	.zap_name = "gen71100_zap.mbn",
 	.hwcg = gen7_2_0_hwcg_regs,
 	.hwcg_count = ARRAY_SIZE(gen7_2_0_hwcg_regs),
-	.ao_hwcg = gen7_2_0_ao_hwcg_regs,
-	.ao_hwcg_count = ARRAY_SIZE(gen7_2_0_ao_hwcg_regs),
+	.ao_hwcg = gen7_9_0_ao_hwcg_regs,
+	.ao_hwcg_count = ARRAY_SIZE(gen7_9_0_ao_hwcg_regs),
 	.gbif = gen7_2_0_gbif_cx_regs,
 	.gbif_count = ARRAY_SIZE(gen7_2_0_gbif_cx_regs),
 	.hang_detect_cycles = 0xcfffff,

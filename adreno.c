@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -3528,8 +3528,6 @@ static void adreno_drawctxt_sched(struct kgsl_device *device,
 
 bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct kgsl_mmu *mmu = &device->mmu;
 	u32 fault, val;
 
 	/*
@@ -3544,8 +3542,7 @@ bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev)
 
 	fault = adreno_gpu_fault(adreno_dev);
 
-	return ((fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT) &&
-		test_bit(KGSL_FT_PAGEFAULT_GPUHALT_ENABLE, &mmu->pfpolicy)) ? true : false;
+	return (fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT) ? true : false;
 }
 
 int adreno_power_cycle(struct adreno_device *adreno_dev,

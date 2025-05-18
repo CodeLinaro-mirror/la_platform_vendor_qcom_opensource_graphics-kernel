@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/iommu.h>
@@ -252,6 +252,17 @@ static u32 gen8_hwsched_lookup_key_value(struct adreno_device *adreno_dev,
 	return 0;
 }
 
+static void handle_sw_fault(struct adreno_device *adreno_dev, const char *str, u32 key)
+{
+	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
+	u32 status = gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS, key);
+
+	dev_crit_ratelimited(gmu_pdev_dev, "CP %s | SW fault | status=0x%8.8x\n", str, status);
+	/* BIT(12) - SMMU fault */
+	if (status & BIT(12))
+		adreno_scheduler_fault(adreno_dev, ADRENO_IOMMU_STALL_ON_PAGE_FAULT);
+}
+
 static bool log_gpu_fault(struct adreno_device *adreno_dev)
 {
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
@@ -477,34 +488,19 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 		dev_crit_ratelimited(gmu_pdev_dev, "CP DDE BV Illegal instruction error\n");
 		break;
 	case GMU_CP_BR_SW_FAULT_ERROR:
-		dev_crit_ratelimited(gmu_pdev_dev,
-			"CP BR | SW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_BR_SW_FAULT));
+		handle_sw_fault(adreno_dev, "BR", KEY_CP_BR_SW_FAULT);
 		break;
 	case GMU_CP_BV_SW_FAULT_ERROR:
-		dev_crit_ratelimited(gmu_pdev_dev,
-			"CP BV | SW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_BV_SW_FAULT));
+		handle_sw_fault(adreno_dev, "BV", KEY_CP_BV_SW_FAULT);
 		break;
 	case GMU_CP_LPAC_SW_FAULT_ERROR:
-		dev_crit_ratelimited(gmu_pdev_dev,
-			"CP LPAC | SW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_LPAC_SW_FAULT));
+		handle_sw_fault(adreno_dev, "LPAC", KEY_CP_LPAC_SW_FAULT);
 		break;
 	case GMU_CP_AQE0_SW_FAULT_ERROR:
-		dev_crit_ratelimited(gmu_pdev_dev,
-			"CP AQE0 | SW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_AQE0_SW_FAULT));
+		handle_sw_fault(adreno_dev, "AQE0", KEY_CP_AQE0_SW_FAULT);
 		break;
 	case GMU_CP_AQE1_SW_FAULT_ERROR:
-		dev_crit_ratelimited(gmu_pdev_dev,
-			"CP AQE1 | SW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_AQE1_SW_FAULT));
+		handle_sw_fault(adreno_dev, "AQE1", KEY_CP_AQE1_SW_FAULT);
 		break;
 	case GMU_CP_AQE0_PROTECTED_ERROR: {
 		u32 status = gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
@@ -527,16 +523,10 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 		}
 		break;
 	case GMU_CP_DDEBR_SW_FAULT_ERROR:
-		dev_crit_ratelimited(gmu_pdev_dev,
-			"CP DDE BR | SW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_DDEBR_SW_FAULT));
+		handle_sw_fault(adreno_dev, "DDE BR", KEY_CP_DDEBR_SW_FAULT);
 		break;
 	case GMU_CP_DDEBV_SW_FAULT_ERROR:
-		dev_crit_ratelimited(gmu_pdev_dev,
-			"CP DDE BV | SW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_DDEBV_SW_FAULT));
+		handle_sw_fault(adreno_dev, "DDE BV", KEY_CP_DDEBV_SW_FAULT);
 		break;
 	case GMU_CP_UNKNOWN_ERROR:
 		fallthrough;

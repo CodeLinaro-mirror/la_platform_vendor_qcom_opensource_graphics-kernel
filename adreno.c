@@ -34,7 +34,6 @@
 #include "adreno_pm4types.h"
 #include "adreno_trace.h"
 #include "kgsl_bus.h"
-#include "kgsl_power_trace.h"
 #include "kgsl_reclaim.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
@@ -3524,7 +3523,7 @@ static int adreno_gpu_clock_set(struct kgsl_device *device, u32 pwrlevel)
 	trace_kgsl_pwrlevel(device, pwrlevel, pl->gpu_freq,
 		prev_pwrlevel, pwr->pwrlevels[prev_pwrlevel].gpu_freq, 0);
 
-	KGSL_TRACE_GPU_FREQ(pl->gpu_freq/1000, 0, 0);
+	trace_gpu_frequency(pl->gpu_freq/1000, 0, 0);
 	return 0;
 }
 

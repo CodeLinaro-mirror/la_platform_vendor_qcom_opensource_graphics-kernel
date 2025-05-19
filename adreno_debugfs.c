@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -625,6 +625,44 @@ static int _ifpc_hyst_show(void *data, u64 *val)
 
 DEFINE_DEBUGFS_ATTRIBUTE(ifpc_hyst_fops, _ifpc_hyst_show, _ifpc_hyst_store, "%llu\n");
 
+static void set_minbw_data(struct adreno_device *adreno_dev, void *priv)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct gmu_dev_ops *ops = GMU_DEVICE_OPS(device);
+
+	if (ops && ops->minbw_idle_level_set)
+		ops->minbw_idle_level_set(device, *((u32 *)priv));
+}
+
+static int _minbw_data_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+	u32 minbw_val;
+
+	/* Only 24 bits are allowed by GMU for this feature */
+	if (val & 0xffffffffff000000)
+		return -EINVAL;
+
+	/* We cannot use minBW if IFPC or minBW is disabled */
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_IFPC) ||
+		(!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_MINBW)))
+		return 0;
+
+	minbw_val = (u32)val;
+
+	return adreno_power_cycle(adreno_dev, set_minbw_data, &minbw_val);
+}
+
+static int _minbw_data_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	*val = (u64)adreno_dev->minbw_data;
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(minbw_fops, _minbw_data_show, _minbw_data_store, "%llu\n");
+
 static int _gmu_fp_store(void *data, u64 val)
 {
 	struct adreno_device *adreno_dev = data;
@@ -732,6 +770,9 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 	if (gmu_core_isenabled(device)) {
 		debugfs_create_file("ifpc_hyst", 0644, device->d_debugfs,
 			device, &ifpc_hyst_fops);
+
+		debugfs_create_file("minbw", 0644, device->d_debugfs,
+			device, &minbw_fops);
 
 		debugfs_create_file("gmu_fault_policy", 0644, device->d_debugfs,
 			device, &gmu_fp_fops);

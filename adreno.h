@@ -180,6 +180,10 @@
 #define ADRENO_RT_HINT BIT(23)
 /* Defer allocation of preemption record gmem memory when needed */
 #define ADRENO_DEFER_GMEM_ALLOC BIT(24)
+/* The GMU supports MINBW voting */
+#define ADRENO_GMU_MINBW BIT(25)
+/* Enable GMU Based DCVS profile */
+#define ADRENO_DCVS_PROFILE BIT(26)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -262,6 +266,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A619 = 619,
 	ADRENO_REV_A620 = 620,
 	ADRENO_REV_A621 = 621,
+	ADRENO_REV_A622 = 622,
 	ADRENO_REV_A630 = 630,
 	ADRENO_REV_A635 = 635,
 	ADRENO_REV_A640 = 640,
@@ -689,6 +694,8 @@ struct adreno_device {
 	bool lpac_enabled;
 	/** @dms_enabled: True if DMS is enabled */
 	bool dms_enabled;
+	/** @minbw_enabled: True if minbw vote is enabled */
+	bool minbw_enabled;
 	/** @preempt_override: True if command line param enables preemption */
 	bool preempt_override;
 	struct kgsl_memdesc *profile_buffer;
@@ -760,6 +767,8 @@ struct adreno_device {
 	 * throttle level for bcl alarm levels 0-2. If not set, gmu fw sets default throttle levels.
 	 */
 	u32 bcl_data;
+	/* @minbw_data: Min bw level to vote for when entering ifpc */
+	u32 minbw_data;
 	/*
 	 * @bcl_debugfs_dir: Debugfs directory node for bcl related nodes
 	 */
@@ -823,6 +832,8 @@ struct adreno_device {
 	u32 dcvs_tuning_numbusy_lvl;
 	/** @total_ctxt_record_sz: Size of the total preemption record in bytes */
 	u64 total_ctxt_record_sz;
+	/** @dcvs_profile_enabled: True if DCVS profile is enabled */
+	bool dcvs_profile_enabled;
 };
 
 /* Time to wait for suspend recovery gate to complete */
@@ -1237,6 +1248,7 @@ ADRENO_TARGET(a612, ADRENO_REV_A612)
 ADRENO_TARGET(a618, ADRENO_REV_A618)
 ADRENO_TARGET(a619, ADRENO_REV_A619)
 ADRENO_TARGET(a621, ADRENO_REV_A621)
+ADRENO_TARGET(a622, ADRENO_REV_A622)
 ADRENO_TARGET(a630, ADRENO_REV_A630)
 ADRENO_TARGET(a635, ADRENO_REV_A635)
 ADRENO_TARGET(a662, ADRENO_REV_A662)
@@ -1283,7 +1295,7 @@ static inline int adreno_is_a640_family(struct adreno_device *adreno_dev)
  * Derived GPUs from A650 needs to be added to this list.
  * A650 is derived from A640 but register specs has been
  * changed hence do not belongs to A640 family. A620, A621,
- * A660, A663, A690 follows the register specs of A650.
+ * A622, A660, A663, A690 follows the register specs of A650.
  *
  */
 static inline int adreno_is_a650_family(struct adreno_device *adreno_dev)
@@ -1293,7 +1305,7 @@ static inline int adreno_is_a650_family(struct adreno_device *adreno_dev)
 	return (rev == ADRENO_REV_A650 || rev == ADRENO_REV_A620 ||
 		rev == ADRENO_REV_A660 || rev == ADRENO_REV_A635 ||
 		rev == ADRENO_REV_A662 || rev == ADRENO_REV_A621 ||
-		rev == ADRENO_REV_A663);
+		rev == ADRENO_REV_A622 || rev == ADRENO_REV_A663);
 }
 
 static inline int adreno_is_a619_holi(struct adreno_device *adreno_dev)
@@ -1306,7 +1318,8 @@ static inline int adreno_is_a620(struct adreno_device *adreno_dev)
 {
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
 
-	return (rev == ADRENO_REV_A620 || rev == ADRENO_REV_A621);
+	return (rev == ADRENO_REV_A620 || rev == ADRENO_REV_A621 ||
+		rev == ADRENO_REV_A622);
 }
 
 static inline int adreno_is_a610_family(struct adreno_device *adreno_dev)

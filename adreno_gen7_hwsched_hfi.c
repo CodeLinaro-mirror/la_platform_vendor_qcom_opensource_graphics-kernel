@@ -5,7 +5,6 @@
  */
 
 #include <linux/iommu.h>
-#include <soc/qcom/msm_performance.h>
 
 #include "adreno.h"
 #include "adreno_gen7.h"
@@ -1632,12 +1631,6 @@ void gen7_hwsched_hfi_stop(struct adreno_device *adreno_dev)
 	kgsl_pwrctrl_axi(KGSL_DEVICE(adreno_dev), false);
 
 	clear_bit(GMU_PRIV_HFI_STARTED, &gmu->flags);
-
-	/*
-	 * Reset the hfi host access memory records, As GMU expects hfi memory
-	 * records to be clear in bootup.
-	 */
-	adreno_hwsched_reset_hfi_mem(adreno_dev);
 }
 
 static void gen7_hwsched_enable_async_hfi(struct adreno_device *adreno_dev)
@@ -2784,7 +2777,9 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 
 			if (ret) {
 				adreno_hwsched_syncobj_kfence_put(syncobj);
-				syncobj->flags &= ~KGSL_SYNCOBJ_HW;
+				clear_bit(KGSL_SYNCOBJ_HW, &syncobj->flags);
+				drawobj->timestamp = 0;
+				clear_bit(KGSL_SYNCOBJ_HW_TS, &syncobj->flags);
 				return ret;
 			}
 
@@ -2806,7 +2801,8 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 	 * Attach a timestamp to this SYNCOBJ to keep track whether GMU has deemed it signaled
 	 * or not.
 	 */
-	drawobj->timestamp = ++drawctxt->syncobj_timestamp;
+	if (!test_and_set_bit(KGSL_SYNCOBJ_HW_TS, &syncobj->flags))
+		drawobj->timestamp = ++drawctxt->syncobj_timestamp;
 	cmd->timestamp = drawobj->timestamp;
 
 	seqnum = atomic_inc_return(&adreno_dev->hwsched.submission_seqnum);

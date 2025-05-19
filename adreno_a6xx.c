@@ -10,8 +10,6 @@
 #include <linux/of.h>
 #include <linux/of_fdt.h>
 #include <linux/of_device.h>
-#include <linux/regulator/consumer.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 #include <soc/qcom/of_common.h>
 
 #include "adreno.h"
@@ -96,7 +94,7 @@ static u32 a6xx_ifpc_pwrup_reglist[] = {
 	A6XX_CP_AHB_CNTL,
 };
 
-/* Applicable to a620, a621, a635, a650 and a660 */
+/* Applicable to a620, a621, a622, a635, a650 and a660 */
 static u32 a650_ifpc_pwrup_reglist[] = {
 	A6XX_CP_PROTECT_REG+32,
 	A6XX_CP_PROTECT_REG+33,
@@ -116,7 +114,7 @@ static u32 a650_ifpc_pwrup_reglist[] = {
 	A6XX_CP_PROTECT_REG+47,
 };
 
-/* Applicable to a620, a621, a635, a650 and a660 */
+/* Applicable to a620, a621, a622, a635, a650 and a660 */
 static u32 a650_pwrup_reglist[] = {
 	A6XX_TPL1_BICUBIC_WEIGHTS_TABLE_0,
 	A6XX_TPL1_BICUBIC_WEIGHTS_TABLE_1,
@@ -865,40 +863,6 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	 */
 	a6xx_deassert_gbif_halt(adreno_dev);
 
-}
-
-/* Offsets into the MX/CX mapped register regions */
-#define RDPM_MX_OFFSET 0xf00
-#define RDPM_CX_OFFSET 0xf18
-
-void a6xx_rdpm_mx_freq_update(struct a6xx_gmu_device *gmu,
-		u32 freq)
-{
-	if (gmu->rdpm_mx_virt) {
-		writel_relaxed(freq/1000,
-			(gmu->rdpm_mx_virt + RDPM_MX_OFFSET));
-
-		/*
-		 * ensure previous writes post before this one,
-		 * i.e. act like normal writel()
-		 */
-		wmb();
-	}
-}
-
-void a6xx_rdpm_cx_freq_update(struct a6xx_gmu_device *gmu,
-		u32 freq)
-{
-	if (gmu->rdpm_cx_virt) {
-		writel_relaxed(freq/1000,
-			(gmu->rdpm_cx_virt + RDPM_CX_OFFSET));
-
-		/*
-		 * ensure previous writes post before this one,
-		 * i.e. act like normal writel()
-		 */
-		wmb();
-	}
 }
 
 /* This is the start point for non GMU/RGMU targets */

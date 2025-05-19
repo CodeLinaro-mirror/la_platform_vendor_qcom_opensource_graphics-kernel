@@ -548,24 +548,6 @@ to_gen8_gpudev(const struct adreno_gpudev *gpudev)
 void gen8_reset_preempt_records(struct adreno_device *adreno_dev);
 
 /**
- * gen8_rdpm_mx_freq_update - Update the mx frequency
- * @gmu: An Adreno GMU handle
- * @freq: Frequency in KHz
- *
- * This function communicates GPU mx frequency(in Mhz) changes to rdpm.
- */
-void gen8_rdpm_mx_freq_update(struct gen8_gmu_device *gmu, u32 freq);
-
-/**
- * gen8_rdpm_cx_freq_update - Update the cx frequency
- * @gmu: An Adreno GMU handle
- * @freq: Frequency in KHz
- *
- * This function communicates GPU cx frequency(in Mhz) changes to rdpm.
- */
-void gen8_rdpm_cx_freq_update(struct gen8_gmu_device *gmu, u32 freq);
-
-/**
  * gen8_scm_gpu_init_cx_regs - Program gpu regs for feature support
  * @adreno_dev: Handle to the adreno device
  *
@@ -654,6 +636,23 @@ void gen8_periph_regread(struct kgsl_device *device, u32 offsetwords,
  */
 void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id,
 		u32 slice_id, u32 use_slice_id);
+
+/**
+ * gen8_set_gmem_protect - Program the RB_GC_GMEM_PROTECT
+ * @adreno_dev: Handle to the adreno device
+ *
+ * This function programs RB_GC_GMEM_PROTECT register
+ */
+void gen8_set_gmem_protect(struct adreno_device *adreno_dev);
+
+/**
+ * gen8_patch_pwrup_reglist - Patch power-up register list
+ * @adreno_dev: Handle to the adreno device
+ *
+ * This function patches the power-up register list for Adreno Gen8 GPUs.
+ * It writes the offset and current value of each register into the a buffer.
+ */
+void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev);
 
 #if IS_ENABLED(CONFIG_QCOM_KGSL_CORESIGHT)
 void gen8_coresight_init(struct adreno_device *device);

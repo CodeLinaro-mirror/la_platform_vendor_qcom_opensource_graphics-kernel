@@ -28,12 +28,12 @@
 #endif
 
 #include "adreno.h"
-#include "adreno_a5xx.h"
 #include "adreno_a6xx.h"
 #include "adreno_compat.h"
 #include "adreno_pm4types.h"
 #include "adreno_trace.h"
 #include "kgsl_bus.h"
+#include "kgsl_power_trace.h"
 #include "kgsl_reclaim.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
@@ -912,9 +912,9 @@ static int adreno_of_get_power(struct adreno_device *adreno_dev,
 }
 
 /* Read the fuse through the new and fancy nvmem method */
-static int adreno_read_speed_bin(struct platform_device *pdev)
+static int adreno_read_fuse(struct platform_device *pdev, const char *fuse)
 {
-	struct nvmem_cell *cell = nvmem_cell_get(&pdev->dev, "speed_bin");
+	struct nvmem_cell *cell = nvmem_cell_get(&pdev->dev, fuse);
 	int ret = PTR_ERR_OR_ZERO(cell);
 	void *buf;
 	int val = 0;
@@ -1326,6 +1326,7 @@ int adreno_device_probe(struct platform_device *pdev,
 		struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct device *dev = &pdev->dev;
 	unsigned int priv = 0;
 	int status;
@@ -1342,11 +1343,17 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	adreno_update_soc_hw_revision_quirks(adreno_dev, pdev);
 
-	status = adreno_read_speed_bin(pdev);
+	status = adreno_read_fuse(pdev, "speed_bin");
 	if (status < 0)
 		goto err;
 
 	device->speed_bin = status;
+
+	status = adreno_read_fuse(pdev, "gpu_debug_bus_bin");
+	if (status < 0)
+		dev_err(device->dev, "failed to read gpu_debug_bus_bin nvmem cell\n");
+
+	device->debug_bus_bin = status;
 
 	adreno_read_soc_code(device);
 
@@ -1490,6 +1497,8 @@ int adreno_device_probe(struct platform_device *pdev,
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS)) {
 		/* Ignore return value, as driver can still function without pwrscale enabled */
 		kgsl_pwrscale_init(device, pdev, CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR);
+	} else {
+		gmu_core->gpu_pwrscale_enable = true;
 	}
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_L3_VOTE))
@@ -2660,7 +2669,11 @@ static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
 		else
 			device->pwrctrl.ctrl_flags = 0;
 
-		kgsl_pwrscale_enable(device);
+		if (device->host_based_dcvs)
+			kgsl_pwrscale_enable(device);
+		else
+			device->ftbl->gmu_based_dcvs_pwr_ops(device, enable,
+					GPU_PWRLEVEL_OP_DCVS_ENABLE);
 	} else {
 		if (gmu_core_isenabled(device)) {
 			set_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
@@ -2671,12 +2684,101 @@ static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
 			kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
 			device->pwrctrl.ctrl_flags = KGSL_PWR_ON;
 		}
-		kgsl_pwrscale_disable(device, true);
+		if (device->host_based_dcvs) {
+			kgsl_pwrscale_disable(device, true);
+		} else {
+			device->ftbl->gmu_based_dcvs_pwr_ops(device, enable,
+					GPU_PWRLEVEL_OP_DCVS_ENABLE);
+			device->ftbl->gmu_based_dcvs_pwr_ops(device, 0, GPU_PWRLEVEL_OP_GPUCLK);
+		}
 	}
 
 	mutex_unlock(&device->mutex);
 
 	return 0;
+}
+
+static void adreno_alloc_dcvs_profile_memory(struct kgsl_device *device,
+		struct kgsl_process_private *proc_priv)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_memdesc *md = &proc_priv->profile.md;
+	u32 sizebytes;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_DCVS_PROFILE))
+		return;
+
+	if (!gmu_core_alloc_kernel_block(device, md,
+			SZ_4K, GMU_NONCACHED_KERNEL,
+			IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV)) {
+		/* KMD need to initialize KGSL region to KGSL_DCVS_ATTR_UNUSED for
+		 * torn state handling as per design and second half region to 0 so that
+		 * if there is no profile ever registered for a process, GMU can skip
+		 * tracking for this profile.
+		 */
+		sizebytes = md->size >> 1;
+		memset(md->hostptr, KGSL_DCVS_ATTR_UNUSED, sizebytes);
+		memset(md->hostptr + sizebytes, 0, sizebytes);
+	}
+}
+
+static int adreno_set_dcvs_profile(struct kgsl_device_private *dev_priv,
+		void __user *data, u32 sizebytes)
+{
+	struct kgsl_device *device = dev_priv->device;
+	struct kgsl_process_private *proc_priv = dev_priv->process_priv;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_hwsched_ops *hwsched_ops = adreno_dev->hwsched.hwsched_ops;
+	struct kgsl_memdesc *md = &proc_priv->profile.md;
+	struct kgsl_dcvs_profile param = {0};
+	struct kgsl_dcvs_attrs attrs;
+	u32 size;
+	int ret = 0;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_DCVS_PROFILE))
+		return -EOPNOTSUPP;
+
+	/* Restrict to one profile per process */
+	mutex_lock(&proc_priv->profile.profile_mutex);
+	if (proc_priv->profile.user_profile_registered) {
+		ret = -EINVAL;
+		goto done;
+	}
+
+	/* Not enough allocated GMU memory */
+	if ((!md->hostptr) || (sizeof(attrs) > (md->size >> 1))) {
+		ret = -ENOMEM;
+		goto done;
+	}
+
+	size = min_t(u32, sizeof(param), sizebytes);
+	if (copy_from_user(&param, data, size)) {
+		ret = -EFAULT;
+		goto done;
+	}
+
+	/*
+	 * Divide shared buffer into two equal parts and first part addresses
+	 * should be reserved for KGSL to copy profile buffer and second
+	 * part addresses for GMU Internal usage.
+	 */
+	size = min_t(u32, sizeof(attrs), param.attrs_size);
+
+	if (copy_from_user(md->hostptr, u64_to_user_ptr(param.attrs), size)) {
+		memset(md->hostptr, KGSL_DCVS_ATTR_UNUSED, size);
+		ret = -EFAULT;
+		goto done;
+	}
+
+	if (hwsched_ops->set_dcvs_profile && adreno_dev->dcvs_profile_enabled) {
+		mutex_lock(&device->mutex);
+		ret = hwsched_ops->set_dcvs_profile(adreno_dev, proc_priv);
+		mutex_unlock(&device->mutex);
+	}
+
+done:
+	mutex_unlock(&proc_priv->profile.profile_mutex);
+	return ret;
 }
 
 static int adreno_setproperty(struct kgsl_device_private *dev_priv,
@@ -2713,6 +2815,9 @@ static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 
 			kgsl_context_put(context);
 		}
+		break;
+	case KGSL_PROP_DCVS_PROFILE:
+		status = adreno_set_dcvs_profile(dev_priv, value, sizebytes);
 		break;
 	default:
 		status = adreno_default_setproperty(dev_priv, type, value, sizebytes);
@@ -3523,7 +3628,7 @@ static int adreno_gpu_clock_set(struct kgsl_device *device, u32 pwrlevel)
 	trace_kgsl_pwrlevel(device, pwrlevel, pl->gpu_freq,
 		prev_pwrlevel, pwr->pwrlevels[prev_pwrlevel].gpu_freq, 0);
 
-	trace_gpu_frequency(pl->gpu_freq/1000, 0, 0);
+	KGSL_TRACE_GPU_FREQ(pl->gpu_freq/1000, 0, 0);
 	return 0;
 }
 
@@ -3776,6 +3881,7 @@ static const struct kgsl_functable adreno_functable = {
 	.create_hw_fence = adreno_create_hw_fence,
 	.gmu_based_dcvs_pwr_ops = adreno_gmu_based_dcvs_pwr_ops,
 	.set_thermal_index = adreno_set_thermal_index,
+	.alloc_dcvs_profile_memory = adreno_alloc_dcvs_profile_memory,
 };
 
 static const struct component_master_ops adreno_ops = {
@@ -4126,6 +4232,8 @@ module_exit(kgsl_3d_exit);
 MODULE_DESCRIPTION("3D Graphics driver");
 MODULE_LICENSE("GPL v2");
 MODULE_SOFTDEP("pre: arm_smmu nvmem_qfprom socinfo governor_msm_adreno_tz governor_gpubw_mon");
-#if (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
+MODULE_IMPORT_NS("DMA_BUF");
+#elif (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)
 MODULE_IMPORT_NS(DMA_BUF);
 #endif

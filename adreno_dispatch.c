@@ -13,7 +13,6 @@
 #include "kgsl_bus.h"
 #include "kgsl_eventlog.h"
 #include "kgsl_gmu_core.h"
-#include "kgsl_timeline.h"
 
 #define DRAWQUEUE_NEXT(_i, _s) (((_i) + 1) % (_s))
 
@@ -894,7 +893,7 @@ static void adreno_dispatcher_issuecmds(struct adreno_device *adreno_dev)
 
 	mutex_unlock(&dispatcher->mutex);
 	_decrement_submit_now(device);
-
+	return;
 done:
 	adreno_scheduler_queue(adreno_dev);
 }

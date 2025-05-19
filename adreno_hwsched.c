@@ -10,7 +10,6 @@
 #include "adreno_sysfs.h"
 #include "adreno_trace.h"
 #include "kgsl_eventlog.h"
-#include "kgsl_timeline.h"
 #include "kgsl_trace.h"
 #include <linux/msm_kgsl.h>
 #include <linux/sched/clock.h>
@@ -480,7 +479,7 @@ static int _retire_syncobj(struct adreno_device *adreno_dev,
 	 * send it to the GMU
 	 */
 	if (test_bit(ADRENO_HWSCHED_HW_FENCE, &hwsched->flags) &&
-		((syncobj->flags & KGSL_SYNCOBJ_HW)))
+		test_bit(KGSL_SYNCOBJ_HW, &syncobj->flags))
 		return 1;
 
 	/*
@@ -1117,6 +1116,7 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 
 	mutex_unlock(&hwsched->mutex);
 	_decrement_submit_now(device);
+	return;
 
 done:
 	adreno_scheduler_queue(adreno_dev);
@@ -1474,6 +1474,9 @@ static int adreno_hwsched_queue_cmds(struct kgsl_device_private *dev_priv,
 	} else
 		kmem_cache_free(jobs_cache, job);
 
+	if (test_and_clear_bit(ADRENO_CONTEXT_FAULT, &context->priv))
+		return -EPROTO;
+
 	return 0;
 }
 
@@ -1527,25 +1530,28 @@ void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj)
 	}
 }
 
+static bool _retire_hw_syncobj(struct kgsl_drawobj *drawobj)
+{
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
+	struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
+
+	if (timestamp_cmp(drawobj->timestamp, hdr->sync_obj_ts) > 0)
+		return false;
+
+	adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
+	kgsl_drawobj_destroy(drawobj);
+	return true;
+}
+
 static bool drawobj_retired(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj)
 {
-	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_drawobj_cmd *cmdobj;
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 
-	if ((drawobj->type & SYNCOBJ_TYPE) != 0) {
-		struct gmu_context_queue_header *hdr =
-			drawctxt->gmu_context_queue.hostptr;
-
-		if (timestamp_cmp(drawobj->timestamp, hdr->sync_obj_ts) > 0)
-			return false;
-
-		adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
-		kgsl_drawobj_destroy(drawobj);
-		return true;
-	}
+	if ((drawobj->type & SYNCOBJ_TYPE) != 0)
+		return _retire_hw_syncobj(drawobj);
 
 	cmdobj = CMDOBJ(drawobj);
 
@@ -1754,15 +1760,8 @@ bool adreno_hwsched_drawobj_replay(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj_cmd *cmdobj;
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 
-	if ((drawobj->type & SYNCOBJ_TYPE) != 0) {
-
-		if (kgsl_drawobj_events_pending(SYNCOBJ(drawobj)))
-			return true;
-
-		adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
-		kgsl_drawobj_destroy(drawobj);
-		return false;
-	}
+	if ((drawobj->type & SYNCOBJ_TYPE) != 0)
+		return _retire_hw_syncobj(drawobj);
 
 	cmdobj = CMDOBJ(drawobj);
 
@@ -2115,6 +2114,9 @@ static void adreno_hwsched_snapshot_legacy(struct adreno_device *adreno_dev, int
 			drawobj = NULL;
 	}
 
+	if (drawobj && drawobj->context)
+		set_bit(ADRENO_CONTEXT_FAULT, &drawobj->context->priv);
+
 	adreno_gpufault_stats(adreno_dev, drawobj, NULL, fault);
 
 	if (!drawobj) {
@@ -2201,6 +2203,9 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 			drawobj = NULL;
 	}
 
+	if (drawobj && drawobj->context)
+		set_bit(ADRENO_CONTEXT_FAULT, &drawobj->context->priv);
+
 	do_fault_header(adreno_dev, drawobj, fault);
 
 	if (!obj_lpac && (fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT))
@@ -2226,6 +2231,9 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 		if (gpudev->lpac_fault_header)
 			gpudev->lpac_fault_header(adreno_dev, drawobj_lpac);
 	}
+
+	if (drawobj_lpac && drawobj_lpac->context)
+		set_bit(ADRENO_CONTEXT_FAULT, &drawobj_lpac->context->priv);
 
 	kgsl_device_snapshot(device, context, context_lpac, false);
 	adreno_gpufault_stats(adreno_dev, drawobj, drawobj_lpac, fault);

@@ -19,6 +19,7 @@
 
 #include "kgsl_device.h"
 #include "kgsl_bus.h"
+#include "kgsl_power_trace.h"
 #include "kgsl_pwrscale.h"
 #include "kgsl_sysfs.h"
 #include "kgsl_trace.h"
@@ -1090,15 +1091,14 @@ static ssize_t pwrscale_store(struct device *dev,
 	if (ret)
 		return ret;
 
-	if (!device->host_based_dcvs)
-		return count;
-
 	mutex_lock(&device->mutex);
 
-	if (enable)
-		kgsl_pwrscale_enable(device);
-	else
-		kgsl_pwrscale_disable(device, false);
+	if (device->ftbl->gmu_based_dcvs_pwr_ops(device, enable, GPU_PWRLEVEL_OP_DCVS_ENABLE)) {
+		if (enable)
+			kgsl_pwrscale_enable(device);
+		else
+			kgsl_pwrscale_disable(device, false);
+	}
 
 	mutex_unlock(&device->mutex);
 
@@ -1110,8 +1110,12 @@ static ssize_t pwrscale_show(struct device *dev,
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
 	struct kgsl_pwrscale *psc = &device->pwrscale;
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 
-	return scnprintf(buf, PAGE_SIZE, "%u\n", psc->enabled);
+	if (device->host_based_dcvs)
+		return scnprintf(buf, PAGE_SIZE, "%u\n", psc->enabled);
+	else
+		return scnprintf(buf, PAGE_SIZE, "%u\n", (u32)gmu_core->gpu_pwrscale_enable);
 }
 
 static DEVICE_ATTR_RO(temp);
@@ -2326,7 +2330,7 @@ static int _wake(struct kgsl_device *device)
 		kgsl_pwrctrl_axi(device, true);
 		kgsl_pwrscale_wake(device);
 		kgsl_pwrctrl_irq(device, true);
-		trace_gpu_frequency(
+		KGSL_TRACE_GPU_FREQ(
 			pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq/1000, 0, 0);
 
 		kgsl_bus_update(device, KGSL_BUS_VOTE_ON);
@@ -2417,7 +2421,7 @@ _slumber(struct kgsl_device *device)
 		device->ftbl->stop(device);
 		kgsl_pwrctrl_disable(device);
 		kgsl_pwrscale_sleep(device);
-		trace_gpu_frequency(0, 0, 0);
+		KGSL_TRACE_GPU_FREQ(0, 0, 0);
 		kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 		break;
 	case KGSL_STATE_SUSPEND:
@@ -2427,7 +2431,7 @@ _slumber(struct kgsl_device *device)
 		break;
 	case KGSL_STATE_AWARE:
 		kgsl_pwrctrl_disable(device);
-		trace_gpu_frequency(0, 0, 0);
+		KGSL_TRACE_GPU_FREQ(0, 0, 0);
 		kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 		break;
 	default:

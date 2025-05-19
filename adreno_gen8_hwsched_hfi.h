@@ -382,4 +382,17 @@ int gen8_hwsched_boot_gpu(struct adreno_device *adreno_dev);
  */
 int gen8_hwsched_set_gmu_based_dcvs_value(struct adreno_device *adreno_dev, u32 type,
 		u32 subtype, u32 val, bool default_vote);
+
+/**
+ * gen8_hwsched_set_dcvs_profile - Set profile for GMU based DCVS
+ * @adreno_dev: Pointer to the adreno device
+ * @proc_priv: Pointer to process private
+ *
+ * This function sends PROFILE_REGISTER hfi to set DCVS profile to GMU,
+ * and wait for the ack
+ *
+ * Return: Zero on success or negative error on failure
+ */
+int gen8_hwsched_set_dcvs_profile(struct adreno_device *adreno_dev,
+	struct kgsl_process_private *proc_priv);
 #endif

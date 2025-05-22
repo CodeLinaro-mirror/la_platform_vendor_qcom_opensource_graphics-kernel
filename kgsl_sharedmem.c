@@ -1947,7 +1947,7 @@ struct kgsl_memdesc *kgsl_alloc_map_gpu_global(struct kgsl_device *device,
 	int ret;
 	struct kgsl_global_memdesc *md;
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!kgsl_mutex_is_locked(&device->mutex)))
 		return ERR_PTR(-EINVAL);
 
 	md = kzalloc(sizeof(*md), GFP_KERNEL);
@@ -1990,7 +1990,7 @@ struct kgsl_memdesc *kgsl_alloc_map_gpu_global(struct kgsl_device *device,
 int kgsl_get_global_gpuaddr(struct kgsl_device *device, struct kgsl_memdesc *memdesc,
 	u64 size, u64 flags, u32 priv)
 {
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!kgsl_mutex_is_locked(&device->mutex)))
 		return -EINVAL;
 
 	if (!size || size > UINT_MAX)

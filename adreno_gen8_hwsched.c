@@ -1045,7 +1045,7 @@ static void hwsched_idle_check(struct work_struct *work)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (test_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags))
 		goto done;
@@ -1076,7 +1076,7 @@ static void hwsched_idle_check(struct work_struct *work)
 	gen8_hwsched_power_off(adreno_dev);
 
 done:
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 static int gen8_hwsched_first_open(struct adreno_device *adreno_dev)
@@ -1109,7 +1109,7 @@ static int gen8_hwsched_active_count_get(struct adreno_device *adreno_dev)
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	int ret = 0;
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!kgsl_mutex_is_locked(&device->mutex)))
 		return -EINVAL;
 
 	if (test_bit(GMU_PRIV_PM_SUSPEND, &gmu->flags))
@@ -1720,11 +1720,11 @@ static ssize_t dcvs_tuning_store(struct kobject *kobj,
 	if (ret)
 		return ret;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	hwsched->dcvs_tunables[pattr->tuning_attr].value = val;
 	device->ftbl->gmu_based_dcvs_pwr_ops(device,  pattr->tuning_attr,
 			GPU_PWRLEVEL_OP_TUNING_ATTR);
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	return count;
 }
@@ -1737,6 +1737,8 @@ DCVS_TUNABLES_SYSFS_WO(target_fps, GPU_TUNING_KEY_TARGET_FPS);
 DCVS_TUNABLES_SYSFS_WO(num_samples_up, GPU_TUNING_KEY_NUM_SAMPLES_UP);
 DCVS_TUNABLES_SYSFS_WO(num_samples_down, GPU_TUNING_KEY_NUM_SAMPLES_DOWN);
 DCVS_TUNABLES_SYSFS_WO(strict_frame, GPU_TUNING_KEY_STRICT_FRAME);
+DCVS_TUNABLES_SYSFS_WO(non_linear_ramp_up, GPU_TUNING_KEY_NON_LINEAR_RAMP_UP);
+DCVS_TUNABLES_SYSFS_WO(non_linear_ramp_down, GPU_TUNING_KEY_NON_LINEAR_RAMP_DOWN);
 
 static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_penalty_up.attr.attr,
@@ -1747,6 +1749,8 @@ static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_num_samples_up.attr.attr,
 	&dcvs_attr_num_samples_down.attr.attr,
 	&dcvs_attr_strict_frame.attr.attr,
+	&dcvs_attr_non_linear_ramp_up.attr.attr,
+	&dcvs_attr_non_linear_ramp_down.attr.attr,
 	NULL,
 };
 
@@ -1777,9 +1781,9 @@ static void gen8_hwsched_gmu_based_dcvs_pwr_ops(struct adreno_device *adreno_dev
 	case GPU_PWRLEVEL_OP_PERF_HINT: {
 		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-		mutex_lock(&device->mutex);
+		kgsl_mutex_lock(&device->mutex);
 		gen8_hwsched_set_pwrconstraint(adreno_dev, arg);
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		}
 		break;
 	case GPU_PWRLEVEL_OP_DCVS_ENABLE:

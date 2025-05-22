@@ -2674,6 +2674,7 @@ int adreno_set_constraint(struct kgsl_device *device,
 	switch (constraint->type) {
 	case KGSL_CONSTRAINT_PWRLEVEL: {
 		struct kgsl_device_constraint_pwrlevel pwr;
+		u32 max_supported_level;
 
 		if (constraint->size != sizeof(pwr)) {
 			status = -EINVAL;
@@ -2686,7 +2687,10 @@ int adreno_set_constraint(struct kgsl_device *device,
 			status = -EFAULT;
 			break;
 		}
-		if (pwr.level >= KGSL_CONSTRAINT_PWR_MAXLEVELS) {
+
+		max_supported_level = (device->host_based_dcvs) ?
+			KGSL_CONSTRAINT_PWR_MAXLEVELS - 1 : KGSL_CONSTRAINT_PWR_PERC_MAX;
+		if (pwr.level > max_supported_level) {
 			status = -EINVAL;
 			break;
 		}

@@ -204,6 +204,11 @@ static int __dcvs_tuning_scm_entry(struct adreno_device *adreno_dev, u32 param, 
 static int _dcvs_tuning_mingap_store(struct adreno_device *adreno_dev,
 		unsigned int val)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (!device->host_based_dcvs)
+		return -EOPNOTSUPP;
+
 	if (val > DCVS_TUNING_MAX)
 		return -EINVAL;
 
@@ -212,12 +217,22 @@ static int _dcvs_tuning_mingap_store(struct adreno_device *adreno_dev,
 
 static u32 _dcvs_tuning_mingap_show(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (!device->host_based_dcvs)
+		return 0;
+
 	return adreno_dev->dcvs_tuning_mingap_lvl;
 }
 
 static int _dcvs_tuning_penalty_store(struct adreno_device *adreno_dev,
 		unsigned int val)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (!device->host_based_dcvs)
+		return -EOPNOTSUPP;
+
 	if (val > DCVS_TUNING_MAX)
 		return -EINVAL;
 
@@ -226,12 +241,22 @@ static int _dcvs_tuning_penalty_store(struct adreno_device *adreno_dev,
 
 static u32 _dcvs_tuning_penalty_show(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (!device->host_based_dcvs)
+		return 0;
+
 	return adreno_dev->dcvs_tuning_penalty_lvl;
 }
 
 static int _dcvs_tuning_numbusy_store(struct adreno_device *adreno_dev,
 		unsigned int val)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (!device->host_based_dcvs)
+		return -EOPNOTSUPP;
+
 	if (val > DCVS_TUNING_MAX)
 		return -EINVAL;
 
@@ -240,6 +265,11 @@ static int _dcvs_tuning_numbusy_store(struct adreno_device *adreno_dev,
 
 static u32 _dcvs_tuning_numbusy_show(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (!device->host_based_dcvs)
+		return 0;
+
 	return adreno_dev->dcvs_tuning_numbusy_lvl;
 }
 
@@ -685,6 +715,7 @@ static GPU_SYSFS_ATTR(gpu_model, 0444, _gpu_model_show, NULL);
 int adreno_sysfs_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct device *gmu_dev = GMU_PDEV_DEV(device);
 	int ret;
 
 	ret = sysfs_create_files(&device->dev->kobj, _attr_list);
@@ -696,6 +727,9 @@ int adreno_sysfs_init(struct adreno_device *adreno_dev)
 		ret = sysfs_create_file(&device->gpu_sysfs_kobj,
 			&gpu_sysfs_attr_gpu_model.attr);
 	}
+
+	/* Add a soft link for gmu device */
+	WARN_ON(sysfs_create_link(&device->dev->kobj, &gmu_dev->kobj, "gmu"));
 
 	return ret;
 }

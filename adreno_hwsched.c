@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "adreno.h"
@@ -1731,6 +1731,7 @@ static void adreno_hwsched_dispatcher_close(struct adreno_device *adreno_dev)
 		kgsl_sharedmem_free(&hwsched->global_ctxtq);
 
 	kobject_put(&hwsched->dcvs_kobj);
+	kobject_put(&hwsched->tunables_kobj);
 }
 
 static void force_retire_timestamp(struct kgsl_device *device,

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __KGSL_GMU_CORE_H
 #define __KGSL_GMU_CORE_H
@@ -369,6 +369,8 @@ struct trace_dcvs_pwrstats {
 	u64 gpu_time;
 	u64 ram_wait;
 	u64 ram_time;
+	u16 aggr_max_pwrlevel;
+	u16 padding;
 } __packed;
 
 struct trace_pwr_constraint {

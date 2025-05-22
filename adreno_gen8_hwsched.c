@@ -1704,7 +1704,7 @@ static ssize_t dcvs_tuning_show(struct kobject *kobj, struct kobj_attribute *att
 {
 	struct adreno_dcvs_tuning_attribute *pattr = container_of(attr,
 						struct adreno_dcvs_tuning_attribute, attr);
-	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, tunables_kobj);
 
 	return scnprintf(buf, PAGE_SIZE, "%d\n",
 				hwsched->dcvs_tunables[pattr->tuning_attr].value);
@@ -1715,7 +1715,7 @@ static ssize_t dcvs_tuning_store(struct kobject *kobj,
 {
 	struct adreno_dcvs_tuning_attribute *pattr = container_of(attr,
 						struct adreno_dcvs_tuning_attribute, attr);
-	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, tunables_kobj);
 	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	s64 val = 0;
@@ -1757,7 +1757,7 @@ DCVS_TUNABLES_SYSFS(min_freq_mhz, GPU_TUNING_KEY_MIN_GPU_FREQUENCY);
 DCVS_TUNABLES_SYSFS(max_freq_mhz, GPU_TUNING_KEY_MAX_GPU_FREQUENCY);
 DCVS_TUNABLES_SYSFS(mod_percent, GPU_TUNING_KEY_MOD_PERCENT);
 
-static struct attribute *dcvs_attrs[] = {
+static struct attribute *dcvs_tunables_attrs[] = {
 	&dcvs_attr_penalty_up.attr.attr,
 	&dcvs_attr_penalty_down.attr.attr,
 	&dcvs_attr_first_step_down.attr.attr,
@@ -1771,6 +1771,35 @@ static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_min_freq_mhz.attr.attr,
 	&dcvs_attr_max_freq_mhz.attr.attr,
 	&dcvs_attr_mod_percent.attr.attr,
+	NULL,
+};
+
+ATTRIBUTE_GROUPS(dcvs_tunables);
+
+static struct kobj_type ktype_tunables = {
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = dcvs_tunables_groups,
+};
+
+#define DCVS_SYSFS_RO(_name) \
+	static struct kobj_attribute dcvs_attr_##_name = \
+			__ATTR(_name, 0444, _name##_show, NULL)
+
+static ssize_t aggregated_max_gpuclk_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", pwr->pwrlevels[pwr->aggr_max_pwrlevel].gpu_freq);
+}
+
+DCVS_SYSFS_RO(aggregated_max_gpuclk);
+
+static struct attribute *dcvs_attrs[] = {
+	&dcvs_attr_aggregated_max_gpuclk.attr,
 	NULL,
 };
 
@@ -1879,12 +1908,16 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 	if (ret)
 		return ret;
 
-	gmu_dev = GMU_PDEV_DEV(device);
-	WARN_ON(kobject_init_and_add(&adreno_dev->hwsched.dcvs_kobj, &ktype_dcvs, &gmu_dev->kobj,
-				"dcvs_tunables"));
 	/* Initialize the dcvs tunables */
 	for (i = 0; i < GPU_TUNING_KEY_MAX; i++)
 		adreno_dev->hwsched.dcvs_tunables[i].value = GPU_DCVS_TUNING_INVALID_VALUE;
+
+	gmu_dev = GMU_PDEV_DEV(device);
+	WARN_ON(kobject_init_and_add(&adreno_dev->hwsched.tunables_kobj, &ktype_tunables,
+				&gmu_dev->kobj, "dcvs_tunables"));
+
+	WARN_ON(kobject_init_and_add(&adreno_dev->hwsched.dcvs_kobj, &ktype_dcvs,
+				&gmu_dev->kobj, "dcvs"));
 
 	return ret;
 }

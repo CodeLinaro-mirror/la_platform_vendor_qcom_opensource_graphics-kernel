@@ -239,7 +239,7 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = gmu_core_enable_clks(device, GMU_MAX_PWRLEVELS - 1);
+	ret = gmu_core_enable_clks(device, device->gmu_core.num_freqs - 1);
 	if (ret)
 		goto gdsc_off;
 
@@ -318,7 +318,7 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	ret = gmu_core_clock_set_rate(device, device->gmu_core.freqs[0]);
+	ret = gmu_core_clock_set_rate(device, 0);
 	if (ret) {
 		gen8_hwsched_hfi_stop(adreno_dev);
 		goto err;
@@ -372,7 +372,7 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = gmu_core_enable_clks(device, GMU_MAX_PWRLEVELS - 1);
+	ret = gmu_core_enable_clks(device, device->gmu_core.num_freqs - 1);
 	if (ret)
 		goto gdsc_off;
 
@@ -411,7 +411,7 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	ret = gmu_core_clock_set_rate(device, device->gmu_core.freqs[0]);
+	ret = gmu_core_clock_set_rate(device, 0);
 	if (ret) {
 		gen8_hwsched_hfi_stop(adreno_dev);
 		goto err;

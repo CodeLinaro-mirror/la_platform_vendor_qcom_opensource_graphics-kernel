@@ -1059,8 +1059,8 @@ static void gen8_process_f2h_platform_msg(struct adreno_device *adreno_dev, u32 
 		struct hfi_scale_gmu_cmd *cmd = (struct hfi_scale_gmu_cmd *)rcvd;
 		u32 index = cmd->gmu_pwrlevel;
 
-		if ((index > 0) && (index <= GMU_MAX_PWRLEVELS))
-			gmu_core_clock_set_rate(device, device->gmu_core.freqs[index - 1]);
+		if ((index > 0) && (index <= device->gmu_core.num_freqs))
+			gmu_core_clock_set_rate(device, index - 1);
 	}
 }
 
@@ -2305,10 +2305,11 @@ static u32 gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct hfi_table_cmd *cmd;
 	struct hfi_table_entry *entry;
-	u32 index;
+	u32 index, i;
 	u32 ddr_index;
 	u32 size_first_entry_dwords = (sizeof(*entry) >> 2) + (1 * 1);
-	u32 size_second_entry_dwords = (sizeof(*entry) >> 2) + (1 * 4);
+	u32 size_second_entry_dwords = (sizeof(*entry) >> 2) +
+				(1 * (device->gmu_core.num_freqs + 1));
 	u32 size_table_dwords = (sizeof(*cmd) >> 2) + size_first_entry_dwords +
 				size_second_entry_dwords;
 
@@ -2316,7 +2317,7 @@ static u32 gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev
 	 * Return early if the scaling table is already generated or if the ddr threshold
 	 * to scale is not set for the target
 	 */
-	if (gmu->gmu_scaling_cmdbuf || !gmu_core->perf_ddr_bw)
+	if (gmu->gmu_scaling_cmdbuf || !gmu_core->perf_ddr_bw[0])
 		return 0;
 
 	/*
@@ -2369,17 +2370,24 @@ static u32 gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev
 	 */
 	entry = (struct hfi_table_entry *)&gmu->gmu_scaling_cmdbuf[index];
 	entry->count = 1;
-	entry->stride = 4;
+	entry->stride = device->gmu_core.num_freqs + 1;
 
-	/* Find the ddr index for gmu level 1 */
-	for (ddr_index = 0; ddr_index < pwr->ddr_table_count; ddr_index++) {
-		if (pwr->ddr_table[ddr_index] >= gmu_core->perf_ddr_bw)
-			break;
-	}
 	entry->data[0] = 0;
-	entry->data[1] = ddr_index;
-	entry->data[2] = 0;
-	entry->data[3] = 0;
+
+	for (i = 0; i < device->gmu_core.num_freqs; i++) {
+		if (!gmu_core->perf_ddr_bw[i]) {
+			entry->data[i + 1] = 0;
+			continue;
+		}
+
+		/* Find the ddr index for gmu level */
+		for (ddr_index = 0; ddr_index < pwr->ddr_table_count; ddr_index++) {
+			if (pwr->ddr_table[ddr_index] >= gmu_core->perf_ddr_bw[i])
+				break;
+		}
+		entry->data[i + 1] = ddr_index;
+	}
+
 	index += size_second_entry_dwords;
 
 	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_TABLE, HFI_MSG_CMD);

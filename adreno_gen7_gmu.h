@@ -15,7 +15,7 @@ struct gen7_dcvs_table {
 	u32 gpu_level_num;
 	u32 gmu_level_num;
 	struct opp_gx_desc gx_votes[MAX_GX_LEVELS];
-	struct opp_desc cx_votes[MAX_CX_LEVELS];
+	struct opp_desc cx_votes[MAX_CX_LEVELS_LEGACY];
 };
 
 /**

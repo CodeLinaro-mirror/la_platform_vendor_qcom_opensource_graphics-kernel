@@ -22,7 +22,8 @@
 
 #define MAX_GX_LEVELS		32
 #define MAX_GX_LEVELS_LEGACY	16
-#define MAX_CX_LEVELS		4
+#define MAX_CX_LEVELS		16
+#define MAX_CX_LEVELS_LEGACY	4
 #define MAX_BW_LEVELS		16
 #define MAX_CNOC_LEVELS		2
 #define MAX_CNOC_CMDS		6
@@ -114,10 +115,6 @@ enum oob_request {
 
 #define FENCE_STATUS_WRITEDROPPED0_MASK 0x1
 #define FENCE_STATUS_WRITEDROPPED1_MASK 0x2
-
-#define GMU_MAX_PWRLEVELS	2
-#define GMU_FREQ_MIN   200000000
-#define GMU_FREQ_MAX   500000000
 
 #define HFI_VERSION(major, minor, step) \
 	(FIELD_PREP(GENMASK(31, 28), major) | \
@@ -563,16 +560,18 @@ struct gmu_core_device {
 	/** @num_clks: Number of entries in the @clks array */
 	int num_clks;
 	/** @freqs: Array of GMU frequencies */
-	u32 freqs[GMU_MAX_PWRLEVELS];
+	u32 freqs[MAX_CX_LEVELS];
+	/** @num_freqs: Number of entries in the @freqs array */
+	int num_freqs;
 	/** @vlvls: Array of GMU voltage levels */
-	u32 vlvls[GMU_MAX_PWRLEVELS];
+	u32 vlvls[MAX_CX_LEVELS];
 	/*
 	 * @perf_ddr_bw: The lowest ddr bandwidth that puts CX at a corner at
 	 * which GMU can run at higher frequency.
 	 */
-	u32 perf_ddr_bw;
-	/** @cur_freq: Tracks scaled frequency for GMU */
-	u32 cur_freq;
+	u32 perf_ddr_bw[MAX_CX_LEVELS];
+	/** @cur_level: Tracks current frequency level for GMU */
+	u32 cur_level;
 	/** @gpu_pwrscale_enable: Flag to toggle GMU based DCVS pwrscale */
 	bool gpu_pwrscale_enable;
 };
@@ -922,11 +921,11 @@ int gmu_core_clk_probe(struct kgsl_device *device);
 /**
  * gmu_core_clock_set_rate - Set the gmu clock rate
  * @device: Pointer to KGSL device
- * @req_freq: Requested freq to set gmu to
+ * @gmu_level: Requested gmu power level
  *
  * Returns 0 on success or error on clock set rate failure
  */
-int gmu_core_clock_set_rate(struct kgsl_device *device, u32 req_freq);
+int gmu_core_clock_set_rate(struct kgsl_device *device, u32 gmu_level);
 
 /**
  * gmu_core_enable_clks - Enable gmu clocks

@@ -511,6 +511,7 @@ static void a6xx_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 
 static void a6xx_llc_configure_gpu_scid(struct adreno_device *adreno_dev);
 static void a6xx_llc_configure_gpuhtw_scid(struct adreno_device *adreno_dev);
+static void a6xx_llc_configure_gpumv_scid(struct adreno_device *adreno_dev);
 static void a6xx_llc_enable_overrides(struct adreno_device *adreno_dev);
 
 static void a6xx_set_secvid(struct kgsl_device *device)
@@ -812,6 +813,7 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	/* Configure LLCC */
 	a6xx_llc_configure_gpu_scid(adreno_dev);
 	a6xx_llc_configure_gpuhtw_scid(adreno_dev);
+	a6xx_llc_configure_gpumv_scid(adreno_dev);
 
 	a6xx_llc_enable_overrides(adreno_dev);
 
@@ -1618,6 +1620,29 @@ static void a6xx_llc_configure_gpuhtw_scid(struct adreno_device *adreno_dev)
 
 	kgsl_regrmw(device, A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_1,
 		A6XX_GPUHTW_LLC_SCID_MASK, gpuhtw_scid << A6XX_GPUHTW_LLC_SCID_SHIFT);
+}
+
+/*
+ * a6xx_llc_configure_gpumv_scid() - Program the sub-cache ID for CCU block
+ * @adreno_dev: The adreno device pointer
+ */
+static void a6xx_llc_configure_gpumv_scid(struct adreno_device *adreno_dev)
+{
+	u32 gpumv_scid = 0;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_mmu *mmu = &device->mmu;
+
+	if (IS_ERR_OR_NULL(adreno_dev->gpumv_llc_slice) ||
+		!adreno_dev->gpumv_llc_slice_enable ||
+		mmu->subtype != KGSL_IOMMU_SMMU_V500)
+		return;
+
+	if (llcc_slice_activate(adreno_dev->gpumv_llc_slice))
+		return;
+
+	gpumv_scid = llcc_get_slice_id(adreno_dev->gpumv_llc_slice);
+	kgsl_regrmw(device, A6XX_GBIF_SCACHE_CNTL1,
+		A6XX_GPUMV_LLC_SCID_MASK, FIELD_PREP(GENMASK(19, 15), gpumv_scid));
 }
 
 /*

@@ -834,6 +834,8 @@ struct adreno_device {
 	u64 total_ctxt_record_sz;
 	/** @dcvs_profile_enabled: True if DCVS profile is enabled */
 	bool dcvs_profile_enabled;
+	/** @aqe_ctxt_record_sz: Size of the AQE section in preemption record in bytes */
+	u64 aqe_ctxt_record_sz;
 };
 
 /* Time to wait for suspend recovery gate to complete */
@@ -1188,6 +1190,14 @@ int adreno_active_count_get(struct adreno_device *adreno_dev);
  * device mutex must be held while calling this function.
  */
 void adreno_active_count_put(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_populate_ctxt_record_size - Populate the context record size
+ * @adreno_dev: Pointer to the adreno device structure
+ *
+ * Return: 0 on success, or an error code on failure.
+ */
+int adreno_populate_ctxt_record_size(struct adreno_device *adreno_dev);
 
 #define ADRENO_TARGET(_name, _id) \
 static inline int adreno_is_##_name(struct adreno_device *adreno_dev) \

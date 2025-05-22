@@ -225,6 +225,14 @@ enum gmu_vrb_idx {
 	VRB_PREEMPT_COUNT_L1A = 7,
 	/* Contains the number of L1B GPU preemptions */
 	VRB_PREEMPT_COUNT_L1B = 8,
+	/* Contains the GMU VA for power limits trace buffer */
+	VRB_PWR_LIMITS_TRACE_BUF = 9,
+	/* Contains the total size of context record in KB */
+	VRB_CTXRECORD_TOTAL_SZ = 10,
+	/* Contains the size of AQE context record in KB */
+	VRB_CTXRECORD_AQE_SZ = 11,
+	/* Contains the size of GMEM inside context record in KB */
+	VRB_CTXRECORD_GMEM_SZ = 12,
 };
 
 /* For GMU Trace */

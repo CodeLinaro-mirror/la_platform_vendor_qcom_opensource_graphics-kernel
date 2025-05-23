@@ -81,6 +81,12 @@ void a6xx_hwsched_snapshot(struct adreno_device *adreno_dev,
 	}
 }
 
+static void a6xx_hwsched_gmu_suspend(struct adreno_device *adreno_dev, bool force)
+{
+	a6xx_gmu_suspend(adreno_dev, force);
+	adreno_hwsched_reset_hfi_mem(adreno_dev);
+}
+
 static int a6xx_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -161,10 +167,11 @@ err:
 	a6xx_gmu_irq_disable(adreno_dev);
 
 	if (device->gmu_fault) {
-		a6xx_gmu_suspend(adreno_dev, false);
-
+		a6xx_hwsched_gmu_suspend(adreno_dev, false);
 		return ret;
 	}
+
+	adreno_hwsched_reset_hfi_mem(adreno_dev);
 
 clks_gdsc_off:
 	gmu_core_disable_clks(device);
@@ -231,10 +238,11 @@ err:
 	a6xx_gmu_irq_disable(adreno_dev);
 
 	if (device->gmu_fault) {
-		a6xx_gmu_suspend(adreno_dev, false);
-
+		a6xx_hwsched_gmu_suspend(adreno_dev, false);
 		return ret;
 	}
+
+	adreno_hwsched_reset_hfi_mem(adreno_dev);
 
 clks_gdsc_off:
 	gmu_core_disable_clks(device);
@@ -320,12 +328,14 @@ static int a6xx_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_NONE);
 
+	adreno_hwsched_reset_hfi_mem(adreno_dev);
+
 	return ret;
 
 error:
 	a6xx_gmu_irq_disable(adreno_dev);
 	a6xx_hwsched_hfi_stop(adreno_dev);
-	a6xx_gmu_suspend(adreno_dev, false);
+	a6xx_hwsched_gmu_suspend(adreno_dev, false);
 
 	return ret;
 }
@@ -966,7 +976,7 @@ int a6xx_hwsched_reset_replay(struct adreno_device *adreno_dev)
 
 	a6xx_hwsched_hfi_stop(adreno_dev);
 
-	a6xx_gmu_suspend(adreno_dev, true);
+	a6xx_hwsched_gmu_suspend(adreno_dev, true);
 
 	adreno_llcc_slice_deactivate(adreno_dev);
 

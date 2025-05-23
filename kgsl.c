@@ -31,6 +31,7 @@
 #include "kgsl_debugfs.h"
 #include "kgsl_device.h"
 #include "kgsl_eventlog.h"
+#include "kgsl_gmu_core.h"
 #include "kgsl_mmu.h"
 #include "kgsl_pool.h"
 #include "kgsl_reclaim.h"
@@ -970,6 +971,10 @@ static void kgsl_destroy_process_private(struct kref *kref)
 {
 	struct kgsl_process_private *private = container_of(kref,
 			struct kgsl_process_private, refcount);
+	struct kgsl_device *device = KGSL_MMU_DEVICE(private->pagetable->mmu);
+
+	if (private->profile.md.hostptr)
+		gmu_core_free_block(device, private->profile.md.hostptr);
 
 	kgsl_put_work_period(private->period);
 	/*
@@ -1241,6 +1246,9 @@ static struct kgsl_process_private *kgsl_process_private_new(
 		return private;
 	}
 
+	/* Allocate profile memory for gmu based DCVS targets */
+	device->ftbl->alloc_dcvs_profile_memory(device, private);
+	mutex_init(&private->profile.profile_mutex);
 	kgsl_process_init_sysfs(device, private);
 	kgsl_process_init_debugfs(private);
 	write_lock(&kgsl_driver.proclist_lock);

@@ -92,6 +92,7 @@ enum oob_request {
 
 #define GPU_HW_ACTIVE	0x00
 #define GPU_HW_IFPC	0x03
+#define GPU_HW_MINBW	0x06
 #define GPU_HW_SLUMBER	0x0f
 
 /*
@@ -497,6 +498,7 @@ struct gmu_dev_ops {
 	void (*force_first_boot)(struct kgsl_device *device);
 	void (*send_nmi)(struct kgsl_device *device, bool force,
 		enum gmu_fault_panic_policy gf_policy);
+	void (*minbw_idle_level_set)(struct kgsl_device *device, u32 val);
 };
 
 struct firmware_capabilities {

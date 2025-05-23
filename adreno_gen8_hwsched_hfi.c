@@ -35,6 +35,11 @@
 		.write_index = 0, \
 }
 
+/* The GMU buffer address corresponds to the beginning of
+ * half the size of the shared buffer.
+ */
+#define GMU_BUF_ADDR(md) ((md.gmuaddr) + (md.size >> 1))
+
 struct pending_cmd gen8_hw_fence_ack;
 
 struct gen8_hwsched_hfi *to_gen8_hwsched_hfi(
@@ -1051,7 +1056,7 @@ static void gen8_process_f2h_platform_msg(struct adreno_device *adreno_dev, u32 
 
 	if (msg->sub_type == F2H_ST_MSG_SCALE_GMU) {
 		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-		struct hfi_scale_gmu_cmd *cmd = (struct hfi_scale_gmu_cmd *)&(msg->cmd);
+		struct hfi_scale_gmu_cmd *cmd = (struct hfi_scale_gmu_cmd *)rcvd;
 		u32 index = cmd->gmu_pwrlevel;
 
 		if ((index > 0) && (index <= GMU_MAX_PWRLEVELS))
@@ -1122,7 +1127,7 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 			gmu_core_mark_for_coldboot(KGSL_DEVICE(adreno_dev));
 			}
 			break;
-		case F2H_MSG_PLATFORM:
+		case F2H_MSG_PLATFORM_LA:
 			gen8_process_f2h_platform_msg(adreno_dev, rcvd);
 			break;
 		}
@@ -1553,12 +1558,6 @@ void gen8_hwsched_hfi_stop(struct adreno_device *adreno_dev)
 	kgsl_pwrctrl_axi(KGSL_DEVICE(adreno_dev), false);
 
 	clear_bit(GMU_PRIV_HFI_STARTED, &gmu->flags);
-
-	/*
-	 * Reset the hfi host access memory records, As GMU expects hfi memory
-	 * records to be clear in bootup.
-	 */
-	adreno_hwsched_reset_hfi_mem(adreno_dev);
 }
 
 static void gen8_hwsched_enable_async_hfi(struct adreno_device *adreno_dev)
@@ -1975,11 +1974,34 @@ done:
 
 int gen8_hwsched_boot_gpu(struct adreno_device *adreno_dev)
 {
+	int ret;
+
 	/* If warmboot is possible just send the warmboot command else coldboot */
 	if (gen8_hwsched_warmboot_possible(adreno_dev))
-		return gen8_hwsched_warmboot_gpu(adreno_dev);
+		ret = gen8_hwsched_warmboot_gpu(adreno_dev);
 	else
-		return gen8_hwsched_coldboot_gpu(adreno_dev);
+		ret = gen8_hwsched_coldboot_gpu(adreno_dev);
+
+	/*
+	 * When the GPU is in secure mode, any writes to the RB_GC_GMEM_PROTECT
+	 * register are ignored. At this point, the GPU should be in unsecure
+	 * mode, so program the RB_GC_GMEM_PROTECT register.
+	 */
+	if (!ret)
+		gen8_set_gmem_protect(adreno_dev);
+
+	/*
+	 * All registers must be written before this point so that we don't
+	 * miss any register programming when we patch the power up register
+	 * list.
+	 */
+	if (!adreno_dev->patch_reglist &&
+		(adreno_dev->pwrup_reglist->gpuaddr != 0)) {
+		gen8_patch_pwrup_reglist(adreno_dev);
+		adreno_dev->patch_reglist = true;
+	}
+
+	return ret;
 }
 
 int gen8_hwsched_set_gmu_based_dcvs_value(struct adreno_device *adreno_dev, u32 type,
@@ -2414,6 +2436,10 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	ret = gen8_hfi_send_minbw_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
+
 	ret = gen8_hfi_send_thermal_feature_ctrl(adreno_dev);
 	if (ret)
 		goto err;
@@ -2480,6 +2506,12 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	ret = gen8_hfi_send_soft_reset_feature_ctrl(adreno_dev);
 	if (ret)
 		goto err;
+
+	if (adreno_dev->dcvs_profile_enabled) {
+		ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_DCVS_PROFILE, 1, 0);
+		if (ret)
+			goto err;
+	}
 
 	ret = send_start_msg(adreno_dev);
 	if (ret)
@@ -2834,6 +2866,8 @@ static int send_context_pointers(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct hfi_context_pointers_cmd cmd = {0};
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	struct kgsl_process_private *proc_priv = drawctxt->base.proc_priv;
+	struct kgsl_memdesc md = proc_priv->profile.md;
 	int ret;
 
 	ret = CMD_MSG_HDR(cmd, H2F_MSG_CONTEXT_POINTERS);
@@ -2843,6 +2877,8 @@ static int send_context_pointers(struct adreno_device *adreno_dev,
 	cmd.ctxt_id = context->id;
 	cmd.sop_addr = MEMSTORE_ID_GPU_ADDR(device, context->id, soptimestamp);
 	cmd.eop_addr = MEMSTORE_ID_GPU_ADDR(device, context->id, eoptimestamp);
+	cmd.version = 1;
+	cmd.dcvs_profile_addr = GMU_BUF_ADDR(md);
 	if (context->user_ctxt_record)
 		cmd.user_ctxt_record_addr =
 			context->user_ctxt_record->memdesc.gpuaddr;
@@ -2856,6 +2892,8 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 	struct kgsl_context *context)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	struct kgsl_process_private *proc_priv = drawctxt->base.proc_priv;
 	int ret;
 
 	if (context->gmu_registered)
@@ -2872,6 +2910,12 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 
 		return ret;
 	}
+
+	/* Register DCVS profile after SLUMBER if UMD profile present */
+	if ((adreno_dev->dcvs_profile_enabled) &&
+			(proc_priv->profile.user_profile_registered) &&
+			(proc_priv->profile.gmu_registered))
+		gen8_hwsched_set_dcvs_profile(adreno_dev, proc_priv);
 
 	ret = send_context_pointers(adreno_dev, context);
 	if (ret) {
@@ -3802,6 +3846,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
 	struct pending_cmd pending_ack;
 	struct hfi_unregister_ctxt_cmd cmd;
+	struct kgsl_process_private *proc_priv = drawctxt->base.proc_priv;
 	u32 seqnum;
 	int ret;
 
@@ -3809,6 +3854,8 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	if (!context->gmu_registered ||
 		!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags)) {
 		drain_context_hw_fences(adreno_dev, drawctxt);
+		proc_priv->profile.gmu_registered = false;
+
 		return 0;
 	}
 
@@ -4129,6 +4176,35 @@ int gen8_hwsched_disable_hw_fence_throttle(struct adreno_device *adreno_dev)
 
 done:
 	_disable_hw_fence_throttle(adreno_dev, true);
+
+	return ret;
+}
+
+int gen8_hwsched_set_dcvs_profile(struct adreno_device *adreno_dev,
+	struct kgsl_process_private *proc_priv)
+{
+	struct hfi_profile_register cmd = {0};
+	struct hfi_msg_platform msg = {0};
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct kgsl_memdesc md = proc_priv->profile.md;
+	int ret;
+
+	/* Only send HFI if device is not in SLUMBER */
+	if (!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
+		return 0;
+
+	msg.sub_type = H2F_ST_MSG_PROFILE_REGISTER;
+	CMD_MSG_HDR(msg, H2F_MSG_PLATFORM_LA);
+	cmd.header = msg;
+	cmd.version = 1;
+	cmd.gmu_addr = GMU_BUF_ADDR(md);
+	cmd.attrs_addr = md.gmuaddr;
+
+	ret = gen8_hfi_send_cmd_async(adreno_dev, &cmd, sizeof(cmd));
+	if (!ret) {
+		proc_priv->profile.gmu_registered = true;
+		proc_priv->profile.user_profile_registered = true;
+	}
 
 	return ret;
 }

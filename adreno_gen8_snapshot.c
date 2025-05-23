@@ -1224,6 +1224,57 @@ static bool gen8_snapshot_mvc_regs(struct kgsl_device *device,
 	return true;
 }
 
+static void gen8_debugbus_internal_read_setup(struct kgsl_device *device)
+{
+	/* Clear the DBGC logic/events */
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_CNTLM, 0x70000000);
+
+	/* Enable the internal buffer mode and program to tail mode */
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_OPL, 0x28000000);
+
+	/* Program the logic unit 0 to high when the side data is 1 */
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_BYTEL_0, 0x0000000c);
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_MASKL_0, 0x000000f0);
+
+	/* Enable the DBGC logic/events */
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_CNTLM, 0x07000000);
+}
+
+static void gen8_cx_gc_us_i_0_debugbus_read(struct kgsl_device *device,
+	u32 block_id, u32 index, u32 *val)
+{
+	u32 reg_val;
+
+	reg_val = FIELD_PREP(GENMASK(7, 0), index) |
+		FIELD_PREP(GENMASK(24, 16), block_id);
+
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_A, reg_val);
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_B, reg_val);
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_C, reg_val);
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_D, reg_val);
+
+	udelay(1);
+
+	/*
+	 * Select lower 32 bits of internal buffer data for internal mux[1:0]
+	 * DBGC_CFG_DBGBUS_IDX.internalIndex0 = 24 (0x18)
+	 * DBGC_CFG_DBGBUS_IDX.internalIndex1 = 25 (0x19)
+	 */
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_IDX, 0x00001918);
+	udelay(1);
+	kgsl_regread(device, GEN8_CX_DBGC_CFG_DBGBUS_TRACE_BUF3, val);
+	val++;
+
+	/*
+	 * Select upper 32 bits of internal buffer data for internal mux[1:0]
+	 * DBGC_CFG_DBGBUS_IDX.internalIndex0 = 26 (0x1a)
+	 * DBGC_CFG_DBGBUS_IDX.internalIndex1 = 27 (0x1b)
+	 */
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_IDX, 0x00001a1b);
+	udelay(1);
+	kgsl_regread(device, GEN8_CX_DBGC_CFG_DBGBUS_TRACE_BUF3, val);
+}
+
 /* gen8_dbgc_debug_bus_read() - Read data from trace bus */
 static void gen8_dbgc_debug_bus_read(struct kgsl_device *device,
 	u32 block_id, u32 index, u32 *val)
@@ -1343,6 +1394,9 @@ static void gen8_cx_debug_bus_read(struct kgsl_device *device,
 	kgsl_regread(device, GEN8_CX_DBGC_CFG_DBGBUS_TRACE_BUF1, val);
 }
 
+#define GEN8_DEBUGBUS_BLOCK_IDX_1 128
+#define GEN8_DEBUGBUS_BLOCK_IDX_2 192
+
 /*
  * gen8_snapshot_cx_dbgc_debugbus_block() - Capture debug data for a gpu
  * block from the CX DBGC block
@@ -1364,8 +1418,19 @@ static size_t gen8_snapshot_cx_dbgc_debugbus_block(struct kgsl_device *device,
 	header->id = *block;
 	header->count = GEN8_DEBUGBUS_BLOCK_SIZE * 2;
 
-	for (i = 0; i < GEN8_DEBUGBUS_BLOCK_SIZE; i++)
-		gen8_cx_debug_bus_read(device, *block, i, &data[i*2]);
+	/* This block requires an out of order access due to a HW limitation */
+	if (*block == DEBUGBUS_CX_GC_US_I_0) {
+		gen8_debugbus_internal_read_setup(device);
+		for (i = 0; i < GEN8_DEBUGBUS_BLOCK_IDX_1; i++)
+			gen8_cx_gc_us_i_0_debugbus_read(device, *block, i, &data[i * 2]);
+		for (i = GEN8_DEBUGBUS_BLOCK_IDX_2; i < GEN8_DEBUGBUS_BLOCK_SIZE; i++)
+			gen8_cx_gc_us_i_0_debugbus_read(device, *block, i, &data[i * 2]);
+		for (i = GEN8_DEBUGBUS_BLOCK_IDX_1; i < GEN8_DEBUGBUS_BLOCK_IDX_2; i++)
+			gen8_cx_gc_us_i_0_debugbus_read(device, *block, i, &data[i * 2]);
+	} else {
+		for (i = 0; i < GEN8_DEBUGBUS_BLOCK_SIZE; i++)
+			gen8_cx_debug_bus_read(device, *block, i, &data[i * 2]);
+	}
 
 	return GEN8_DEBUGBUS_SECTION_SIZE;
 }
@@ -1427,6 +1492,9 @@ static void gen8_snapshot_cx_debugbus(struct adreno_device *adreno_dev,
 	u32 i;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
+	if (device->debug_bus_bin)
+		return;
+
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_CNTLT,
 			FIELD_PREP(GENMASK(31, 28), 0xf));
 
@@ -1482,6 +1550,9 @@ static void gen8_snapshot_debugbus(struct adreno_device *adreno_dev,
 {
 	u32 i;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (device->debug_bus_bin)
+		return;
 
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_CNTLT,
 			FIELD_PREP(GENMASK(31, 28), 0xf));

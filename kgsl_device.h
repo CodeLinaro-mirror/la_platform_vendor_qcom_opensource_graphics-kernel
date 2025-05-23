@@ -184,6 +184,9 @@ struct kgsl_functable {
 		enum gpu_pwrlevel_op op);
 	/** @set_thermal_index: Target specific function to send thermal constraint to GMU */
 	void (*set_thermal_index)(struct kgsl_device *device);
+	/** @alloc_dcvs_profile_memory: Function ops for GMU based DCVS profile operations */
+	void (*alloc_dcvs_profile_memory)(struct kgsl_device *device,
+		struct kgsl_process_private *proc_priv);
 };
 
 struct kgsl_ioctl {
@@ -316,6 +319,8 @@ struct kgsl_device {
 	rwlock_t event_groups_lock;
 	/** @speed_bin: Speed bin for the GPU device if applicable */
 	u32 speed_bin;
+	/** @debug_bus_bin: Debug bus bin for the GPU device if applicable */
+	u32 debug_bus_bin;
 	/** @soc_code: Identifier containing product and feature code */
 	u32 soc_code;
 	/** @gmu_fault: Set when a gmu or rgmu fault is encountered */
@@ -490,6 +495,20 @@ struct kgsl_context {
 		pid_nr((_c)->proc_priv->pid), ##args)
 
 /**
+ * struct kgsl_dcvs_profile_private - Private structure for a KGSL DCVS profile
+ * @gmu_registered: True if DCVS profile is registered with GMU
+ * @user_profile_registered: True if user DCVS IOCTL profile is received
+ * @md: Memory descriptor for the DCVS profile region
+ * @profile_mutex: Mutex lock to protect kgsl_dcvs_profile_private
+ */
+struct kgsl_dcvs_profile_private {
+	bool gmu_registered;
+	bool user_profile_registered;
+	struct kgsl_memdesc md;
+	struct mutex profile_mutex;
+};
+
+/**
  * struct kgsl_process_private -  Private structure for a KGSL process (across
  * all devices)
  * @priv: Internal flags, use KGSL_PROCESS_* values
@@ -574,6 +593,8 @@ struct kgsl_process_private {
 	u32 pf_count;
 	/** @pf_type_counts: Count of pagefaults of each type from this process */
 	u32 pf_type_counts[KGSL_IOMMU_PAGEFAULT_TYPES];
+	/** @profile: Container for the DCVS profile */
+	struct kgsl_dcvs_profile_private profile;
 };
 
 struct kgsl_device_private {

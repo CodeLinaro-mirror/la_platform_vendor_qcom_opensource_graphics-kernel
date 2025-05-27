@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "adreno.h"
@@ -3321,6 +3321,7 @@ void adreno_hwsched_reset_hfi_mem(struct adreno_device *adreno_dev)
 	/* No need to reset gmem portion of the preemption records */
 	for (i = 0; i < KGSL_PRIORITY_MAX_RB_LEVELS; i++) {
 		md = hwsched->preempt_rec[i];
-		memset(md->hostptr, 0x0, md->size);
+		if (md && md->hostptr)
+			memset(md->hostptr, 0x0, md->size);
 	}
 }

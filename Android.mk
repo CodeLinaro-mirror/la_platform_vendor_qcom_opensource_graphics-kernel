@@ -1,11 +1,13 @@
-ifeq ($(TARGET_USES_QMAA),true)
-        KGSL_ENABLED := false
-        ifeq ($(TARGET_USES_QMAA_OVERRIDE_GFX),true)
-                KGSL_ENABLED := true
-        endif # TARGET_USES_QMAA_OVERRIDE_GFX
-else
-        KGSL_ENABLED := true
-endif # TARGET_USES_QMAA
+#ifeq ($(TARGET_USES_QMAA),true)
+#        KGSL_ENABLED := false
+#        ifeq ($(TARGET_USES_QMAA_OVERRIDE_GFX),true)
+#                KGSL_ENABLED := true
+#        endif # TARGET_USES_QMAA_OVERRIDE_GFX
+#else
+#        KGSL_ENABLED := true
+#endif # TARGET_USES_QMAA
+
+KGSL_ENABLED := true
 
 ifeq ($(ENABLE_HYP), true)
         KGSL_ENABLED := false

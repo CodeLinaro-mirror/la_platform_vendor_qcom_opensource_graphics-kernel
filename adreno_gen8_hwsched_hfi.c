@@ -4296,7 +4296,7 @@ int gen8_hwsched_set_dcvs_profile(struct adreno_device *adreno_dev,
 	msg.sub_type = H2F_ST_MSG_PROFILE_REGISTER;
 	CMD_MSG_HDR(msg, H2F_MSG_PLATFORM_LA);
 	cmd.header = msg;
-	cmd.version = 1;
+	cmd.version = 2;
 	cmd.gmu_addr = GMU_BUF_ADDR(md);
 	cmd.attrs_addr = md.gmuaddr;
 

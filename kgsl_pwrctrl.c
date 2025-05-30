@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/clk/qcom.h>
@@ -614,12 +614,17 @@ static ssize_t gpubusy_show(struct device *dev,
 	int ret;
 	struct kgsl_device *device = dev_get_drvdata(dev);
 	struct kgsl_clk_stats *stats = &device->pwrctrl.clk_stats;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	ret = scnprintf(buf, PAGE_SIZE, "%7d %7d\n",
 			stats->busy_old, stats->total_old);
-	if (!test_bit(KGSL_PWRFLAGS_AXI_ON, &device->pwrctrl.power_flags)) {
+
+	/* Reset the stats if GPU is OFF */
+	if ((atomic_read(&device->active_cnt) == 0)) {
+		mutex_lock(&pwr->mutex);
 		stats->busy_old = 0;
 		stats->total_old = 0;
+		mutex_unlock(&pwr->mutex);
 	}
 	return ret;
 }
@@ -876,6 +881,7 @@ static ssize_t _gpu_busy_show(struct kgsl_device *device,
 {
 	int ret;
 	struct kgsl_clk_stats *stats = &device->pwrctrl.clk_stats;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	unsigned int busy_percent = 0;
 
 	if (stats->total_old != 0)
@@ -884,9 +890,11 @@ static ssize_t _gpu_busy_show(struct kgsl_device *device,
 	ret = scnprintf(buf, PAGE_SIZE, "%d %%\n", busy_percent);
 
 	/* Reset the stats if GPU is OFF */
-	if (!test_bit(KGSL_PWRFLAGS_AXI_ON, &device->pwrctrl.power_flags)) {
+	if ((atomic_read(&device->active_cnt) == 0)) {
+		mutex_lock(&pwr->mutex);
 		stats->busy_old = 0;
 		stats->total_old = 0;
+		mutex_unlock(&pwr->mutex);
 	}
 	return ret;
 }
@@ -1217,6 +1225,7 @@ int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device)
 void kgsl_pwrctrl_busy_time(struct kgsl_device *device, u64 time, u64 busy, u64 ticks)
 {
 	struct kgsl_clk_stats *stats = &device->pwrctrl.clk_stats;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	stats->total += time;
 	stats->busy += busy;
@@ -1224,11 +1233,13 @@ void kgsl_pwrctrl_busy_time(struct kgsl_device *device, u64 time, u64 busy, u64 
 	if (stats->total < UPDATE_BUSY_VAL)
 		return;
 
+	mutex_lock(&pwr->mutex);
 	/* Update the output regularly and reset the counters. */
 	stats->total_old = stats->total;
 	stats->busy_old = stats->busy;
 	stats->total = 0;
 	stats->busy = 0;
+	mutex_unlock(&pwr->mutex);
 
 	trace_kgsl_gpubusy(device, stats->busy_old, stats->total_old, ticks);
 }
@@ -1968,6 +1979,8 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 		dev_err(device->dev, "No power levels are defined\n");
 		return -EINVAL;
 	}
+
+	mutex_init(&pwr->mutex);
 
 	init_waitqueue_head(&device->active_cnt_wq);
 

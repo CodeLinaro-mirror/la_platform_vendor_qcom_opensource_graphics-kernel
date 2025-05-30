@@ -19,6 +19,7 @@
 
 #include "kgsl_device.h"
 #include "kgsl_bus.h"
+#include "kgsl_eventlog.h"
 #include "kgsl_power_trace.h"
 #include "kgsl_pwrscale.h"
 #include "kgsl_sysfs.h"
@@ -1403,18 +1404,27 @@ int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 	if (!pwr->cx_regulator && !pwr->gmu_cx_pd)
 		return 0;
 
-	ret = wait_for_completion_timeout(&pwr->cx_gdsc_gate, msecs_to_jiffies(5000));
-	if (!ret) {
-		/* Dump the cx regulator consumer list */
-		if (pwr->cx_regulator) {
-			dev_err(device->dev, "GPU CX wait timeout. Dumping CX votes:\n");
-			qcom_clk_dump(NULL, pwr->cx_regulator, false);
-		} else {
-			dev_err(device->dev, "GPU CX wait timeout\n");
+	/*
+	 * Wait for CX GDSC collapse during hang recovery to prevent
+	 * boot up from stale state.
+	 */
+	if (device->ftbl->is_reset_recovery(device)) {
+		ret = wait_for_completion_timeout(&pwr->cx_gdsc_gate, msecs_to_jiffies(5000));
+		if (!ret) {
+			/* Dump the cx regulator consumer list */
+			if (pwr->cx_regulator) {
+				dev_err(device->dev, "GPU CX wait timeout. Dumping CX votes:\n");
+				qcom_clk_dump(NULL, pwr->cx_regulator, false);
+			} else {
+				dev_err(device->dev, "GPU CX wait timeout\n");
+			}
+			KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
+				GMU_PDEV(device), 0ULL, GMU_FAULT_CX_WAIT_TIMEOUT);
 		}
-		KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
-			GMU_PDEV(device), 0ULL, GMU_FAULT_CX_WAIT_TIMEOUT);
 	}
+
+	if (!completion_done(&pwr->cx_gdsc_gate))
+		log_kgsl_cx_wait_timeout_event(HLOS_CX_WAIT_TIMEOUT);
 
 	if (pwr->cx_regulator)
 		ret = regulator_enable(pwr->cx_regulator);
@@ -1620,6 +1630,7 @@ static int kgsl_cx_gdsc_event(struct notifier_block *nb,
 		if (kgsl_regmap_read_poll_timeout(&device->regmap, pwr->cx_cfg_gdsc_offset,
 			val, (val & BIT(15)), 100, 100 * 1000)) {
 			dev_err(device->dev, "GPU CX GDSC power down timed out\n");
+			log_kgsl_cx_wait_timeout_event(NONHLOS_CX_WAIT_TIMEOUT);
 			KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
 				GMU_PDEV(device), 0ULL, GMU_FAULT_WAIT_FOR_CX);
 		}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/component.h>
@@ -2600,10 +2600,14 @@ int a6xx_gmu_probe(struct kgsl_device *device,
 		struct platform_device *pdev)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_a6xx_core *a6xx_core = to_a6xx_core(adreno_dev);
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+	u64 freq = a6xx_core->gmu_hub_clk_freq;
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	int ret;
+
+	adreno_dev->gmu_hub_clk_freq = freq ? freq : 150000000;
 
 	device->gmu_core.pdev = pdev;
 

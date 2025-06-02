@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _ADRENO_GEN8_H_
@@ -24,6 +24,7 @@ struct gen8_snapshot_block_list;
 extern const struct adreno_power_ops gen8_gmu_power_ops;
 extern const struct adreno_power_ops gen8_hwsched_power_ops;
 extern const struct adreno_perfcounters adreno_gen8_perfcounters;
+extern const struct adreno_perfcounters adreno_gen8_2_x_perfcounters;
 
 struct gen8_gpudev {
 	struct adreno_gpudev base;

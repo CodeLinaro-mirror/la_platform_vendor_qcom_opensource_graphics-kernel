@@ -3523,9 +3523,22 @@ void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	u32 retired = 0;
 	int ret = 0;
 	bool destroy = false;
+	u32 hw_fence_last_ts;
 
 	spin_lock(&drawctxt->lock);
 	spin_lock(&hwf->lock);
+
+	hw_fence_last_ts = drawctxt->hw_fence_last_ts;
+
+	/*
+	 * Only create hw fences if the timestamp is greater than timestamp of the last hw fence
+	 * that was created. Otherwise, we will hit a GMU assert as GMU doesn't expect duplicate
+	 * or out-of-order fences
+	 */
+	if (timestamp_cmp(hw_fence_last_ts, kfence->timestamp) >= 0)
+		goto done;
+
+	drawctxt->hw_fence_last_ts = kfence->timestamp;
 
 	/*
 	 * If we create a hardware fence and this context is going away, we may never dispatch
@@ -3580,6 +3593,7 @@ void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 				kfence->context_id, kfence->timestamp, ret);
 		kgsl_hw_fence_destroy(kfence);
 		destroy = true;
+		drawctxt->hw_fence_last_ts = hw_fence_last_ts;
 		goto done;
 	}
 

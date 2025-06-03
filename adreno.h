@@ -196,6 +196,8 @@
 #define ADRENO_GMU_SPEL BIT(31)
 /* Enable ACD AVG (Adaptive Voltage Guardband) */
 #define ADRENO_ACD_AVG BIT_ULL(32)
+/* GMU and kernel supports synx */
+#define ADRENO_SYNX BIT_ULL(33)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds

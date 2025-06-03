@@ -2068,8 +2068,10 @@ int kgsl_allocate_kernel(struct kgsl_device *device,
 
 void kgsl_memdesc_free_sgt(struct kgsl_memdesc *md)
 {
-	sg_free_table(md->sgt);
-	kfree(md->sgt);
+	if (md->sgt) {
+		sg_free_table(md->sgt);
+		kfree(md->sgt);
+	}
 	md->sgt = NULL;
 }
 

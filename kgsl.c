@@ -2241,7 +2241,7 @@ long kgsl_ioctl_submit_commands(struct kgsl_device_private *dev_priv,
 
 		drawobj[i++] = DRAWOBJ(syncobj);
 
-		if (!gmu_core_is_hw_fencing_enabled(device))
+		if (!gmu_core_is_gmu_fencing_enabled(device))
 			set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
 
 		result = kgsl_drawobj_sync_add_syncpoints(device, syncobj,
@@ -2331,7 +2331,7 @@ long kgsl_ioctl_gpu_command(struct kgsl_device_private *dev_priv,
 
 		drawobj[i++] = DRAWOBJ(syncobj);
 
-		if (!gmu_core_is_hw_fencing_enabled(device))
+		if (!gmu_core_is_gmu_fencing_enabled(device))
 			set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
 
 		result = kgsl_drawobj_sync_add_synclist(device, syncobj,

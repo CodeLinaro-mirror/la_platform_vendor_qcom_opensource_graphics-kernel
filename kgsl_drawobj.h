@@ -105,6 +105,8 @@ struct kgsl_drawobj_sync_hw_fence {
 	struct kgsl_context *context;
 	/** @list: list node for this hardware fence */
 	struct list_head node;
+	/** @handle: hw handle backing this fence */
+	u64 handle;
 };
 
 /**

@@ -52,6 +52,7 @@ enum gmu_platform_capabilities {
 	FAC_SOFT_RESET = 6,
 	FAC_FAST_CONTEXT_DESTROY = 7,
 	FAC_POWER_CONTROL_WA = 8,
+	FAC_SYNX = 9,
 };
 
 /*
@@ -81,6 +82,8 @@ enum gmu_core_flags {
 	GMU_NON_BUFFERABLE_CARVEOUT,
 	/* Hardware fences are enabled */
 	GMU_HWSCHED_HW_FENCE,
+	/* SYNX is enabled */
+	GMU_HWSCHED_SYNX,
 };
 
 /*
@@ -245,6 +248,8 @@ enum gmu_vrb_idx {
 	VRB_NON_BUFFERABLE_CARVEOUT_BASE = 19,
 	/* Contains the size (bytes) of noncached region non bufferable carveout */
 	VRB_NON_BUFFERABLE_CARVEOUT_SIZE = 20,
+	/* Contains the size (bytes) of synx memory */
+	VRB_SYNX_SIZE_BYTES = 21,
 };
 
 /* For GMU Trace */
@@ -824,11 +829,13 @@ int gmu_core_get_attrs(u32 flags);
  * gmu_core_import_buffer - Import a gmu buffer
  * @device: Pointer to KGSL device
  * @entry: GMU memory entry
+ * @vma_id: GMU VMA where this buffer should be mapped
  * This function imports and maps a buffer to a gmu vma
  *
  * Return: 0 on success or error code on failure
  */
-int gmu_core_import_buffer(struct kgsl_device *device, struct hfi_mem_alloc_entry *entry);
+int gmu_core_import_buffer(struct kgsl_device *device, struct hfi_mem_alloc_entry *entry,
+		u32 vma_id);
 
 /**
  * gmu_core_reserve_kernel_block - Allocate a gmu buffer
@@ -1127,11 +1134,19 @@ int gmu_core_set_max_pwrlevel(struct kgsl_device *device, u64 val);
 int gmu_core_list_frequencies(struct kgsl_device *device, struct seq_file *s);
 
 /**
- * gmu_core_is_hw_fencing_enabled() - Check if hw fences is enabled
+ * gmu_core_is_hw_fencing_enabled() - Check if hardware fences are enabled
  * @device: Pointer to the kgsl device
 
- * Return: Boolean to indicate if hw fences are enabled or not
+ * Return: Boolean to indicate if hw fences are enabled
  */
 bool gmu_core_is_hw_fencing_enabled(struct kgsl_device *device);
+
+/**
+ * gmu_core_is_gmu_fencing_enabled() - Check if either hardware fences or synx is enabled
+ * @device: Pointer to the kgsl device
+
+ * Return: Boolean to indicate if hw fences or synx is enabled or not
+ */
+bool gmu_core_is_gmu_fencing_enabled(struct kgsl_device *device);
 
 #endif /* __KGSL_GMU_CORE_H */

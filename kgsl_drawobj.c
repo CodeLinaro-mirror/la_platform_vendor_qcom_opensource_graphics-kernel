@@ -75,6 +75,8 @@ static void syncobj_destroy_object(struct kgsl_drawobj *drawobj)
 	list_for_each_entry_safe(hw_fence, tmp, &syncobj->hw_fence_list, node) {
 		kgsl_context_put(hw_fence->context);
 		list_del_init(&hw_fence->node);
+		if (hw_fence->handle != INVALID_HW_FENCE_HANDLE)
+			kgsl_synx_import_release(drawobj->device, hw_fence->handle);
 		kmem_cache_free(drawobj->device->syncobj_hw_fence_cache, hw_fence);
 	}
 

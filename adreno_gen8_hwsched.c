@@ -22,7 +22,7 @@ static void _wakeup_hw_fence_waiters(struct adreno_device *adreno_dev, u32 fault
 	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 	bool lock = !in_interrupt();
 
-	if (!gmu_core_is_hw_fencing_enabled(KGSL_DEVICE(adreno_dev)))
+	if (!gmu_core_is_gmu_fencing_enabled(KGSL_DEVICE(adreno_dev)))
 		return;
 
 	/*
@@ -200,7 +200,7 @@ void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
 	adreno_hwsched_log_remove_pending_hw_fences(adreno_dev, gmu_pdev_dev);
 	gmu_core_mark_for_coldboot(KGSL_DEVICE(adreno_dev));
 
-	adreno_hwsched_deregister_hw_fence(adreno_dev);
+	adreno_hwsched_disable_gmu_fencing(adreno_dev, true, true);
 }
 
 static void gen8_hwsched_gmu_suspend(struct adreno_device *adreno_dev, bool force)
@@ -395,7 +395,7 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	/* This is the minimum GMU FW HFI version required to enable hw fences */
 	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) >= 7)
-		adreno_hwsched_register_hw_fence(adreno_dev);
+		adreno_hwsched_enable_gmu_fencing(adreno_dev);
 
 	/* From this GMU FW all RBBM interrupts are handled at GMU */
 	if (device->gmu_core.ver.core >= GMU_VERSION(5, 01, 06))
@@ -1083,7 +1083,7 @@ static int check_inflight_hw_fences(struct adreno_device *adreno_dev)
 	struct kgsl_context *context;
 	int id, ret = 0;
 
-	if (!gmu_core_is_hw_fencing_enabled(device))
+	if (!gmu_core_is_gmu_fencing_enabled(device))
 		return 0;
 
 	read_lock(&device->context_lock);
@@ -1166,7 +1166,7 @@ static void check_hw_fence_unack_count(struct adreno_device *adreno_dev)
 	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 	u32 unack_count;
 
-	if (!gmu_core_is_hw_fencing_enabled(device))
+	if (!gmu_core_is_gmu_fencing_enabled(device))
 		return;
 
 	gen8_hwsched_process_msgq(adreno_dev);
@@ -2253,7 +2253,8 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 
 	kgsl_mmu_set_feature(device, KGSL_MMU_PAGEFAULT_TERMINATE);
 
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_HW_FENCE))
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_HW_FENCE) ||
+		ADRENO_FEATURE(adreno_dev, ADRENO_SYNX))
 		device->max_syncobj_hw_fence_count = min_t(u32, HFI_SYNCOBJ_HW_FENCE_MAX,
 			MAX_SYNCOBJ_QUERY_BITS);
 

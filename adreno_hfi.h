@@ -85,6 +85,7 @@
 #define HFI_FEATURE_SOFT_RESET		0x10000001
 #define HFI_FEATURE_DCVS_PROFILE	0x10000002
 #define HFI_FEATURE_FAST_CONTEXT_DESTROY	0x10000003
+#define HFI_FEATURE_HW_SYNX		0x10000004
 
 /*
  * MINBW_HYST_MASK = 0xffff
@@ -177,113 +178,115 @@ enum hfi_mem_kind {
 	/** @HFI_MEMKIND_GENERIC: Used for requesting generic memory */
 	HFI_MEMKIND_GENERIC = 0,
 	/** @HFI_MEMKIND_RB: Used for requesting ringbuffer memory */
-	HFI_MEMKIND_RB,
+	HFI_MEMKIND_RB = 1,
 	/** @HFI_MEMKIND_SCRATCH: Used for requesting scratch memory */
-	HFI_MEMKIND_SCRATCH,
+	HFI_MEMKIND_SCRATCH = 2,
 	/**
 	 * @HFI_MEMKIND_CSW_SMMU_INFO: Used for requesting SMMU record for
 	 * preemption context switching
 	 */
-	HFI_MEMKIND_CSW_SMMU_INFO,
+	HFI_MEMKIND_CSW_SMMU_INFO = 3,
 	/**
 	 * @HFI_MEMKIND_CSW_PRIV_NON_SECURE: Used for requesting privileged non
 	 * secure preemption records
 	 */
-	HFI_MEMKIND_CSW_PRIV_NON_SECURE,
+	HFI_MEMKIND_CSW_PRIV_NON_SECURE = 4,
 	/**
 	 * @HFI_MEMKIND_CSW_PRIV_SECURE: Used for requesting privileged secure
 	 * preemption records
 	 */
-	HFI_MEMKIND_CSW_PRIV_SECURE,
+	HFI_MEMKIND_CSW_PRIV_SECURE = 5,
 	/**
 	 * @HFI_MEMKIND_CSW_NON_PRIV: Used for requesting non privileged per
 	 * context preemption buffer
 	 */
-	HFI_MEMKIND_CSW_NON_PRIV,
+	HFI_MEMKIND_CSW_NON_PRIV = 6,
 	/**
 	 * @HFI_MEMKIND_CSW_COUNTER: Used for requesting preemption performance
 	 * counter save/restore buffer
 	 */
-	HFI_MEMKIND_CSW_COUNTER,
+	HFI_MEMKIND_CSW_COUNTER = 7,
 	/**
 	 * @HFI_MEMKIND_CTXTREC_PREEMPT_CNTR: Used for requesting preemption
 	 * counter buffer
 	 */
-	HFI_MEMKIND_CTXTREC_PREEMPT_CNTR,
+	HFI_MEMKIND_CTXTREC_PREEMPT_CNTR = 8,
 	/** @HFI_MEMKIND_SYSLOG: Used for requesting system log memory */
-	HFI_MEMKIND_SYS_LOG,
+	HFI_MEMKIND_SYS_LOG = 9,
 	/** @HFI_MEMKIND_CRASH_DUMP: Used for requesting carsh dumper memory */
-	HFI_MEMKIND_CRASH_DUMP,
+	HFI_MEMKIND_CRASH_DUMP = 10,
 	/**
 	 * @HFI_MEMKIND_MMIO_DPU: Used for requesting Display processing unit's
 	 * register space
 	 */
-	HFI_MEMKIND_MMIO_DPU,
+	HFI_MEMKIND_MMIO_DPU = 11,
 	/**
 	 * @HFI_MEMKIND_MMIO_TCSR: Used for requesting Top CSR(contains SoC
 	 * doorbells) register space
 	 */
-	HFI_MEMKIND_MMIO_TCSR,
+	HFI_MEMKIND_MMIO_TCSR = 12,
 	/**
 	 * @HFI_MEMKIND_MMIO_QDSS_STM: Used for requesting QDSS STM register
 	 * space
 	 */
-	HFI_MEMKIND_MMIO_QDSS_STM,
+	HFI_MEMKIND_MMIO_QDSS_STM = 13,
 	/** @HFI_MEMKIND_PROFILE: Used for kernel profiling */
-	HFI_MEMKIND_PROFILE,
+	HFI_MEMKIND_PROFILE = 14,
 	/** @HFI_MEMKIND_USER_PROFILING_IBS: Used for user profiling */
-	HFI_MEMKIND_USER_PROFILE_IBS,
+	HFI_MEMKIND_USER_PROFILE_IBS = 15,
 	/** @MEMKIND_CMD_BUFFER: Used for composing ringbuffer content */
-	HFI_MEMKIND_CMD_BUFFER,
+	HFI_MEMKIND_CMD_BUFFER = 16,
 	/**
 	 * @HFI_MEMKIND_GPU_BUSY_DATA_BUFFER: Used for GPU busy buffer for
 	 * all the contexts
 	 */
-	HFI_MEMKIND_GPU_BUSY_DATA_BUFFER,
+	HFI_MEMKIND_GPU_BUSY_DATA_BUFFER = 17,
 	/** @HFI_MEMKIND_GPU_BUSY_CMD_BUFFER: Used for GPU busy cmd buffer
 	 * (Only readable to GPU)
 	 */
-	HFI_MEMKIND_GPU_BUSY_CMD_BUFFER,
+	HFI_MEMKIND_GPU_BUSY_CMD_BUFFER = 18,
 	/**
 	 *@MEMKIND_MMIO_IPC_CORE: Used for IPC_core region mapping to GMU space
 	 * for EVA to GPU communication.
 	 */
-	HFI_MEMKIND_MMIO_IPC_CORE,
+	HFI_MEMKIND_MMIO_IPC_CORE = 19,
 	/** @HFIMEMKIND_MMIO_IPCC_AOSS: Used for IPCC AOSS, second memory region */
-	HFI_MEMKIND_MMIO_IPCC_AOSS,
+	HFI_MEMKIND_MMIO_IPCC_AOSS = 20,
 	/**
 	 * @MEMKIND_CSW_LPAC_PRIV_NON_SECURE: Used for privileged nonsecure
 	 * memory for LPAC context record
 	 */
-	HFI_MEMKIND_CSW_LPAC_PRIV_NON_SECURE,
+	HFI_MEMKIND_CSW_LPAC_PRIV_NON_SECURE = 21,
 	/** @HFI_MEMKIND_MEMSTORE: Buffer used to query a context's GPU sop/eop timestamps */
-	HFI_MEMKIND_MEMSTORE,
+	HFI_MEMKIND_MEMSTORE = 22,
 	/** @HFI_MEMKIND_HW_FENCE:  Hardware fence Tx/Rx headers and queues */
-	HFI_MEMKIND_HW_FENCE,
+	HFI_MEMKIND_HW_FENCE = 23,
 	/** @HFI_MEMKIND_PREEMPT_SCRATCH: Used for Preemption scratch memory */
-	HFI_MEMKIND_PREEMPT_SCRATCH,
+	HFI_MEMKIND_PREEMPT_SCRATCH = 24,
 	/**
 	 * @HFI_MEMKIND_AQE_BUFFER: Sandbox memory used by AQE to switch
 	 * between LPAC and GC
 	 */
-	HFI_MEMKIND_AQE_BUFFER,
+	HFI_MEMKIND_AQE_BUFFER = 25,
 	/** @HFI_MEMKIND_HW_FENCE_SHADOW: Shadow memory used for caching external input fences */
-	HFI_MEMKIND_HW_FENCE_SHADOW,
+	HFI_MEMKIND_HW_FENCE_SHADOW = 26,
 	/**
 	 * @HFI_MEMKIND_FREQMGR_SCRATCH: Scratch memory for FreqMgr task to retain information
 	 * related to GMU based DCVS.
 	 */
-	HFI_MEMKIND_FREQMGR_SCRATCH,
+	HFI_MEMKIND_FREQMGR_SCRATCH = 27,
+	/** @HFI_MEMKIND_HW_SYNX:  synx global shared memory */
 	/**
 	 * @HFI_MEMKIND_DUMMY_CSW_PRIV_NON_SECURE: Used for requesting privileged non
 	 * secure preemption records for the internal dummy buffer
 	 */
-	HFI_MEMKIND_DUMMY_CSW_PRIV_NON_SECURE,
+	HFI_MEMKIND_DUMMY_CSW_PRIV_NON_SECURE = 28,
 	/**
 	 * @HFI_MEMKIND_DUMMY_CSW_COUNTER: Used for requesting preemption performance
 	 * counter save/restore buffer for the internal dummy buffer
 	 */
-	HFI_MEMKIND_DUMMY_CSW_COUNTER,
+	HFI_MEMKIND_DUMMY_CSW_COUNTER = 29,
+	HFI_MEMKIND_HW_SYNX = 30,
 	HFI_MEMKIND_MAX,
 };
 
@@ -994,13 +997,16 @@ struct hfi_ts_notify_cmd {
 #define GMU_SYNCOBJ_FLAG_SW_STATUS_SIGNALED_BIT	3
 /* This indicates that the SYNCOBJ's software status is pending */
 #define GMU_SYNCOBJ_FLAG_SW_STATUS_PENDING_BIT	4
+/* This indicates that the SYNCOBJ is a synx handle */
+#define GMU_SYNCOBJ_FLAG_SYNX_HANDLE_BIT	5
 
 #define GMU_SYNCOBJ_FLAGS  \
 	{ BIT(GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT), "KGSL"}, \
 	{ BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT), "SIGNALED"}, \
 	{ BIT(GMU_SYNCOBJ_FLAG_QUERY_SW_STATUS_BIT), "QUERIED"}, \
 	{ BIT(GMU_SYNCOBJ_FLAG_SW_STATUS_SIGNALED_BIT), "SW_SIGNALED"}, \
-	{ BIT(GMU_SYNCOBJ_FLAG_SW_STATUS_PENDING_BIT), "SW_PENDING"}
+	{ BIT(GMU_SYNCOBJ_FLAG_SW_STATUS_PENDING_BIT), "SW_PENDING"}, \
+	{ BIT(GMU_SYNCOBJ_FLAG_SYNX_HANDLE_BIT), "SYNX"}
 
 /* F2H */
 struct hfi_ts_retire_cmd {
@@ -1151,7 +1157,9 @@ struct hfi_warmboot_scratch_cmd {
 } __packed;
 
 /* Request GMU to add this fence to TxQueue without checking whether this is retired or not */
-#define HW_FENCE_FLAG_SKIP_MEMSTORE 0x1
+#define HW_FENCE_FLAG_SKIP_MEMSTORE BIT(0)
+/* This is a synx handle and not a hardware fence handle */
+#define HW_FENCE_FLAG_SYNX_HANDLE   BIT(1)
 
 struct hfi_hw_fence_info {
 	/** @hdr: Header for the fence info packet */

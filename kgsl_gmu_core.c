@@ -506,11 +506,11 @@ int gmu_core_get_attrs(u32 flags)
 	return attrs;
 }
 
-int gmu_core_import_buffer(struct kgsl_device *device, struct hfi_mem_alloc_entry *entry)
+int gmu_core_import_buffer(struct kgsl_device *device, struct hfi_mem_alloc_entry *entry,
+	u32 vma_id)
 {
 	struct hfi_mem_alloc_desc *desc = &entry->desc;
 	u32 attrs = gmu_core_get_attrs(desc->flags);
-	u32 vma_id = (desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ? GMU_CACHE : GMU_NONCACHED_KERNEL;
 
 	/*
 	 * GMU Tx/Rx queues are mapped as I/O-coherent on both SOCCP and CPU,
@@ -1546,4 +1546,10 @@ int gmu_core_hwsched_memory_init(struct kgsl_device *device)
 bool gmu_core_is_hw_fencing_enabled(struct kgsl_device *device)
 {
 	return test_bit(GMU_HWSCHED_HW_FENCE, &device->gmu_core.flags);
+}
+
+bool gmu_core_is_gmu_fencing_enabled(struct kgsl_device *device)
+{
+	return test_bit(GMU_HWSCHED_HW_FENCE, &device->gmu_core.flags) ||
+	test_bit(GMU_HWSCHED_SYNX, &device->gmu_core.flags);
 }

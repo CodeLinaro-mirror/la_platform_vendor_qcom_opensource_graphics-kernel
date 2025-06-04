@@ -34,14 +34,14 @@ static int setup_cx_arc_votes(struct gen8_gmu_device *gmu,
 	int ret, i;
 
 	gmu_cx_vlvl[0] = 0;
-	gmu_cx_vlvl[1] = vlvls[0];
-	gmu_cx_vlvl[2] = vlvls[1];
+	for (i = 0; i < device->gmu_core.num_freqs; i++)
+		gmu_cx_vlvl[i + 1] = vlvls[i];
 
-	table->gmu_level_num = 3;
+	table->gmu_level_num = device->gmu_core.num_freqs + 1;
 
 	table->cx_votes[0].freq = 0;
-	table->cx_votes[1].freq = freqs[0] / 1000;
-	table->cx_votes[2].freq = freqs[1] / 1000;
+	for (i = 0; i < device->gmu_core.num_freqs; i++)
+		table->cx_votes[i + 1].freq = freqs[i] / 1000;
 
 	ret = adreno_rpmh_setup_volt_dependency_tbl(cx_votes, pri_rail,
 			sec_rail, gmu_cx_vlvl, table->gmu_level_num);

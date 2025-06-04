@@ -511,6 +511,7 @@ static void a6xx_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 
 static void a6xx_llc_configure_gpu_scid(struct adreno_device *adreno_dev);
 static void a6xx_llc_configure_gpuhtw_scid(struct adreno_device *adreno_dev);
+static void a6xx_llc_configure_gpumv_scid(struct adreno_device *adreno_dev);
 static void a6xx_llc_enable_overrides(struct adreno_device *adreno_dev);
 
 static void a6xx_set_secvid(struct kgsl_device *device)
@@ -812,6 +813,7 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	/* Configure LLCC */
 	a6xx_llc_configure_gpu_scid(adreno_dev);
 	a6xx_llc_configure_gpuhtw_scid(adreno_dev);
+	a6xx_llc_configure_gpumv_scid(adreno_dev);
 
 	a6xx_llc_enable_overrides(adreno_dev);
 
@@ -1621,6 +1623,29 @@ static void a6xx_llc_configure_gpuhtw_scid(struct adreno_device *adreno_dev)
 }
 
 /*
+ * a6xx_llc_configure_gpumv_scid() - Program the sub-cache ID for CCU block
+ * @adreno_dev: The adreno device pointer
+ */
+static void a6xx_llc_configure_gpumv_scid(struct adreno_device *adreno_dev)
+{
+	u32 gpumv_scid = 0;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_mmu *mmu = &device->mmu;
+
+	if (IS_ERR_OR_NULL(adreno_dev->gpumv_llc_slice) ||
+		!adreno_dev->gpumv_llc_slice_enable ||
+		mmu->subtype != KGSL_IOMMU_SMMU_V500)
+		return;
+
+	if (llcc_slice_activate(adreno_dev->gpumv_llc_slice))
+		return;
+
+	gpumv_scid = llcc_get_slice_id(adreno_dev->gpumv_llc_slice);
+	kgsl_regrmw(device, A6XX_GBIF_SCACHE_CNTL1,
+		A6XX_GPUMV_LLC_SCID_MASK, FIELD_PREP(GENMASK(19, 15), gpumv_scid));
+}
+
+/*
  * a6xx_llc_enable_overrides() - Override the page attributes
  * @adreno_dev: The adreno device pointer
  */
@@ -1673,16 +1698,16 @@ static const char *a6xx_fault_block_uche(struct kgsl_device *device,
 	 * to turn off CX gdsc will fail during the reset. So to avoid blocking
 	 * here, try to lock device mutex and return if it fails.
 	 */
-	if (!mutex_trylock(&device->mutex))
+	if (!kgsl_mutex_trylock(&device->mutex))
 		return "UCHE: unknown";
 
 	if (!kgsl_state_is_awake(device)) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		return "UCHE: unknown";
 	}
 
 	kgsl_regread(device, A6XX_UCHE_CLIENT_PF, &uche_client_id);
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	/* Ignore the value if the gpu is in IFPC */
 	if (uche_client_id == SCOOBYDOO)

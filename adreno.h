@@ -639,6 +639,8 @@ struct adreno_fault_proc {
  * @gpu_llc_slice_enable: To enable the GPU system cache slice or not
  * @gpuhtw_llc_slice: GPU pagetables system cache slice descriptor
  * @gpuhtw_llc_slice_enable: To enable the GPUHTW system cache slice or not
+ * @gpumv_llc_slice: GPU MV buffer system cache slice descriptor
+ * @gpumv_llc_slice_enable: To enable GPUMV buffer system cache slice or not
  * @zap_loaded: Used to track if zap was successfully loaded or not
  */
 struct adreno_device {
@@ -733,6 +735,8 @@ struct adreno_device {
 	bool gpu_llc_slice_enable;
 	void *gpuhtw_llc_slice;
 	bool gpuhtw_llc_slice_enable;
+	void *gpumv_llc_slice;
+	bool gpumv_llc_slice_enable;
 	unsigned int zap_loaded;
 	/**
 	 * @critpkts: Memory descriptor for 5xx critical packets if applicable
@@ -834,6 +838,8 @@ struct adreno_device {
 	u64 total_ctxt_record_sz;
 	/** @dcvs_profile_enabled: True if DCVS profile is enabled */
 	bool dcvs_profile_enabled;
+	/** @aqe_ctxt_record_sz: Size of the AQE section in preemption record in bytes */
+	u64 aqe_ctxt_record_sz;
 };
 
 /* Time to wait for suspend recovery gate to complete */
@@ -1188,6 +1194,14 @@ int adreno_active_count_get(struct adreno_device *adreno_dev);
  * device mutex must be held while calling this function.
  */
 void adreno_active_count_put(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_populate_ctxt_record_size - Populate the context record size
+ * @adreno_dev: Pointer to the adreno device structure
+ *
+ * Return: 0 on success, or an error code on failure.
+ */
+int adreno_populate_ctxt_record_size(struct adreno_device *adreno_dev);
 
 #define ADRENO_TARGET(_name, _id) \
 static inline int adreno_is_##_name(struct adreno_device *adreno_dev) \
@@ -2154,6 +2168,9 @@ static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev
 
 	if (adreno_dev->gpuhtw_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
 		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+
+	if (adreno_dev->gpumv_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpumv_llc_slice))
+		llcc_slice_deactivate(adreno_dev->gpumv_llc_slice);
 }
 
 /**

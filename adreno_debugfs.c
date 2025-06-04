@@ -170,6 +170,60 @@ static int _gpu_client_pf_get(void *data, u64 *val)
 DEFINE_DEBUGFS_ATTRIBUTE(_gpu_client_pf_fops, _gpu_client_pf_get,
 				_gpu_client_pf_set, "%llu\n");
 
+static int _prealloc_atomic_snap_mem_set(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+
+	kgsl_mutex_lock(&device->mutex);
+
+	/* Allocate atomic snapshot memory if it's not allocated yet */
+	if (!val || device->snapshot_memory_atomic.ptr) {
+		kgsl_mutex_unlock(&device->mutex);
+		return 0;
+	}
+
+	device->snapshot_memory_atomic.size = device->snapshot_memory.size;
+
+	/* Ensure size is visible to other threads before setting address */
+	smp_wmb();
+
+	device->snapshot_memory_atomic.ptr = dma_alloc_coherent(&device->pdev->dev,
+		device->snapshot_memory_atomic.size, &device->snapshot_memory_atomic.dma_handle,
+		GFP_KERNEL);
+
+	if (WARN_ON((!device->snapshot_memory_atomic.ptr))) {
+		/* Fallback to slab allocator if DMA allocation fails */
+		device->snapshot_memory_atomic.size = (SZ_2M + SZ_1M);
+
+		/* Ensure size is visible to other threads before setting address */
+		smp_wmb();
+
+		device->snapshot_memory_atomic.ptr = devm_kzalloc(&device->pdev->dev,
+			device->snapshot_memory_atomic.size, GFP_KERNEL);
+	}
+
+	if (!device->snapshot_memory_atomic.ptr) {
+		kgsl_mutex_unlock(&device->mutex);
+		dev_err(device->dev, "Failed to allocate memory for atomic snapshot\n");
+		return -ENOMEM;
+	}
+
+	kgsl_mutex_unlock(&device->mutex);
+
+	return 0;
+}
+
+static int _prealloc_atomic_snap_mem_get(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+
+	*val = device->snapshot_memory_atomic.ptr ? 1 : 0;
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(_prealloc_atomic_snapshot_mem_fops, _prealloc_atomic_snap_mem_get,
+				_prealloc_atomic_snap_mem_set, "%llu\n");
+
 typedef void (*reg_read_init_t)(struct kgsl_device *device);
 typedef void (*reg_read_fill_t)(struct kgsl_device *device, int i,
 	unsigned int *vals, int linec);
@@ -674,9 +728,9 @@ static int _gmu_fp_store(void *data, u64 val)
 	if (val == device->gmu_core.gf_panic)
 		return 0;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	device->gmu_core.gf_panic = val;
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	return 0;
 }
@@ -788,6 +842,8 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 		device, &_gpu_client_pf_fops);
 	debugfs_create_bool("dump_all_ibs", 0644, snapshot_dir,
 		&device->dump_all_ibs);
+	debugfs_create_file("prealloc_atomic_snapshot_mem", 0644, snapshot_dir,
+		device, &_prealloc_atomic_snapshot_mem_fops);
 
 	adreno_dev->bcl_debugfs_dir = debugfs_create_dir("bcl", device->d_debugfs);
 	if (!IS_ERR_OR_NULL(adreno_dev->bcl_debugfs_dir)) {

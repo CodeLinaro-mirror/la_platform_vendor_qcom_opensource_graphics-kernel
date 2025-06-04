@@ -102,7 +102,7 @@ static int a6xx_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = gmu_core_enable_clks(device, GMU_MAX_PWRLEVELS - 1);
+	ret = gmu_core_enable_clks(device, device->gmu_core.num_freqs - 1);
 	if (ret)
 		goto gdsc_off;
 
@@ -149,7 +149,7 @@ static int a6xx_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto err;
 
 	/* Switch to min GMU clock */
-	ret = gmu_core_clock_set_rate(device, device->gmu_core.freqs[0]);
+	ret = gmu_core_clock_set_rate(device, 0);
 	if (ret) {
 		a6xx_hwsched_hfi_stop(adreno_dev);
 		goto err;
@@ -195,7 +195,7 @@ static int a6xx_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = gmu_core_enable_clks(device, GMU_MAX_PWRLEVELS - 1);
+	ret = gmu_core_enable_clks(device, device->gmu_core.num_freqs - 1);
 	if (ret)
 		goto gdsc_off;
 
@@ -223,7 +223,7 @@ static int a6xx_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 		goto err;
 
 	/* Switch to min GMU clock */
-	ret = gmu_core_clock_set_rate(device, device->gmu_core.freqs[0]);
+	ret = gmu_core_clock_set_rate(device, 0);
 	if (ret) {
 		a6xx_hwsched_hfi_stop(adreno_dev);
 		goto err;
@@ -697,7 +697,7 @@ static void hwsched_idle_check(struct work_struct *work)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (test_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags))
 		goto done;
@@ -726,7 +726,7 @@ static void hwsched_idle_check(struct work_struct *work)
 	a6xx_hwsched_power_off(adreno_dev);
 
 done:
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 static int a6xx_hwsched_first_open(struct adreno_device *adreno_dev)
@@ -759,7 +759,7 @@ static int a6xx_hwsched_active_count_get(struct adreno_device *adreno_dev)
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	int ret = 0;
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!kgsl_mutex_is_locked(&device->mutex)))
 		return -EINVAL;
 
 	if (test_bit(GMU_PRIV_PM_SUSPEND, &gmu->flags))

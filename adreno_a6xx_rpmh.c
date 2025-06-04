@@ -29,8 +29,8 @@ static int setup_cx_arc_votes(struct adreno_device *adreno_dev,
 	/* Hardcoded values of GMU CX voltage levels */
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct a6xx_hfi *hfi = &gmu->hfi;
-	u16 gmu_cx_vlvl[MAX_CX_LEVELS];
-	u32 cx_votes[MAX_CX_LEVELS];
+	u16 gmu_cx_vlvl[MAX_CX_LEVELS_LEGACY];
+	u32 cx_votes[MAX_CX_LEVELS_LEGACY];
 	struct hfi_dcvstable_cmd *table = &hfi->dcvs_table;
 	int ret, i;
 

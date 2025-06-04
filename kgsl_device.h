@@ -6,6 +6,7 @@
 #ifndef __KGSL_DEVICE_H
 #define __KGSL_DEVICE_H
 
+#include <linux/spinlock.h> /* Included before rtmutex.h to avoid a compile error */
 #include <linux/rtmutex.h>
 #include <linux/sched/mm.h>
 #include <linux/sched/task.h>

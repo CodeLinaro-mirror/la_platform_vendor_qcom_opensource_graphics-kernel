@@ -1353,7 +1353,9 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 			kgsl_regread(device, r[j], dest++);
 		}
 
-		if ((r == gen8_ifpc_pwrup_reglist) || (r == gen8_3_0_ifpc_pwrup_reglist)) {
+		if ((r == gen8_ifpc_pwrup_reglist ||
+				r == gen8_2_0_ifpc_pwrup_reglist ||
+				r == gen8_3_0_ifpc_pwrup_reglist)) {
 			u32 cs_len = adreno_coresight_patch_pwrup_reglist(adreno_dev, dest);
 
 			lock->ifpc_list_len += cs_len;

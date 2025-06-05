@@ -192,6 +192,8 @@ struct adreno_gen8_core {
 	const struct hfi_therm_profile_ctrl *therm_profile;
 	/** @limits_mit_cfg: GPU limits mitigation configuration */
 	const struct gen8_limits_mit_cfg *limits_mit_cfg;
+	/** @clx_tbl: GPU CLX table */
+	const struct hfi_clx_table_v2_cmd *clx_tbl;
 };
 
 /**

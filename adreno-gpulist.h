@@ -18,6 +18,9 @@ static const struct adreno_gpu_core adreno_gpu_core_##_name = { \
 
 #define MHZ_TO_KBPS(mhz, w) ((u64)(mhz * 1000000ULL * w) / (1024))
 
+#define CLX_DATA(irated, num_phases, clx_path, extd_intf) \
+	((extd_intf << 29) | (clx_path << 28) | (num_phases << 22) | (irated << 16))
+
 DEFINE_DEPRECATED_CORE(a304, ADRENO_REV_A304, 4, 0, 5, ANY_ID);
 DEFINE_DEPRECATED_CORE(a306, ADRENO_REV_A306, 4, 0, 5, ANY_ID);
 DEFINE_DEPRECATED_CORE(a306a, ADRENO_REV_A306A, 4, 0, 5, ANY_ID);
@@ -2979,6 +2982,30 @@ static const struct hfi_therm_profile_ctrl therm_profile_8_0_0 = {
 	.throttle_cfg.throttle_lvls[2] = 20,
 };
 
+static const struct hfi_clx_table_v2_cmd gen8_0_0_clx_table = {
+	.version = (2 << 16) | 1,
+	.domain = {
+		/* GFX domain */
+		{
+			.data0 = CLX_DATA(55, 4, 1, 1),
+			.clxt = 0,
+			.clxh = 0,
+			.urgmode = 1,
+			.lkgen = 0,
+			.currbudget = 100,
+		},
+		/* MxG domain */
+		{
+			.data0 = CLX_DATA(55, 1, 1, 1),
+			.clxt = 0,
+			.clxh = 0,
+			.urgmode = 1,
+			.lkgen = 0,
+			.currbudget = 50,
+		},
+	},
+};
+
 static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_0_0,
@@ -3019,6 +3046,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 	.preempt_level = 1,
 	.cl_no_ft_timeout_ms = 6500,
 	.therm_profile = &therm_profile_8_0_0,
+	.clx_tbl = &gen8_0_0_clx_table,
 };
 
 static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
@@ -3061,9 +3089,34 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
 	.preempt_level = 1,
 	.cl_no_ft_timeout_ms = 6500,
 	.therm_profile = &therm_profile_8_0_0,
+	.clx_tbl = &gen8_0_0_clx_table,
 };
 
 extern const struct gen8_snapshot_block_list gen8_2_0_snapshot_block_list;
+
+static const struct hfi_clx_table_v2_cmd gen8_2_0_clx_table = {
+	.version = (2 << 16) | 1,
+	.domain = {
+		/* GFX domain */
+		{
+			.data0 = CLX_DATA(60, 5, 1, 1),
+			.clxt = 0,
+			.clxh = 0,
+			.urgmode = 1,
+			.lkgen = 0,
+			.currbudget = 100,
+		},
+		/* MxG domain */
+		{
+			.data0 = CLX_DATA(60, 1, 1, 1),
+			.clxt = 0,
+			.clxh = 0,
+			.urgmode = 1,
+			.lkgen = 0,
+			.currbudget = 50,
+		},
+	},
+};
 
 static const struct hfi_limits_mit_tbl gen8_2_0_limits_mit_tbl[] = {
 	{
@@ -3317,6 +3370,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 	.therm_profile = &therm_profile_8_2_0,
 	.limits_mit_cfg = &gen8_2_0_limits_mit_cfg,
 	.preempt_level = 1,
+	.clx_tbl = &gen8_2_0_clx_table,
 };
 
 static const struct adreno_gen8_core adreno_gpu_core_gen8_2_1 = {
@@ -3360,6 +3414,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_1 = {
 	.therm_profile = &therm_profile_8_2_0,
 	.limits_mit_cfg = &gen8_2_0_limits_mit_cfg,
 	.preempt_level = 1,
+	.clx_tbl = &gen8_2_0_clx_table,
 };
 
 /* GEN8_4_0 noncontext register list */

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <dt-bindings/power/qcom-rpmpd.h>
@@ -815,6 +815,8 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 	pwr->time_in_pwrlevel[pwr->active_pwrlevel] += data->total_time;
 	if (pwr->thermal_pwrlevel)
 		pwr->thermal_time += data->gpu_time;
+
+	pwr->aggr_max_pwrlevel = data->aggr_max_pwrlevel;
 }
 
 static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packet *pkt)

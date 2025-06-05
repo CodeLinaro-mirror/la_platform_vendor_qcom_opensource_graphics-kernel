@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_GEN7_11_0_SNAPSHOT_H
 #define __ADRENO_GEN7_11_0_SNAPSHOT_H
@@ -33,8 +34,6 @@ static const u32 gen7_11_0_debugbus_blocks[] = {
 	DEBUGBUS_UFC_1,
 	DEBUGBUS_GMU_GX,
 	DEBUGBUS_DBGC,
-	DEBUGBUS_CX,
-	DEBUGBUS_GMU_CX,
 	DEBUGBUS_GPC_BR,
 	DEBUGBUS_GPC_BV,
 	DEBUGBUS_LARC,

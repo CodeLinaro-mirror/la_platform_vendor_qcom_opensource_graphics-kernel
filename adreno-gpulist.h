@@ -3129,8 +3129,8 @@ static const struct hfi_limits_mit_tbl gen8_2_0_limits_mit_tbl[] = {
 			.lkgen = 0,
 			.mode = 0,
 			.sid_val = 0xC,
-			.mit_time = 50,
-			.curr_limit = 25000,
+			.mit_time = 5,
+			.curr_limit = 6000,
 		}
 	},
 	{
@@ -3143,8 +3143,8 @@ static const struct hfi_limits_mit_tbl gen8_2_0_limits_mit_tbl[] = {
 			.lkgen = 0,
 			.mode = 0,
 			.sid_val = 0x12,
-			.mit_time = 50,
-			.curr_limit = 5000,
+			.mit_time = 2000,
+			.curr_limit = 6000,
 		}
 	},
 	{
@@ -3155,10 +3155,10 @@ static const struct hfi_limits_mit_tbl gen8_2_0_limits_mit_tbl[] = {
 			.enable = 1,
 			.msg_path = 0,
 			.lkgen = 0,
-			.mode = 1,
-			.sid_val = 0,
-			.mit_time = 10,
-			.curr_limit = 25000,
+			.mode = 0,
+			.sid_val = 7,
+			.mit_time = 3,
+			.curr_limit = 30000,
 		}
 	},
 	{
@@ -3166,13 +3166,13 @@ static const struct hfi_limits_mit_tbl gen8_2_0_limits_mit_tbl[] = {
 		.domain = GMU_MX_DOMAIN,
 		.feature_rev = 0,
 		.mit_cfg = {
-			.enable = 1,
+			.enable = 0,
 			.msg_path = 0,
 			.lkgen = 0,
 			.mode = 0,
-			.sid_val = 0xC,
-			.mit_time = 10,
-			.curr_limit = 5000,
+			.sid_val = 7,
+			.mit_time = 3,
+			.curr_limit = 6000,
 		}
 	},
 };

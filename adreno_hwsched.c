@@ -3326,6 +3326,7 @@ void adreno_hwsched_reset_hfi_mem(struct adreno_device *adreno_dev)
 	/* No need to reset gmem portion of the preemption records */
 	for (i = 0; i < KGSL_PRIORITY_MAX_RB_LEVELS; i++) {
 		md = hwsched->preempt_rec[i];
-		memset(md->hostptr, 0x0, md->size);
+		if (md && md->hostptr)
+			memset(md->hostptr, 0x0, md->size);
 	}
 }

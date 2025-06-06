@@ -20,10 +20,10 @@
  * Reclaiming excessive number of pages from a process will impact launch
  * latency for the subsequent launch of the process. After measuring the
  * launch latencies by having various maximum limits, it has been decided
- * that allowing 30MB (7680 pages) of relcaim per process will have little
- * impact and the latency will be within acceptable limit.
+ * that allowing 30MB of reclaim per process will have little impact and
+ * the latency will be within acceptable limit.
  */
-static u32 kgsl_reclaim_max_page_limit = 7680;
+static u32 kgsl_reclaim_max_page_limit = (30 * SZ_1M) / PAGE_SIZE;
 
 /* Setting this to 0 means we reclaim pages as specified in shrinker call */
 static u32 kgsl_nr_to_scan;

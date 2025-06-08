@@ -2346,6 +2346,11 @@ static const char *gen8_fault_block_uche(struct kgsl_device *device,
 		goto regread_fail;
 	}
 
+	if (!gen8_gmu_rpmh_pwr_state_is_active(device) || !adreno_gx_is_on(adreno_dev)) {
+		kgsl_mutex_unlock(&device->mutex);
+		goto regread_fail;
+	}
+
 	kgsl_regread(device, GEN8_UCHE_CLIENT_PF, &uche_client_id);
 	kgsl_mutex_unlock(&device->mutex);
 

@@ -1687,7 +1687,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 
 	switch (mode) {
 	case KGSL_UBWC_6_0:
-		yuvnotcomptofc = 0;
+		yuvnotcomptofc = 1;
 		mode2 = 5;
 		break;
 	case KGSL_UBWC_5_0:
@@ -1723,6 +1723,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 	gen8_regwrite_aperture(device, GEN8_GRAS_NC_MODE_CNTL,
 			       FIELD_PREP(GENMASK(8, 5), hbb), PIPE_BR, 0, 0);
 	gen8_regwrite_aperture(device, GEN8_RB_CCU_NC_MODE_CNTL,
+			       FIELD_PREP(GENMASK(6, 6), yuvnotcomptofc) |
 			       FIELD_PREP(GENMASK(3, 3), hbb_hi) |
 			       FIELD_PREP(GENMASK(2, 1), hbb_lo),
 			       PIPE_BR, 0, 0);

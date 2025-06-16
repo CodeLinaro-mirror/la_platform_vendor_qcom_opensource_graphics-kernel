@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/iommu.h>
@@ -1699,7 +1699,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	}
 
 	ret = adreno_hwsched_ctxt_unregister_wait_completion(adreno_dev,
-		GMU_PDEV_DEV(device), &pending_ack, a6xx_hwsched_process_msgq, &cmd);
+		GMU_PDEV_DEV(device), context, &pending_ack, a6xx_hwsched_process_msgq, &cmd);
 	if (ret) {
 		trigger_context_unregister_fault(adreno_dev, context);
 		goto done;

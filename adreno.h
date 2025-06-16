@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -884,6 +884,8 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_CX_TIMER_INITIALIZED = 17,
 	/** @ADRENO_DEVICE_RESET_RECOVERY: Set if the ADRENO device under goes reset recovery */
 	ADRENO_DEVICE_RESET_RECOVERY = 18,
+	/** @ADRENO_DEVICE_FAST_CONTEXT_DESTROY: Set if fast context destroy is enabled on GMU */
+	ADRENO_DEVICE_FAST_CONTEXT_DESTROY = 19,
 };
 
 /**
@@ -1717,6 +1719,12 @@ static inline bool adreno_is_preemption_enabled(
 				struct adreno_device *adreno_dev)
 {
 	return test_bit(ADRENO_DEVICE_PREEMPTION, &adreno_dev->priv);
+}
+
+static inline bool adreno_is_fast_context_destroy_enabled(
+				struct adreno_device *adreno_dev)
+{
+	return test_bit(ADRENO_DEVICE_FAST_CONTEXT_DESTROY, &adreno_dev->priv);
 }
 
 

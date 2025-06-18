@@ -107,8 +107,12 @@ static int alloc_map_preempt_record(struct adreno_device *adreno_dev,
 			entry->md->gpuaddr + offset, md_size, 0, flags, priv,
 			(entry->desc.mem_kind == HFI_MEMKIND_CSW_PRIV_SECURE) ?
 			"sec_preempt_record_non_gmem" : "preempt_record_non_gmem");
-	if (!*md)
-		return PTR_ERR(*md);
+	if (IS_ERR(*md)) {
+		int ret = PTR_ERR(*md);
+
+		*md = NULL;
+		return ret;
+	}
 
 	if (!(desc->flags & HFI_MEMFLAG_GMU_ACC))
 		return 0;

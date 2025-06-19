@@ -626,11 +626,19 @@ int gen8_hfi_send_minbw_feature_ctrl(struct adreno_device *adreno_dev)
 
 int gen8_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
 {
-	int ret = 0;
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	struct hfi_clx_table_v2_cmd cmd = {0};
+	int ret;
 
 	if (!adreno_dev->clx_enabled)
 		return 0;
+
+	if (WARN_ON(!gen8_core->clx_tbl)) {
+		adreno_dev->clx_enabled = false;
+		return 0;
+	}
+
+	memcpy(&cmd, gen8_core->clx_tbl, sizeof(struct hfi_clx_table_v2_cmd));
 
 	/* Make sure the table is valid before enabling feature */
 	ret = CMD_MSG_HDR(cmd, H2F_MSG_CLX_TBL);
@@ -640,31 +648,6 @@ int gen8_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
 	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_CLX, 1, 0);
 	if (ret)
 		return ret;
-
-	cmd.version = FIELD_PREP(GENMASK(31, 16), 0x2) | FIELD_PREP(GENMASK(15, 0), 0x1);
-	/* GFX domain */
-	cmd.domain[0].data0 = FIELD_PREP(GENMASK(31, 29), 1) |
-				FIELD_PREP(GENMASK(28, 28), 1) |
-				FIELD_PREP(GENMASK(27, 22), 4) |
-				FIELD_PREP(GENMASK(21, 16), 55) |
-				FIELD_PREP(GENMASK(15, 0), 0);
-	cmd.domain[0].clxt = 0;
-	cmd.domain[0].clxh = 0;
-	cmd.domain[0].urgmode = 1;
-	cmd.domain[0].lkgen = 0;
-	cmd.domain[0].currbudget = 100;
-
-	/* MxG domain */
-	cmd.domain[1].data0 = FIELD_PREP(GENMASK(31, 29), 1) |
-				FIELD_PREP(GENMASK(28, 28), 1) |
-				FIELD_PREP(GENMASK(27, 22), 1) |
-				FIELD_PREP(GENMASK(21, 16), 55) |
-				FIELD_PREP(GENMASK(15, 0), 0);
-	cmd.domain[1].clxt = 0;
-	cmd.domain[1].clxh = 0;
-	cmd.domain[1].urgmode = 1;
-	cmd.domain[1].lkgen = 0;
-	cmd.domain[1].currbudget = 50;
 
 	ret = gen8_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
 	if (ret)

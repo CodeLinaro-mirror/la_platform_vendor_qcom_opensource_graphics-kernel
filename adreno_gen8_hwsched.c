@@ -1756,6 +1756,8 @@ DCVS_TUNABLES_SYSFS(non_linear_ramp_down, GPU_TUNING_KEY_NON_LINEAR_RAMP_DOWN);
 DCVS_TUNABLES_SYSFS(min_freq_mhz, GPU_TUNING_KEY_MIN_GPU_FREQUENCY);
 DCVS_TUNABLES_SYSFS(max_freq_mhz, GPU_TUNING_KEY_MAX_GPU_FREQUENCY);
 DCVS_TUNABLES_SYSFS(mod_percent, GPU_TUNING_KEY_MOD_PERCENT);
+DCVS_TUNABLES_SYSFS(bus_min_freq_mhz, GPU_TUNING_KEY_BUS_MIN_FREQUENCY);
+DCVS_TUNABLES_SYSFS(bus_max_freq_mhz, GPU_TUNING_KEY_BUS_MAX_FREQUENCY);
 
 static struct attribute *dcvs_tunables_attrs[] = {
 	&dcvs_attr_penalty_up.attr.attr,
@@ -1771,6 +1773,8 @@ static struct attribute *dcvs_tunables_attrs[] = {
 	&dcvs_attr_min_freq_mhz.attr.attr,
 	&dcvs_attr_max_freq_mhz.attr.attr,
 	&dcvs_attr_mod_percent.attr.attr,
+	&dcvs_attr_bus_min_freq_mhz.attr.attr,
+	&dcvs_attr_bus_max_freq_mhz.attr.attr,
 	NULL,
 };
 

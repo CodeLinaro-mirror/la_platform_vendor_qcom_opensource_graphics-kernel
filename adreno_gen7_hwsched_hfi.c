@@ -14,6 +14,7 @@
 #include "adreno_trace.h"
 #include "kgsl_device.h"
 #include "kgsl_eventlog.h"
+#include "kgsl_gmu_core.h"
 #include "kgsl_pwrctrl.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
@@ -1560,7 +1561,7 @@ poll:
 		break;
 	case F2H_MSG_PROCESS_TRACE:
 		rc = 0;
-		gmu_core_process_trace_data(device, GMU_PDEV_DEV(device), &gmu->trace);
+		gmu_core_process_trace_data(device, GMU_PDEV_DEV(device), &device->gmu_core.trace);
 		break;
 	default:
 		if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
@@ -2386,7 +2387,6 @@ static int hfi_f2h_main(void *arg)
 	struct adreno_device *adreno_dev = arg;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_hwsched_hfi *hfi = to_gen7_hwsched_hfi(adreno_dev);
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 
 	while (!kthread_should_stop()) {
 		wait_event_interruptible(hfi->f2h_wq, kthread_should_stop() ||
@@ -2394,7 +2394,7 @@ static int hfi_f2h_main(void *arg)
 			(((hfi->irq_mask & HFI_IRQ_MSGQ_MASK) &&
 			!is_queue_empty(adreno_dev, HFI_MSG_ID)) ||
 			/* Trace buffer has messages to process */
-			!gmu_core_is_trace_empty(gmu->trace.md->hostptr) ||
+			!gmu_core_is_trace_empty(device->gmu_core.trace.md->hostptr) ||
 			/* Dbgq has messages to process */
 			!is_queue_empty(adreno_dev, HFI_DBG_ID)));
 
@@ -2403,7 +2403,7 @@ static int hfi_f2h_main(void *arg)
 
 		gen7_hwsched_process_msgq(adreno_dev);
 		gmu_core_process_trace_data(KGSL_DEVICE(adreno_dev),
-					GMU_PDEV_DEV(device), &gmu->trace);
+					GMU_PDEV_DEV(device), &device->gmu_core.trace);
 		gen7_hwsched_process_dbgq(adreno_dev, true);
 	}
 

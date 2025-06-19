@@ -1245,3 +1245,43 @@ void gmu_core_scale_gmu_frequency(struct kgsl_device *device, int buslevel)
 
 	return;
 }
+
+int gmu_core_hwsched_memory_init(struct kgsl_device *device)
+{
+	int ret;
+
+	/* GMU Virtual register bank */
+	if (IS_ERR_OR_NULL(device->gmu_core.vrb)) {
+		device->gmu_core.vrb = gmu_core_reserve_kernel_block(device, 0, GMU_VRB_SIZE,
+				GMU_NONCACHED_KERNEL, 0);
+
+		if (IS_ERR(device->gmu_core.vrb))
+			return PTR_ERR(device->gmu_core.vrb);
+
+		/* Populate size of the virtual register bank */
+		ret = gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_SIZE_IDX,
+					device->gmu_core.vrb->size >> 2);
+		if (ret)
+			return ret;
+	}
+
+	/* GMU trace log */
+	if (IS_ERR_OR_NULL(device->gmu_core.trace.md)) {
+		device->gmu_core.trace.md = gmu_core_reserve_kernel_block(device, 0,
+					GMU_TRACE_SIZE, GMU_NONCACHED_KERNEL, 0);
+
+		if (IS_ERR(device->gmu_core.trace.md))
+			return PTR_ERR(device->gmu_core.trace.md);
+
+		/* Pass trace buffer address to GMU through the VRB */
+		ret = gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_TRACE_BUFFER_ADDR_IDX,
+					device->gmu_core.trace.md->gmuaddr);
+		if (ret)
+			return ret;
+
+		/* Initialize the GMU trace buffer header */
+		gmu_core_trace_header_init(&device->gmu_core.trace);
+	}
+
+	return 0;
+}

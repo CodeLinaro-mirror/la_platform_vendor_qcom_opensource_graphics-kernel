@@ -504,7 +504,9 @@ enum gmu_fault_panic_policy {
 
 #define KGSL_GMU_CORE_FORCE_PANIC(gf_panic, pdev, ticks, policy) do { \
 		if (gf_panic & BIT(policy)) { \
-			dev_err(&pdev->dev, "GMU always on ticks: %llx\n", ticks);\
+			dev_err(&pdev->dev, \
+				"GMU always on ticks: %llx gf_policy: 0x%x gf_trigger: 0x%lx\n", \
+				ticks, gf_panic, BIT(policy));\
 			BUG();\
 		} \
 	} while (0)

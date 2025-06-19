@@ -153,6 +153,7 @@ static ADRENO_CORESIGHT_ATTR(evt_intf_sel_1, &gen8_coresight_regs[41]);
 static ADRENO_CORESIGHT_ATTR(eco_cntl, &gen8_coresight_regs[42]);
 static ADRENO_CORESIGHT_ATTR(ahb_dbg_cntl, &gen8_coresight_regs[43]);
 static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_misc_mode, &gen8_coresight_regs[44]);
+static ADRENO_CORESIGHT_ATTR(cfg_smmu_fault_block_halt, &gen8_coresight_regs[45]);
 
 /*CX debug registers*/
 static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_sel_a,
@@ -294,6 +295,7 @@ static struct attribute *gen8_coresight_attrs[] = {
 	&coresight_attr_eco_cntl.attr.attr,
 	&coresight_attr_ahb_dbg_cntl.attr.attr,
 	&coresight_attr_cfg_dbgbus_misc_mode.attr.attr,
+	&coresight_attr_cfg_smmu_fault_block_halt.attr.attr,
 	NULL,
 };
 
@@ -378,12 +380,21 @@ static const struct adreno_coresight gen8_coresight_cx = {
 	.groups = gen8_coresight_groups_cx,
 };
 
+#if (KERNEL_VERSION(6, 14, 0) > LINUX_VERSION_CODE)
 static int name_match(struct device *dev, void *data)
 {
 	char *child_name = data;
 
 	return strcmp(child_name, dev_name(dev)) == 0;
 }
+#else
+static int name_match(struct device *dev, const void *data)
+{
+	const char *child_name = data;
+
+	return strcmp(child_name, dev_name(dev)) == 0;
+}
+#endif
 
 void gen8_coresight_init(struct adreno_device *adreno_dev)
 {

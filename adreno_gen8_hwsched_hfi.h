@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _ADRENO_GEN8_HWSCHED_HFI_H_
@@ -272,12 +272,13 @@ void gen8_hwsched_context_destroy(struct adreno_device *adreno_dev,
  * gen8_hwsched_hfi_get_value - Send GET_VALUE packet to GMU to get the value of a property
  * @adreno_dev: Pointer to adreno device
  * @prop: property to get from GMU
+ * @subtype: subtype to get from GMU
  *
  * This functions sends GET_VALUE HFI packet to query value of a property
  *
  * Return: On success, return the value in the GMU response. On failure, return 0
  */
-u32 gen8_hwsched_hfi_get_value(struct adreno_device *adreno_dev, u32 prop);
+u32 gen8_hwsched_hfi_get_value(struct adreno_device *adreno_dev, u32 prop, u32 subtype);
 
 /**
  * gen8_hwsched_hfi_set_value - Send SET_VALUE packet to GMU to set the value of a property
@@ -395,4 +396,15 @@ int gen8_hwsched_set_gmu_based_dcvs_value(struct adreno_device *adreno_dev, u32 
  */
 int gen8_hwsched_set_dcvs_profile(struct adreno_device *adreno_dev,
 	struct kgsl_process_private *proc_priv);
+
+/**
+ * gen8_hwsched_set_tuning_attrs - Set value for GMU based DCVS tunables
+ * @adreno_dev: pointer to the adreno device
+ * @type: Type of HFI for set value
+ * @subtype: Sub type of HFI
+ * @val: Value to set
+ *
+ */
+void gen8_hwsched_set_tuning_attrs(struct adreno_device *adreno_dev, u32 type,
+		u32 subtype, u32 val);
 #endif

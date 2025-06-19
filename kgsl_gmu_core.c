@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <dt-bindings/power/qcom-rpmpd.h>
@@ -815,6 +815,8 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 	pwr->time_in_pwrlevel[pwr->active_pwrlevel] += data->total_time;
 	if (pwr->thermal_pwrlevel)
 		pwr->thermal_time += data->gpu_time;
+
+	pwr->aggr_max_pwrlevel = data->aggr_max_pwrlevel;
 }
 
 static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packet *pkt)
@@ -1067,12 +1069,15 @@ void gmu_core_rdpm_cx_freq_update(struct kgsl_device *device, u32 freq)
 	wmb();
 }
 
+#define GMU_FREQ_MIN   200000000
+#define GMU_FREQ_MAX   500000000
+
 int gmu_core_clk_probe(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct platform_device *gmu_pdev = GMU_PDEV(device);
 	struct gmu_core_device *gmu = &device->gmu_core;
-	int tbl_size, num_freqs, offset, ret, i;
+	int tbl_size, num_freqs, num_perf_ddr_bw, offset, ret, i;
 
 	ret = devm_clk_bulk_get_all(GMU_PDEV_DEV(device), &gmu->clks);
 	if (ret < 0)
@@ -1095,16 +1100,29 @@ int gmu_core_clk_probe(struct kgsl_device *device)
 
 	gmu->num_clks = ret;
 
-	of_property_read_u32(GMU_PDEV(device)->dev.of_node,
-		"qcom,gmu-perf-ddr-bw", &gmu->perf_ddr_bw);
+	if (of_get_property(gmu_pdev->dev.of_node,
+		"qcom,gmu-perf-ddr-bw", &tbl_size) == NULL)
+		goto read_gmu_freq;
 
+	num_perf_ddr_bw = (tbl_size / sizeof(u32));
+	if (num_perf_ddr_bw >= ARRAY_SIZE(gmu->perf_ddr_bw))
+		goto read_gmu_freq;
+
+	for (i = 0; i < num_perf_ddr_bw; i++) {
+		ret = of_property_read_u32_index(gmu_pdev->dev.of_node,
+			"qcom,gmu-perf-ddr-bw", i, &gmu->perf_ddr_bw[i]);
+		if (ret)
+			goto read_gmu_freq;
+	}
+
+read_gmu_freq:
 	/* Read the optional list of GMU frequencies */
 	if (of_get_property(gmu_pdev->dev.of_node,
 		"qcom,gmu-freq-table", &tbl_size) == NULL)
 		goto default_gmu_freq;
 
 	num_freqs = (tbl_size / sizeof(u32)) / 2;
-	if (num_freqs != ARRAY_SIZE(gmu->freqs))
+	if (num_freqs >= ARRAY_SIZE(gmu->freqs))
 		goto default_gmu_freq;
 
 	for (i = 0; i < num_freqs; i++) {
@@ -1119,6 +1137,8 @@ int gmu_core_clk_probe(struct kgsl_device *device)
 			goto default_gmu_freq;
 	}
 
+	gmu->num_freqs = num_freqs;
+
 	return 0;
 
 default_gmu_freq:
@@ -1128,16 +1148,19 @@ default_gmu_freq:
 	gmu->freqs[1] = GMU_FREQ_MAX;
 	gmu->vlvls[1] = RPMH_REGULATOR_LEVEL_SVS;
 
+	gmu->num_freqs = 2;
+
 	if (adreno_is_a6xx(adreno_dev) && !adreno_is_a660(adreno_dev))
 		gmu->vlvls[0] = RPMH_REGULATOR_LEVEL_MIN_SVS;
 
 	return 0;
 }
 
-int gmu_core_clock_set_rate(struct kgsl_device *device, u32 req_freq)
+int gmu_core_clock_set_rate(struct kgsl_device *device, u32 gmu_level)
 {
 	struct gmu_core_device *gmu_core = &device->gmu_core;
 	int ret;
+	u32 req_freq = gmu_core->freqs[gmu_level];
 
 	gmu_core_rdpm_cx_freq_update(device, req_freq / 1000);
 
@@ -1147,9 +1170,9 @@ int gmu_core_clock_set_rate(struct kgsl_device *device, u32 req_freq)
 		return ret;
 	}
 
-	trace_kgsl_gmu_pwrlevel(req_freq, gmu_core->cur_freq);
+	trace_kgsl_gmu_pwrlevel(req_freq, gmu_core->freqs[gmu_core->cur_level]);
 
-	gmu_core->cur_freq = req_freq;
+	gmu_core->cur_level = gmu_level;
 
 	return ret;
 }
@@ -1160,7 +1183,7 @@ int gmu_core_enable_clks(struct kgsl_device *device, u32 level)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret;
 
-	ret = gmu_core_clock_set_rate(device, gmu->freqs[level]);
+	ret = gmu_core_clock_set_rate(device, level);
 	if (ret)
 		return ret;
 
@@ -1193,21 +1216,19 @@ void gmu_core_scale_gmu_frequency(struct kgsl_device *device, int buslevel)
 {
 	struct gmu_core_device *gmu = &device->gmu_core;
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	u32 cur_freq = gmu->cur_freq;
-	u32 req_freq = gmu->freqs[0];
+	u32 i, gmu_level = 0;
 
-	if (!gmu->perf_ddr_bw)
+	if (!gmu->perf_ddr_bw[0])
 		return;
 
-	/*
-	 * Scale the GMU if DDR is at a CX corner at which GMU can run at
-	 * a higher frequency
-	 */
-	if (pwr->ddr_table[buslevel] >= gmu->perf_ddr_bw)
-		req_freq = gmu->freqs[GMU_MAX_PWRLEVELS - 1];
+	/* Check if IB threshold has been breached to scale gmu */
+	for (i = 0; i < MAX_CX_LEVELS; i++) {
+		if ((pwr->ddr_table[buslevel] >= gmu->perf_ddr_bw[i]) && (gmu->perf_ddr_bw[i] != 0))
+			gmu_level = (i + 1);
+	}
 
-	if (cur_freq == req_freq)
-		return;
+	if ((gmu_level < MAX_CX_LEVELS) && (gmu->cur_level != gmu_level))
+		gmu_core_clock_set_rate(device, gmu_level);
 
-	gmu_core_clock_set_rate(device, req_freq);
+	return;
 }

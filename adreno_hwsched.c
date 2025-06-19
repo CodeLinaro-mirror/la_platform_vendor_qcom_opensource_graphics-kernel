@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "adreno.h"
@@ -390,7 +390,7 @@ static int adreno_hwsched_alloc_preempt_record_gmem(struct adreno_device *adreno
 	if (*md)
 		return 0;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (*md)
 		goto unlock;
@@ -426,7 +426,7 @@ static int adreno_hwsched_alloc_preempt_record_gmem(struct adreno_device *adreno
 		kfree(*md);
 	}
 unlock:
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 	return ret;
 }
 
@@ -811,7 +811,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 	if (!obj)
 		return -ENOMEM;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	/* Elevating thread’s priority to avoid context switch with holding device mutex */
 	if (!is_current_rt)
@@ -880,7 +880,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 done:
 	if (!is_current_rt)
 		sched_set_normal(current, nice);
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 	if (ret)
 		kmem_cache_free(obj_cache, obj);
 
@@ -1108,10 +1108,10 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 		hwsched_issuecmds(adreno_dev);
 
 	if (hwsched->inflight > 0) {
-		mutex_lock(&device->mutex);
+		kgsl_mutex_lock(&device->mutex);
 		kgsl_pwrscale_update(device);
 		kgsl_start_idle_timer(device);
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 	}
 
 	mutex_unlock(&hwsched->mutex);
@@ -1588,7 +1588,7 @@ static void hwsched_power_down(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (test_and_clear_bit(ADRENO_HWSCHED_ACTIVE, &hwsched->flags))
 		complete_all(&hwsched->idle_gate);
@@ -1598,7 +1598,7 @@ static void hwsched_power_down(struct adreno_device *adreno_dev)
 		clear_bit(ADRENO_HWSCHED_POWER, &hwsched->flags);
 	}
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 static void adreno_hwsched_queue_context(struct adreno_device *adreno_dev,
@@ -1643,11 +1643,11 @@ static unsigned int _preempt_count_show(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 count;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	count = hwsched_ops->preempt_count(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	return count;
 }
@@ -1729,6 +1729,9 @@ static void adreno_hwsched_dispatcher_close(struct adreno_device *adreno_dev)
 
 	if (hwsched->global_ctxtq.hostptr)
 		kgsl_sharedmem_free(&hwsched->global_ctxtq);
+
+	kobject_put(&hwsched->dcvs_kobj);
+	kobject_put(&hwsched->tunables_kobj);
 }
 
 static void force_retire_timestamp(struct kgsl_device *device,
@@ -2150,7 +2153,7 @@ static void adreno_hwsched_snapshot_legacy(struct adreno_device *adreno_dev, int
 	kgsl_drawobj_put(drawobj);
 }
 
-static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
+static int adreno_hwsched_snapshot_and_soft_reset(struct adreno_device *adreno_dev, int fault)
 {
 	struct kgsl_drawobj *drawobj = NULL;
 	struct kgsl_drawobj *drawobj_lpac = NULL;
@@ -2218,7 +2221,10 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 			kgsl_device_snapshot(device, NULL, NULL, false);
 
 		adreno_gpufault_stats(adreno_dev, NULL, NULL, fault);
-		return;
+
+		/* Faulting command not found, Hence force hard reset */
+		adreno_dev->hwsched.reset_type = GMU_GPU_HARD_RESET;
+		goto done;
 	}
 
 	if (obj)
@@ -2287,10 +2293,9 @@ done:
 		ret = gpudev->soft_reset(adreno_dev, NULL, ctx_guilty);
 
 	memset(hwsched->ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
-	clear_bit(ADRENO_HWSCHED_GPU_SOFT_RESET, &adreno_dev->hwsched.flags);
 	adreno_dev->hwsched.reset_type = GMU_GPU_RESET_NONE;
-	if (ret && gpudev->reset)
-		gpudev->reset(adreno_dev);
+
+	return ret;
 }
 
 static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
@@ -2322,7 +2327,7 @@ static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
 		return true;
 	}
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (device->state == KGSL_STATE_ACTIVE) {
 		/*
@@ -2332,19 +2337,21 @@ static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
 		if ((fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT) && adreno_gx_is_on(adreno_dev))
 			adreno_writereg(adreno_dev, ADRENO_REG_CP_ME_CNTL, 0);
 
-		if (test_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &hwsched->flags))
+		if (test_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &hwsched->flags)) {
 			adreno_hwsched_snapshot_legacy(adreno_dev, fault);
-		else
-			adreno_hwsched_snapshot(adreno_dev, fault);
+			memset(hwsched->ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
+			adreno_gpudev_reset(adreno_dev);
+		} else {
+			int ret = adreno_hwsched_snapshot_and_soft_reset(adreno_dev, fault);
 
-		memset(hwsched->ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
-
-		adreno_gpudev_reset(adreno_dev);
+			if (ret)
+				adreno_gpudev_reset(adreno_dev);
+		}
 	}
 
 	adreno_scheduler_queue(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 	mutex_unlock(&adreno_dev->fault_recovery_mutex);
 
 	return true;
@@ -2379,10 +2386,10 @@ static void adreno_hwsched_work(struct kthread_work *work)
 	if (hwsched->inflight == 0) {
 		hwsched_power_down(adreno_dev);
 	} else {
-		mutex_lock(&device->mutex);
+		kgsl_mutex_lock(&device->mutex);
 		kgsl_pwrscale_update(device);
 		kgsl_start_idle_timer(device);
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 	}
 
 	mutex_unlock(&hwsched->mutex);
@@ -2428,10 +2435,10 @@ static void hwsched_lsr_check(struct work_struct *work)
 		struct adreno_device, hwsched);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	kgsl_pwrscale_update_stats(device);
 	kgsl_pwrscale_update(device);
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	mod_timer(&hwsched->lsr_timer, jiffies + msecs_to_jiffies(10));
 }
@@ -2625,7 +2632,7 @@ static int hwsched_idle(struct adreno_device *adreno_dev)
 	/* Block any new submissions from being submitted */
 	adreno_get_gpu_halt(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	/*
 	 * Flush the worker to make sure all executing
@@ -2653,7 +2660,7 @@ static int hwsched_idle(struct adreno_device *adreno_dev)
 			ret = -EDEADLK;
 	}
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	/*
 	 * This will allow the dispatcher to start submitting to
@@ -2671,7 +2678,7 @@ static int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int ret;
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!kgsl_mutex_is_locked(&device->mutex)))
 		return -EDEADLK;
 
 	if (!kgsl_state_is_awake(device))
@@ -2802,12 +2809,11 @@ int adreno_hwsched_ctxt_unregister_wait_completion(
 	u64 start, end;
 
 	start = gpudev->read_alwayson(adreno_dev);
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
-	ret = wait_for_completion_timeout(&ack->complete,
-		msecs_to_jiffies(msecs_to_jiffies(30 * 1000)));
+	ret = wait_for_completion_timeout(&ack->complete, msecs_to_jiffies(30 * 1000));
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	if (ret)
 		return 0;
 
@@ -3320,6 +3326,7 @@ void adreno_hwsched_reset_hfi_mem(struct adreno_device *adreno_dev)
 	/* No need to reset gmem portion of the preemption records */
 	for (i = 0; i < KGSL_PRIORITY_MAX_RB_LEVELS; i++) {
 		md = hwsched->preempt_rec[i];
-		memset(md->hostptr, 0x0, md->size);
+		if (md && md->hostptr)
+			memset(md->hostptr, 0x0, md->size);
 	}
 }

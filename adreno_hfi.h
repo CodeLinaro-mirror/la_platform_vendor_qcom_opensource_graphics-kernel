@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __ADRENO_HFI_H
 #define __ADRENO_HFI_H
@@ -141,6 +141,7 @@ enum hfi_table_type {
 #define HFI_VALUE_RB_IB_RULE		124
 #define HFI_VALUE_GMU_WARMBOOT		125
 #define HFI_VALUE_DCVS_ENABLE		131
+#define HFI_VALUE_DCVS_TUNING_PARAM	132
 #define HFI_VALUE_RB_GPULEVEL_RULE	133
 #define HFI_VALUE_GLOBAL_TOKEN		0xFFFFFFFF
 
@@ -604,7 +605,7 @@ struct hfi_dcvstable_v1_cmd {
 	u32 gpu_level_num;
 	u32 gmu_level_num;
 	struct opp_desc gx_votes[MAX_GX_LEVELS_LEGACY];
-	struct opp_desc cx_votes[MAX_CX_LEVELS];
+	struct opp_desc cx_votes[MAX_CX_LEVELS_LEGACY];
 } __packed;
 
 /* H2F */
@@ -613,7 +614,7 @@ struct hfi_dcvstable_cmd {
 	u32 gpu_level_num;
 	u32 gmu_level_num;
 	struct opp_gx_desc gx_votes[MAX_GX_LEVELS_LEGACY];
-	struct opp_desc cx_votes[MAX_CX_LEVELS];
+	struct opp_desc cx_votes[MAX_CX_LEVELS_LEGACY];
 } __packed;
 
 /* H2F */
@@ -1391,6 +1392,26 @@ struct payload_section {
 
 /* GPU encountered an unknown CP error */
 #define GMU_CP_UNKNOWN_ERROR 700
+
+#define GPU_DCVS_TUNING_INVALID_VALUE 0xffffffff
+#define GPU_DCVS_TUNING_INVALID_ACK_DATA 0xfffffffe
+
+enum gpu_tuning_attr {
+	GPU_TUNING_KEY_BUSY_PENALTY_UP = 0,
+	GPU_TUNING_KEY_BUSY_PENALTY_DOWN = 1,
+	GPU_TUNING_KEY_FIRST_STEP_DOWN_COUNT = 2,
+	GPU_TUNING_KEY_SUBSEQUENT_STEP_DOWN_COUNT = 3,
+	GPU_TUNING_KEY_MIN_GPU_FREQUENCY = 4,
+	GPU_TUNING_KEY_MAX_GPU_FREQUENCY = 5,
+	GPU_TUNING_KEY_TARGET_FPS = 6,
+	GPU_TUNING_KEY_NUM_SAMPLES_UP = 7,
+	GPU_TUNING_KEY_NUM_SAMPLES_DOWN = 8,
+	GPU_TUNING_KEY_STRICT_FRAME = 9,
+	GPU_TUNING_KEY_NON_LINEAR_RAMP_UP = 10,
+	GPU_TUNING_KEY_NON_LINEAR_RAMP_DOWN = 11,
+	GPU_TUNING_KEY_MOD_PERCENT = 12,
+	GPU_TUNING_KEY_MAX,
+};
 
 /**
  * hfi_update_read_idx - Update the read index of an hfi queue

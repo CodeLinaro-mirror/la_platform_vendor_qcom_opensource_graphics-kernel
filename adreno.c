@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -41,6 +41,52 @@
 /* Include the master list of GPU cores that are supported */
 #include "adreno-gpulist.h"
 
+#define HOSTADDR_IN_MEMDESC(_addr, _memdesc) \
+	(((_addr) >= (_memdesc)->hostptr) && \
+	 ((_addr) < ((_memdesc)->hostptr + (_memdesc)->size)))
+
+/* Indicates that the context record table is present in CP ucode */
+#define CTXT_RECORD_TBL_MAGIC 0xADDED
+#define CTXT_RECORD_MAGIC_OFFSET 5
+#define CTXT_TBL_OFFSET 6
+/* Mask for extracting the instruction payload from ucode instructions */
+#define CTXT_RECORD_PAYLOAD_MASK GENMASK(23, 0)
+
+/**
+ * struct gpu_ctxt_record - Information about GPU context record, defined per GPU.
+ * If a ucode is shared by multiple targets, there will be multiple instances
+ * of this structure embedded in the ucode. Instances of this structure will be
+ * present immediately after ctxt_record_info.
+ */
+struct gpu_ctxt_record {
+	/**
+	 * @hw_version: GPU hardware version
+	 * [15:0]: Step, should be 0.
+	 * [27:16]: Minor
+	 * [31:28]: Major
+	 */
+	u32 hw_version;
+	/** @ctxt_record_size: Size of preemption record in KB */
+	u32 ctxt_record_size;
+	/** aqe_size: Size of AQE in preemption record in KB */
+	u32 aqe_size;
+} __packed;
+
+struct ctxt_record_info {
+	/**
+	 * @version: Version of the ctxt_record_info structure
+	 * [11:0]: Minor, [31:12]: Major.
+	 * Major version changes whenever a true incompatibility is generated.
+	 */
+	u32 version;
+	/** @dwords_per_gpu: DWORD size of struct gpu_ctxt_record */
+	u16 dwords_per_gpu;
+	/** @num_gpus: For targets that share same ucode binary, num_gpus > 1, otherwise 1 */
+	u16 num_gpus;
+	/** @reserved: for future use */
+	u32 reserved[2];
+} __packed;
+
 static void adreno_unbind(struct device *dev);
 static void adreno_input_work(struct work_struct *work);
 static int adreno_soft_reset(struct kgsl_device *device);
@@ -72,6 +118,63 @@ static u32 get_ucode_version(const u32 *data)
 
 	version &= ~0xfff;
 	return  version | ((data[3] & 0xfff000) >> 12);
+}
+
+int adreno_populate_ctxt_record_size(struct adreno_device *adreno_dev)
+{
+	struct kgsl_memdesc *memdesc = ADRENO_FW(adreno_dev, ADRENO_FW_SQE)->memdesc;
+	struct ctxt_record_info *info;
+	u32 *hostptr;
+	int i;
+
+	if (!memdesc)
+		return -ENODEV;
+
+	hostptr = (u32 *)memdesc->hostptr;
+
+	/*
+	 * SQE firmware inserts context record magic at offset 5.
+	 * The pointer to context record table is stored at offset 6.
+	 * The values are stored at [23:0].
+	 */
+	if ((hostptr[CTXT_RECORD_MAGIC_OFFSET] &
+		CTXT_RECORD_PAYLOAD_MASK) != CTXT_RECORD_TBL_MAGIC)
+		return -ENODEV;
+
+	/* Calculate the address of the context record table */
+	hostptr += (hostptr[CTXT_TBL_OFFSET] & CTXT_RECORD_PAYLOAD_MASK);
+	info = (struct ctxt_record_info *) hostptr;
+	hostptr += (sizeof(*info) >> 2);
+
+	/* Validate that the entire context record table is within mapped range */
+	if (!HOSTADDR_IN_MEMDESC((void *)(hostptr +
+		((u64) info->num_gpus * (u64) info->dwords_per_gpu)), memdesc))
+		return -EACCES;
+
+	for (i = 0; i < info->num_gpus; i++) {
+		struct gpu_ctxt_record *record = (struct gpu_ctxt_record *) hostptr;
+		u32 major, minor;
+
+		/* Compare the GPU revision to determine context record size */
+		major = FIELD_GET(GENMASK(31, 28), record->hw_version);
+		minor = FIELD_GET(GENMASK(27, 16), record->hw_version);
+
+		if ((ADRENO_REV_MAJOR(ADRENO_GPUREV(adreno_dev)) == major) &&
+			(ADRENO_REV_MINOR(ADRENO_GPUREV(adreno_dev)) == minor)) {
+			adreno_dev->total_ctxt_record_sz = record->ctxt_record_size * SZ_1K;
+
+			/* From v0.2, GMEM size is not exposed through ucode binary */
+			if ((info->version & GENMASK(11, 0)) >= 2)
+				adreno_dev->total_ctxt_record_sz += adreno_gmem_size(adreno_dev);
+
+			adreno_dev->aqe_ctxt_record_sz = record->aqe_size * SZ_1K;
+			return 0;
+		}
+
+		hostptr += info->dwords_per_gpu;
+	}
+
+	return -ENOENT;
 }
 
 int adreno_get_firmware(struct adreno_device *adreno_dev,
@@ -214,13 +317,13 @@ static void adreno_input_work(struct work_struct *work)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	device->pwrctrl.wake_on_touch = true;
 
 	ops->touch_wakeup(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 /* Wake up the touch event kworker to initiate GPU wakeup */
@@ -859,7 +962,7 @@ static int register_l3_voter(struct kgsl_device *device)
 	if (READ_ONCE(device->num_l3_pwrlevels))
 		return ret;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (!device->l3_vote)
 		goto done;
@@ -891,7 +994,7 @@ static int register_l3_voter(struct kgsl_device *device)
 	WRITE_ONCE(device->num_l3_pwrlevels, 3);
 
 done:
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	return ret;
 }
@@ -1117,6 +1220,26 @@ static int adreno_probe_llcc(struct adreno_device *adreno_dev,
 	} else
 		adreno_dev->gpuhtw_llc_slice_enable = true;
 
+#if (KERNEL_VERSION(6, 1, 0) == LINUX_VERSION_CODE)
+	if (adreno_is_a621(adreno_dev)) {
+		/* Get the system cache slice descriptor for GPU MV grid buffer */
+		adreno_dev->gpumv_llc_slice = llcc_slice_getd(LLCC_GPUMV);
+		ret = PTR_ERR_OR_ZERO(adreno_dev->gpumv_llc_slice);
+		if (ret) {
+			if (ret == -EPROBE_DEFER) {
+				llcc_slice_putd(adreno_dev->gpu_llc_slice);
+				llcc_slice_putd(adreno_dev->gpuhtw_llc_slice);
+				return ret;
+			}
+
+			if (ret != -ENOENT)
+				dev_warn(&pdev->dev, "Unable to get GPUMV buffer slice: %d\n", ret);
+		} else {
+			adreno_dev->gpumv_llc_slice_enable = true;
+		}
+	}
+#endif
+
 	return 0;
 }
 #else
@@ -1199,7 +1322,7 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 
 	idr_init(&adreno_dev->dev.context_idr);
 
-	mutex_init(&adreno_dev->dev.mutex);
+	kgsl_mutex_init(&adreno_dev->dev.mutex);
 	mutex_init(&adreno_dev->dev.file_mutex);
 	mutex_init(&adreno_dev->fault_recovery_mutex);
 	mutex_init(&adreno_dev->dcvs_tuning_mutex);
@@ -1462,10 +1585,10 @@ int adreno_device_probe(struct platform_device *pdev,
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_APRIV))
 		priv |= KGSL_MEMDESC_PRIVILEGED;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	device->memstore = kgsl_allocate_global(device,
 		KGSL_MEMSTORE_SIZE, 0, 0, priv, "memstore");
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	status = PTR_ERR_OR_ZERO(device->memstore);
 	if (status) {
@@ -1630,6 +1753,9 @@ static void adreno_unbind(struct device *dev)
 	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
 		llcc_slice_putd(adreno_dev->gpuhtw_llc_slice);
 
+	if (!IS_ERR_OR_NULL(adreno_dev->gpumv_llc_slice))
+		llcc_slice_putd(adreno_dev->gpumv_llc_slice);
+
 	kgsl_pwrscale_close(device);
 
 	if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->close)
@@ -1696,9 +1822,9 @@ static int adreno_pm_resume(struct device *dev)
 	}
 #endif
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	ops->pm_resume(adreno_dev);
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	kgsl_reclaim_start();
 	return 0;
@@ -1732,7 +1858,7 @@ static int adreno_pm_suspend(struct device *dev)
 	if (!mutex_trylock(&adreno_dev->fault_recovery_mutex))
 		return -EDEADLK;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	status = ops->pm_suspend(adreno_dev);
 
 #if IS_ENABLED(CONFIG_DEEPSLEEP)
@@ -1740,7 +1866,7 @@ static int adreno_pm_suspend(struct device *dev)
 		adreno_zap_shader_unload(adreno_dev);
 #endif
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 	mutex_unlock(&adreno_dev->fault_recovery_mutex);
 
 	if (status)
@@ -1919,14 +2045,14 @@ static int adreno_pwrctrl_active_count_get(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret = 0;
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!kgsl_mutex_is_locked(&device->mutex)))
 		return -EINVAL;
 
 	if ((atomic_read(&device->active_cnt) == 0) &&
 		(device->state != KGSL_STATE_ACTIVE)) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		wait_for_completion(&device->hwaccess_gate);
-		mutex_lock(&device->mutex);
+		kgsl_mutex_lock(&device->mutex);
 		device->pwrctrl.superfast = true;
 		ret = kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
 	}
@@ -1941,7 +2067,7 @@ void adreno_active_count_put(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!kgsl_mutex_is_locked(&device->mutex)))
 		return;
 
 	if (WARN(atomic_read(&device->active_cnt) == 0,
@@ -2661,7 +2787,7 @@ static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
 	if (copy_from_user(&enable, value, sizeof(enable)))
 		return -EFAULT;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (enable) {
 		if (gmu_core_isenabled(device))
@@ -2693,7 +2819,7 @@ static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
 		}
 	}
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	return 0;
 }
@@ -2771,9 +2897,9 @@ static int adreno_set_dcvs_profile(struct kgsl_device_private *dev_priv,
 	}
 
 	if (hwsched_ops->set_dcvs_profile && adreno_dev->dcvs_profile_enabled) {
-		mutex_lock(&device->mutex);
+		kgsl_mutex_lock(&device->mutex);
 		ret = hwsched_ops->set_dcvs_profile(adreno_dev, proc_priv);
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 	}
 
 done:
@@ -2985,7 +3111,7 @@ int adreno_wait_idle(struct kgsl_device *device)
 	 * more commands to the hardware
 	 */
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!kgsl_mutex_is_locked(&device->mutex)))
 		return -EDEADLK;
 
 	/* Check if we are already idle before idling dispatcher */
@@ -3032,7 +3158,7 @@ void adreno_check_idle(struct kgsl_device *device)
 	 * Make sure the device mutex is held so the dispatcher can't send any
 	 * more commands to the hardware
 	 */
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!kgsl_mutex_is_locked(&device->mutex)))
 		return;
 
 	/* Make sure dispatcher is idle */
@@ -3262,14 +3388,14 @@ static void adreno_device_private_destroy(struct kgsl_device_private *dev_priv)
 		dev_priv);
 	struct adreno_perfcounter_list_node *p, *tmp;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	list_for_each_entry_safe(p, tmp, &adreno_priv->perfcounter_list, node) {
 		adreno_perfcounter_put(adreno_dev, p->groupid,
 					p->countable, PERFCOUNTER_FLAG_NONE);
 		list_del(&p->node);
 		kfree(p);
 	}
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	kfree(adreno_priv);
 }
@@ -3430,24 +3556,24 @@ static int adreno_queue_recurring_cmd(struct kgsl_device_private *dev_priv,
 	if (ret)
 		return ret;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	/* Only one recurring command allowed */
 	if (hwsched->recurring_cmdobj) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		return -EINVAL;
 	}
 
 	ret = kgsl_check_context_state(context);
 	if (ret) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		return ret;
 	}
 
 	set_bit(CMDOBJ_RECURRING_START, &cmdobj->priv);
 
 	ret = gpudev->send_recurring_cmdobj(adreno_dev, cmdobj);
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	if (!ret)
 		srcu_notifier_call_chain(&device->nh, GPU_GMU_READY, NULL);
@@ -3470,11 +3596,11 @@ static int adreno_dequeue_recurring_cmd(struct kgsl_device *device,
 	if (!gpudev->send_recurring_cmdobj)
 		return -ENODEV;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	/* We can safely return here as recurring wokload is already untracked */
 	if (hwsched->recurring_cmdobj == NULL) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		return -EINVAL;
 	}
 
@@ -3482,13 +3608,13 @@ static int adreno_dequeue_recurring_cmd(struct kgsl_device *device,
 
 	/* Check if the recurring command is for same context or not*/
 	if (recurring_drawobj->context != context) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		return -EINVAL;
 	}
 
 	ret = kgsl_check_context_state(context);
 	if (ret) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		return ret;
 	}
 
@@ -3497,7 +3623,7 @@ static int adreno_dequeue_recurring_cmd(struct kgsl_device *device,
 
 	ret = gpudev->send_recurring_cmdobj(adreno_dev, hwsched->recurring_cmdobj);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	if (!ret)
 		srcu_notifier_call_chain(&device->nh, GPU_GMU_STOP, NULL);
@@ -3556,7 +3682,7 @@ int adreno_power_cycle(struct adreno_device *adreno_dev,
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 	int ret;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	ret = ops->pm_suspend(adreno_dev);
 
 	if (!ret) {
@@ -3565,7 +3691,7 @@ int adreno_power_cycle(struct adreno_device *adreno_dev,
 		ops->pm_resume(adreno_dev);
 	}
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	return ret;
 }
@@ -3838,6 +3964,13 @@ static void adreno_set_thermal_index(struct kgsl_device *device)
 		ops->set_thermal_index(adreno_dev);
 }
 
+static bool adreno_is_reset_recovery(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+
+	return test_bit(ADRENO_DEVICE_RESET_RECOVERY, &adreno_dev->priv);
+}
+
 static const struct kgsl_functable adreno_functable = {
 	/* Mandatory functions */
 	.check_idle = adreno_check_idle,
@@ -3882,6 +4015,7 @@ static const struct kgsl_functable adreno_functable = {
 	.gmu_based_dcvs_pwr_ops = adreno_gmu_based_dcvs_pwr_ops,
 	.set_thermal_index = adreno_set_thermal_index,
 	.alloc_dcvs_profile_memory = adreno_alloc_dcvs_profile_memory,
+	.is_reset_recovery = adreno_is_reset_recovery,
 };
 
 static const struct component_master_ops adreno_ops = {
@@ -4089,7 +4223,7 @@ static int adreno_hibernation_suspend(struct device *dev)
 	adreno_dev = ADRENO_DEVICE(device);
 	ops = ADRENO_POWER_OPS(adreno_dev);
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	status = ops->pm_suspend(adreno_dev);
 	if (status)
@@ -4111,7 +4245,7 @@ static int adreno_hibernation_suspend(struct device *dev)
 	status = adreno_secure_pt_hibernate(adreno_dev);
 
 err:
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 	return status;
 }
 
@@ -4132,7 +4266,7 @@ static int adreno_hibernation_resume(struct device *dev)
 	adreno_dev = ADRENO_DEVICE(device);
 	ops = ADRENO_POWER_OPS(adreno_dev);
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	ret = adreno_secure_pt_restore(adreno_dev);
 	if (ret)
@@ -4153,7 +4287,7 @@ static int adreno_hibernation_resume(struct device *dev)
 	ops->pm_resume(adreno_dev);
 
 err:
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 	return ret;
 }
 

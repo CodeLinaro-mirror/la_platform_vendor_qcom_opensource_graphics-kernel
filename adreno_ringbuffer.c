@@ -402,7 +402,7 @@ int adreno_ringbuffer_waittimestamp(struct adreno_ringbuffer *rb,
 	if (ret)
 		return ret;
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	wait_time = msecs_to_jiffies(msecs);
 	if (wait_event_timeout(rb->ts_expire_waitq,
@@ -411,7 +411,7 @@ int adreno_ringbuffer_waittimestamp(struct adreno_ringbuffer *rb,
 		wait_time) == 0)
 		ret  = -ETIMEDOUT;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	/*
 	 * after wake up make sure that expected timestamp has retired
 	 * because the wakeup could have happened due to a cancel event

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __KGSL_GMU_CORE_H
 #define __KGSL_GMU_CORE_H
@@ -22,7 +22,8 @@
 
 #define MAX_GX_LEVELS		32
 #define MAX_GX_LEVELS_LEGACY	16
-#define MAX_CX_LEVELS		4
+#define MAX_CX_LEVELS		16
+#define MAX_CX_LEVELS_LEGACY	4
 #define MAX_BW_LEVELS		16
 #define MAX_CNOC_LEVELS		2
 #define MAX_CNOC_CMDS		6
@@ -114,10 +115,6 @@ enum oob_request {
 
 #define FENCE_STATUS_WRITEDROPPED0_MASK 0x1
 #define FENCE_STATUS_WRITEDROPPED1_MASK 0x2
-
-#define GMU_MAX_PWRLEVELS	2
-#define GMU_FREQ_MIN   200000000
-#define GMU_FREQ_MAX   500000000
 
 #define HFI_VERSION(major, minor, step) \
 	(FIELD_PREP(GENMASK(31, 28), major) | \
@@ -225,6 +222,14 @@ enum gmu_vrb_idx {
 	VRB_PREEMPT_COUNT_L1A = 7,
 	/* Contains the number of L1B GPU preemptions */
 	VRB_PREEMPT_COUNT_L1B = 8,
+	/* Contains the GMU VA for power limits trace buffer */
+	VRB_PWR_LIMITS_TRACE_BUF = 9,
+	/* Contains the total size of context record in KB */
+	VRB_CTXRECORD_TOTAL_SZ = 10,
+	/* Contains the size of AQE context record in KB */
+	VRB_CTXRECORD_AQE_SZ = 11,
+	/* Contains the size of GMEM inside context record in KB */
+	VRB_CTXRECORD_GMEM_SZ = 12,
 };
 
 /* For GMU Trace */
@@ -364,6 +369,8 @@ struct trace_dcvs_pwrstats {
 	u64 gpu_time;
 	u64 ram_wait;
 	u64 ram_time;
+	u16 aggr_max_pwrlevel;
+	u16 padding;
 } __packed;
 
 struct trace_pwr_constraint {
@@ -555,16 +562,18 @@ struct gmu_core_device {
 	/** @num_clks: Number of entries in the @clks array */
 	int num_clks;
 	/** @freqs: Array of GMU frequencies */
-	u32 freqs[GMU_MAX_PWRLEVELS];
+	u32 freqs[MAX_CX_LEVELS];
+	/** @num_freqs: Number of entries in the @freqs array */
+	int num_freqs;
 	/** @vlvls: Array of GMU voltage levels */
-	u32 vlvls[GMU_MAX_PWRLEVELS];
+	u32 vlvls[MAX_CX_LEVELS];
 	/*
 	 * @perf_ddr_bw: The lowest ddr bandwidth that puts CX at a corner at
 	 * which GMU can run at higher frequency.
 	 */
-	u32 perf_ddr_bw;
-	/** @cur_freq: Tracks scaled frequency for GMU */
-	u32 cur_freq;
+	u32 perf_ddr_bw[MAX_CX_LEVELS];
+	/** @cur_level: Tracks current frequency level for GMU */
+	u32 cur_level;
 	/** @gpu_pwrscale_enable: Flag to toggle GMU based DCVS pwrscale */
 	bool gpu_pwrscale_enable;
 };
@@ -914,11 +923,11 @@ int gmu_core_clk_probe(struct kgsl_device *device);
 /**
  * gmu_core_clock_set_rate - Set the gmu clock rate
  * @device: Pointer to KGSL device
- * @req_freq: Requested freq to set gmu to
+ * @gmu_level: Requested gmu power level
  *
  * Returns 0 on success or error on clock set rate failure
  */
-int gmu_core_clock_set_rate(struct kgsl_device *device, u32 req_freq);
+int gmu_core_clock_set_rate(struct kgsl_device *device, u32 gmu_level);
 
 /**
  * gmu_core_enable_clks - Enable gmu clocks

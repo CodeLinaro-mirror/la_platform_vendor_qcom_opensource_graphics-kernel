@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/component.h>
@@ -1736,7 +1736,7 @@ static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
 	 */
 	if ((adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
-			adreno_is_a635(adreno_dev)))
+			adreno_is_a642l(adreno_dev)))
 		gmu_core_regwrite(device, A6XX_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
 
 	/* Check no outstanding RPMh voting */
@@ -1877,7 +1877,7 @@ out:
 	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
 	 */
 	if ((adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
-			adreno_is_a635(adreno_dev)))
+			adreno_is_a642l(adreno_dev)))
 		gmu_core_regwrite(device, A6XX_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
 
 	return ret;

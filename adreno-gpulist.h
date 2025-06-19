@@ -3809,6 +3809,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_8_0 = {
 	.gen8_snapshot_block_list = &gen8_3_0_snapshot_block_list,
 	.ctxt_record_size = (4558 * SZ_1K),
 	.preempt_level = 1,
+	.noc_timeout_us = 3410, /* 3.41 msec */
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {

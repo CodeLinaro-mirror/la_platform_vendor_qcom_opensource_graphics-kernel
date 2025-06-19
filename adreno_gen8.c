@@ -1165,7 +1165,7 @@ static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
 	unsigned long pipe;
 
 	/* Program non context registers for all pipes */
-	for (pipe_id = PIPE_NONE; pipe_id <= PIPE_AQE1; pipe_id++) {
+	for (pipe_id = PIPE_NONE; pipe_id <= PIPE_DDE_BV; pipe_id++) {
 
 		if ((pipe_id == PIPE_LPAC) && !ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
 			continue;
@@ -1186,7 +1186,7 @@ static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
 		struct gen8_nonctxt_overrides *nc_overrides = gen8_dev->nc_overrides;
 
 		mutex_lock(&gen8_dev->nc_mutex);
-		for (pipe_id = PIPE_NONE; pipe_id <= PIPE_AQE1; pipe_id++) {
+		for (pipe_id = PIPE_NONE; pipe_id <= PIPE_DDE_BV; pipe_id++) {
 
 			if ((pipe_id == PIPE_LPAC) && !ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
 				continue;

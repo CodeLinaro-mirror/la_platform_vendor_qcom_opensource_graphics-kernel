@@ -1449,7 +1449,6 @@ int adreno_device_probe(struct platform_device *pdev,
 		struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct device *dev = &pdev->dev;
 	unsigned int priv = 0;
 	int status;
@@ -1617,12 +1616,10 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	adreno_sysfs_init(adreno_dev);
 
-	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS)) {
-		/* Ignore return value, as driver can still function without pwrscale enabled */
-		kgsl_pwrscale_init(device, pdev, CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR);
-	} else {
-		gmu_core->gpu_pwrscale_enable = true;
-	}
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS))
+		device->host_based_dcvs = true;
+
+	kgsl_pwrscale_init(device, pdev);
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_L3_VOTE))
 		device->l3_vote = true;
@@ -2796,7 +2793,7 @@ static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
 			device->pwrctrl.ctrl_flags = 0;
 
 		if (device->host_based_dcvs)
-			kgsl_pwrscale_enable(device);
+			kgsl_pwrscale_tz_enable(device);
 		else
 			device->ftbl->gmu_based_dcvs_pwr_ops(device, enable,
 					GPU_PWRLEVEL_OP_DCVS_ENABLE);
@@ -2811,7 +2808,7 @@ static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
 			device->pwrctrl.ctrl_flags = KGSL_PWR_ON;
 		}
 		if (device->host_based_dcvs) {
-			kgsl_pwrscale_disable(device, true);
+			kgsl_pwrscale_tz_disable(device, true);
 		} else {
 			device->ftbl->gmu_based_dcvs_pwr_ops(device, enable,
 					GPU_PWRLEVEL_OP_DCVS_ENABLE);
@@ -4365,7 +4362,7 @@ module_exit(kgsl_3d_exit);
 
 MODULE_DESCRIPTION("3D Graphics driver");
 MODULE_LICENSE("GPL v2");
-MODULE_SOFTDEP("pre: arm_smmu nvmem_qfprom socinfo governor_msm_adreno_tz governor_gpubw_mon");
+MODULE_SOFTDEP("pre: arm_smmu nvmem_qfprom socinfo governor_msm_adreno_tz governor_gpubw_mon governor_msm_adreno_ro");
 #if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
 MODULE_IMPORT_NS("DMA_BUF");
 #elif (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)

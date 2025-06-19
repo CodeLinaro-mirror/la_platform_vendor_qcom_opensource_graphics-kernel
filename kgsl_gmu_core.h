@@ -353,9 +353,27 @@ struct trace_syncobj_retire {
 	u32 timestamp;
 } __packed;
 
+#define TRACE_FLAG_BIT_DCVS_VOTE	0
+#define TRACE_FLAG_BIT_STRICT_FRAME	1
+#define TRACE_FLAG_BIT_NON_LINEAR_UP	2
+#define TRACE_FLAG_BIT_NON_LINEAR_DOWN	3
+
 struct trace_dcvs_pwrlvl {
 	u32 new_pwrlvl;
 	u32 prev_pwrlvl;
+	u32 flag;
+	u16 penalty_up;
+	u16 penalty_down;
+	u16 first_step_down_count;
+	u16 subsequent_step_down_count;
+	u16 min_freq;
+	u16 max_freq;
+	u16 num_samples_up;
+	u16 num_samples_down;
+	u16 target_fps;
+	u16 mod_percent;
+	u16 avg_busy;
+	u16 padding;
 } __packed;
 
 struct trace_dcvs_buslvl {

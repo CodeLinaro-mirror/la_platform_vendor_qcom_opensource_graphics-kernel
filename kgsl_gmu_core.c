@@ -772,6 +772,15 @@ static void _gmu_trace_dcvs_pwrlevel(struct kgsl_device *device, struct gmu_trac
 		data->prev_pwrlvl = pwr->active_pwrlevel;
 
 	if (pwr->active_pwrlevel != data->new_pwrlvl) {
+		u32 penalty = FIELD_PREP(GENMASK(31, 16), data->penalty_down) |
+				FIELD_PREP(GENMASK(15, 0), data->penalty_up);
+		u32 step_down_cnt = FIELD_PREP(GENMASK(31, 16), data->subsequent_step_down_count) |
+				FIELD_PREP(GENMASK(15, 0), data->first_step_down_count);
+		u32 freq_cap = FIELD_PREP(GENMASK(31, 16), data->max_freq) |
+				FIELD_PREP(GENMASK(15, 0), data->min_freq);
+		u32 num_samples = FIELD_PREP(GENMASK(31, 16), data->num_samples_down) |
+				FIELD_PREP(GENMASK(15, 0), data->num_samples_up);
+
 		trace_kgsl_pwrlevel(device, data->new_pwrlvl,
 					pwr->pwrlevels[data->new_pwrlvl].gpu_freq,
 					data->prev_pwrlvl,
@@ -779,6 +788,10 @@ static void _gmu_trace_dcvs_pwrlevel(struct kgsl_device *device, struct gmu_trac
 					pkt->ticks);
 		KGSL_TRACE_GPU_FREQ(pwr->pwrlevels[data->new_pwrlvl].gpu_freq/1000,
 					0, pkt->ticks);
+
+		trace_adreno_gpu_vote_params(data->new_pwrlvl, data->prev_pwrlvl,
+				data->avg_busy, data->flag, penalty, step_down_cnt, freq_cap,
+				num_samples, data->target_fps, data->mod_percent, pkt->ticks);
 	}
 
 	pwr->active_pwrlevel = data->new_pwrlvl;

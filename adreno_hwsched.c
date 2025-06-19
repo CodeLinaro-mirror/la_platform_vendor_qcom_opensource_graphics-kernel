@@ -1484,8 +1484,6 @@ void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	struct kgsl_drawobj_cmd *cmdobj)
 {
 	struct kgsl_drawobj *drawobj = DRAWOBJ(cmdobj);
-	struct kgsl_mem_entry *entry;
-	struct kgsl_drawobj_profiling_buffer *profile_buffer;
 	struct kgsl_context *context = drawobj->context;
 
 	msm_perf_events_update(MSM_PERF_GFX, MSM_PERF_RETIRED,
@@ -1496,17 +1494,6 @@ void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME) {
 		atomic64_inc(&drawobj->context->proc_priv->frame_count);
 		atomic_inc(&drawobj->context->proc_priv->period->frames);
-	}
-
-	entry = cmdobj->profiling_buf_entry;
-	if (entry) {
-		profile_buffer = kgsl_gpuaddr_to_vaddr(&entry->memdesc,
-			cmdobj->profiling_buffer_gpuaddr);
-
-		if (profile_buffer == NULL)
-			return;
-
-		kgsl_memdesc_unmap(&entry->memdesc);
 	}
 
 	trace_adreno_cmdbatch_done(drawobj->context->id,

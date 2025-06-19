@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _UAPI_MSM_KGSL_H
@@ -508,7 +508,9 @@ struct kgsl_gpu_model {
 #define KGSL_PERFCOUNTER_GROUP_BV_RAS 0x34
 #define KGSL_PERFCOUNTER_GROUP_BV_LRZ 0x35
 #define KGSL_PERFCOUNTER_GROUP_BV_HLSQ 0x36
-#define KGSL_PERFCOUNTER_GROUP_MAX 0x37
+#define KGSL_PERFCOUNTER_GROUP_BV_CCU 0x37
+#define KGSL_PERFCOUNTER_GROUP_BV_RB 0x38
+#define KGSL_PERFCOUNTER_GROUP_MAX 0x39
 
 #define KGSL_PERFCOUNTER_NOT_USED 0xFFFFFFFF
 #define KGSL_PERFCOUNTER_BROKEN 0xFFFFFFFE

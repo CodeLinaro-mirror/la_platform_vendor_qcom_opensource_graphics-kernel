@@ -354,6 +354,18 @@ gdsc_off:
 	return ret;
 }
 
+static void gen8_scm_gpu_tsense_boot(struct adreno_device *adreno_dev)
+{
+	struct gen8_device *gen8_dev = container_of(adreno_dev,
+					struct gen8_device, adreno_dev);
+
+	/* Cancel any pending TSENSE work that didn't run */
+	cancel_work_sync(&gen8_dev->tsense_work);
+
+	/* Set default tsense measurement window */
+	gen8_scm_gpu_tsense_default(adreno_dev, true);
+}
+
 static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -369,6 +381,8 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	ret = gmu_core_enable_clks(device, 0);
 	if (ret)
 		goto gdsc_off;
+
+	gen8_scm_gpu_tsense_boot(adreno_dev);
 
 	/*
 	 * Enable AHB timeout detection to catch any register access taking longer
@@ -432,6 +446,30 @@ gdsc_off:
 	return ret;
 }
 
+/* TSENSE suspend work can be done in parallel with GPU suspend */
+static void gen8_scm_gpu_tsense_suspend_work(struct work_struct *work)
+{
+	struct gen8_device *gen8_dev = container_of(work, struct gen8_device, tsense_work);
+
+	/* Set non-default tsense measurement window */
+	gen8_scm_gpu_tsense_default(&gen8_dev->adreno_dev, false);
+}
+
+static void gen8_scm_gpu_tsense_suspend(struct adreno_device *adreno_dev)
+{
+	struct gen8_device *gen8_dev = container_of(adreno_dev,
+					struct gen8_device, adreno_dev);
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_TSENSE_DYNAMIC_PERIOD))
+		return;
+
+	/*
+	 * Schedule on the lockless workqueue instead of the kgsl workqueue
+	 * to avoid deadlocks with the device mutex
+	 */
+	queue_work(kgsl_driver.lockless_workqueue, &gen8_dev->tsense_work);
+}
+
 static int gen8_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -450,6 +488,8 @@ static int gen8_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 	req.bw |= adreno_gmu_bus_ab_quantize(adreno_dev, 0);
 	/* Disable the power counter so that the GMU is not busy */
 	gmu_core_regwrite(device, GEN8_GMUCX_POWER_COUNTER_ENABLE, 0);
+
+	gen8_scm_gpu_tsense_suspend(adreno_dev);
 
 	ret = gen8_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
 
@@ -1875,6 +1915,7 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 	struct adreno_device *adreno_dev;
 	struct kgsl_device *device;
 	struct gen8_hwsched_device *gen8_hwsched_dev;
+	struct gen8_device *gen8_dev;
 	struct device *gmu_dev;
 	int ret;
 	int i;
@@ -1884,7 +1925,8 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 	if (!gen8_hwsched_dev)
 		return -ENOMEM;
 
-	adreno_dev = &gen8_hwsched_dev->gen8_dev.adreno_dev;
+	gen8_dev = &gen8_hwsched_dev->gen8_dev;
+	adreno_dev = &gen8_dev->adreno_dev;
 
 	adreno_dev->hwsched_enabled = true;
 
@@ -1916,6 +1958,9 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 	/* Initialize the dcvs tunables */
 	for (i = 0; i < GPU_TUNING_KEY_MAX; i++)
 		adreno_dev->hwsched.dcvs_tunables[i].value = GPU_DCVS_TUNING_INVALID_VALUE;
+
+	/* Initialize the TSENSE suspend work that is done at GPU suspend */
+	INIT_WORK(&gen8_dev->tsense_work, gen8_scm_gpu_tsense_suspend_work);
 
 	gmu_dev = GMU_PDEV_DEV(device);
 	WARN_ON(kobject_init_and_add(&adreno_dev->hwsched.tunables_kobj, &ktype_tunables,

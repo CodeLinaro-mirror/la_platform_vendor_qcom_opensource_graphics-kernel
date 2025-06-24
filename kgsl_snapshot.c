@@ -1089,7 +1089,8 @@ static int kgsl_panic_notifier_callback(struct notifier_block *nb,
 							panic_nb);
 
 	/* To send NMI to GMU */
-	device->gmu_fault = true;
+	device->gmu_fault = gmu_core_isenabled(device);
+
 	kgsl_device_snapshot_atomic(device);
 
 	return NOTIFY_OK;

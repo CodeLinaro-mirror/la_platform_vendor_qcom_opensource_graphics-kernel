@@ -462,6 +462,9 @@ static int gen8_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 
 	ret = gen8_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
 
+	/* Set non-default tsens measurement window */
+	gen8_scm_gpu_tsens_default(adreno_dev, false);
+
 	/*
 	 * GEMNOC can enter power collapse state during GPU power down sequence.
 	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
@@ -567,6 +570,9 @@ static int gen8_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 
 	/* Clear the busy_data stats - we're starting over from scratch */
 	memset(&adreno_dev->busy_data, 0, sizeof(adreno_dev->busy_data));
+
+	/* Set default tsens measurement window */
+	gen8_scm_gpu_tsens_default(adreno_dev, true);
 
 	gen8_start(adreno_dev);
 

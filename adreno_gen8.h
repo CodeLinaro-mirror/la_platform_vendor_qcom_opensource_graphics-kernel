@@ -567,6 +567,18 @@ void gen8_reset_preempt_records(struct adreno_device *adreno_dev);
 int gen8_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev);
 
 /**
+ * gen8_scm_gpu_tsens_default - Program gpu tsens measurement interval
+ * @adreno_dev: Handle to the adreno device
+ * @default_req: Bool on if should udpate tsens with deafult or slow interval
+ *
+ * Program gpu tsens reg for measurement granularity. Scm call for the same
+ * is added from kernel version 6.0 onwards.
+ *
+ * Return: 0 on success or negative on failure
+ */
+int gen8_scm_gpu_tsens_default(struct adreno_device *adreno_dev, bool default_req);
+
+/**
  * gen8_legacy_snapshot_registers - Dump registers for GPU/GMU
  * @device: Handle to the KGSL device
  * @buf: Target buffer to copy the data

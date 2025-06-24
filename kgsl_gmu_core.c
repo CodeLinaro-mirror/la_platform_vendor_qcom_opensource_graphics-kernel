@@ -258,7 +258,7 @@ void gmu_core_free_globals(struct kgsl_device *device)
 
 		iommu_unmap(gmu->domain, md->gmuaddr, md->size);
 
-		if (md->priv & KGSL_MEMDESC_SYSMEM)
+		if (TEST_FLAG(KGSL_MEMDESC_SYSMEM, &md->priv))
 			kgsl_sharedmem_free(md);
 
 		memset(md, 0, sizeof(*md));

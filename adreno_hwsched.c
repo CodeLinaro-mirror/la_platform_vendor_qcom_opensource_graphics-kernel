@@ -3107,7 +3107,7 @@ void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
 	spin_unlock(&hwf->lock);
 	drawctxt->hw_fence_count--;
 
-	dma_fence_put(&entry->kfence->fence);
+	kgsl_hw_fence_put(entry->kfence);
 	list_del_init(&entry->node);
 	kmem_cache_free(hwsched->hw_fence_cache, entry);
 	kgsl_context_put_deferred(&drawctxt->base);

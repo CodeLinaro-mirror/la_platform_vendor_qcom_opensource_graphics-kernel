@@ -3486,8 +3486,6 @@ static struct adreno_hw_fence_entry *allocate_hw_fence_entry(struct adreno_devic
 		return NULL;
 	}
 
-	dma_fence_get(&kfence->fence);
-
 	drawctxt->hw_fence_count++;
 	hwsched->hw_fence.pending_count++;
 
@@ -3656,7 +3654,6 @@ void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 			dev_err(GMU_PDEV_DEV(device),
 				"hw fence for ctx:%d ts:%d ret:%d may not be destroyed\n",
 				kfence->context_id, kfence->timestamp, ret);
-		kgsl_hw_fence_destroy(kfence);
 		destroy = true;
 		drawctxt->hw_fence_last_ts = hw_fence_last_ts;
 		goto done;

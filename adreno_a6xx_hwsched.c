@@ -15,6 +15,7 @@
 #include "kgsl_device.h"
 #include "kgsl_gmu_core.h"
 #include "kgsl_trace.h"
+#include "kgsl_util.h"
 
 void a6xx_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
@@ -640,7 +641,7 @@ no_gx_power:
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
-	del_timer_sync(&device->idle_timer);
+	kgsl_delete_timer_sync(&device->idle_timer);
 
 	kgsl_pwrscale_sleep(device);
 

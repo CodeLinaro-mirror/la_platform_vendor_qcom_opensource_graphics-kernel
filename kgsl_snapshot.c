@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/of.h>
@@ -391,15 +391,6 @@ void kgsl_snapshot_indexed_registers(struct kgsl_device *device,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_INDEXED_REGS,
 		snapshot, kgsl_snapshot_dump_indexed_regs, &iregs);
 }
-
-struct kgsl_snapshot_indexed_registers_v2 {
-	u32 index;
-	u32 data;
-	u32 start;
-	u32 count;
-	u32 pipe_id;
-	u32 slice_id;
-};
 
 static size_t kgsl_snapshot_dump_indexed_regs_v2(struct kgsl_device *device,
 	u8 *buf, size_t remain, void *priv)

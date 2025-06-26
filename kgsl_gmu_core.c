@@ -7,6 +7,7 @@
 #include <dt-bindings/power/qcom-rpmpd.h>
 #include <linux/of.h>
 #include <linux/io.h>
+#include <linux/pm_opp.h>
 
 #include "adreno.h"
 #include "adreno_trace.h"
@@ -1082,6 +1083,39 @@ void gmu_core_rdpm_cx_freq_update(struct kgsl_device *device, u32 freq)
 	wmb();
 }
 
+static void build_hub_opp_table(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct device_node *opp_table, *opp;
+	int i = 0;
+
+	opp_table = of_find_node_by_name(NULL, "hub_opp_table");
+	if (!opp_table)
+		goto err;
+
+	for_each_child_of_node(opp_table, opp) {
+		if (of_property_read_u64(opp, "opp-hz", (u64 *)&gmu->hub_freqs[i]))
+			goto err;
+
+		if (of_property_read_u32(opp, "opp-level", &gmu->hub_vlvls[i]))
+			goto err;
+
+		i++;
+	}
+
+	gmu->num_hub_freqs = i;
+	of_node_put(opp_table);
+	return;
+
+err:
+	if (opp_table)
+		of_node_put(opp_table);
+
+	gmu->hub_freqs[0] = adreno_dev->gmu_hub_clk_freq;
+	gmu->num_hub_freqs = 1;
+}
+
 #define GMU_FREQ_MIN   200000000
 #define GMU_FREQ_MAX   500000000
 
@@ -1152,6 +1186,8 @@ read_gmu_freq:
 
 	gmu->num_freqs = num_freqs;
 
+	build_hub_opp_table(device);
+
 	return 0;
 
 default_gmu_freq:
@@ -1166,6 +1202,33 @@ default_gmu_freq:
 	if (adreno_is_a6xx(adreno_dev) && !adreno_is_a660(adreno_dev))
 		gmu->vlvls[0] = RPMH_REGULATOR_LEVEL_MIN_SVS;
 
+	return 0;
+}
+
+static int scale_hub_clock(struct kgsl_device *device, u32 cx_voltage)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	int ret, i;
+
+	for (i = 0; i < gmu->num_hub_freqs; i++) {
+		if (gmu->hub_vlvls[i] <= cx_voltage)
+			break;
+	}
+
+	/* Default to minimum hub frequency if no match found */
+	if (i == gmu->num_hub_freqs)
+		i = gmu->num_hub_freqs - 1;
+
+	if (i == gmu->cur_hub_level)
+		return 0;
+
+	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "hub_clk", gmu->hub_freqs[i]);
+	if (ret && ret != -ENODEV) {
+		dev_err(GMU_PDEV_DEV(device), "Unable to set the HUB clock ret %d\n", ret);
+		return ret;
+	}
+
+	gmu->cur_hub_level = i;
 	return 0;
 }
 
@@ -1187,25 +1250,20 @@ int gmu_core_clock_set_rate(struct kgsl_device *device, u32 gmu_level)
 
 	gmu_core->cur_level = gmu_level;
 
-	return ret;
+	return scale_hub_clock(device, gmu_core->vlvls[gmu_level]);
 }
 
 int gmu_core_enable_clks(struct kgsl_device *device, u32 level)
 {
 	struct gmu_core_device *gmu = &device->gmu_core;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret;
+
+	/* Reset hub clock level */
+	gmu->cur_hub_level = gmu->num_hub_freqs;
 
 	ret = gmu_core_clock_set_rate(device, level);
 	if (ret)
 		return ret;
-
-	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "hub_clk",
-			adreno_dev->gmu_hub_clk_freq);
-	if (ret && ret != -ENODEV) {
-		dev_err(GMU_PDEV_DEV(device), "Unable to set the HUB clock ret %d\n", ret);
-		return ret;
-	}
 
 	ret = clk_bulk_prepare_enable(gmu->num_clks, gmu->clks);
 	if (ret) {

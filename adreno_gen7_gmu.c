@@ -2039,10 +2039,14 @@ int gen7_gmu_probe(struct kgsl_device *device,
 		struct platform_device *pdev)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct device *dev = &pdev->dev;
+	u64 freq = gen7_core->gmu_hub_clk_freq;
 	struct resource *res;
 	int ret, i;
+
+	adreno_dev->gmu_hub_clk_freq = freq ? freq : 150000000;
 
 	device->gmu_core.pdev = pdev;
 

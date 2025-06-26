@@ -594,6 +594,14 @@ struct gmu_core_device {
 	u32 perf_ddr_bw[MAX_CX_LEVELS];
 	/** @cur_level: Tracks current frequency level for GMU */
 	u32 cur_level;
+	/** @hub_freqs: Array of GMU hub frequencies */
+	u32 hub_freqs[MAX_CX_LEVELS];
+	/** @hub_vlvls: Array of GMU hub voltage levels */
+	u32 hub_vlvls[MAX_CX_LEVELS];
+	/** @num_hub_freqs: Number of entries in the @hub_freqs array */
+	int num_hub_freqs;
+	/** @cur_hub_level: Tracks current frequency level for hub clock */
+	u32 cur_hub_level;
 	/** @gpu_pwrscale_enable: Flag to toggle GMU based DCVS pwrscale */
 	bool gpu_pwrscale_enable;
 	/** @vrb: GMU virtual register bank memory */

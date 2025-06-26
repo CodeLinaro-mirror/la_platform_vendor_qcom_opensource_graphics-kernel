@@ -313,7 +313,7 @@ void a6xx_load_rsc_ucode(struct adreno_device *adreno_dev)
 	_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_DATA + RSC_CMD_OFFSET, 0);
 	_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_ADDR + RSC_CMD_OFFSET, 0);
 	_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_DATA + RSC_CMD_OFFSET * 2,
-			0x80000000);
+			adreno_is_a622(adreno_dev) ? 0x80000028 : 0x80000000);
 	_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_ADDR + RSC_CMD_OFFSET * 2,
 			0);
 	_regwrite(rscc, A6XX_RSCC_OVERRIDE_START_ADDR, 0);
@@ -322,7 +322,13 @@ void a6xx_load_rsc_ucode(struct adreno_device *adreno_dev)
 	_regwrite(rscc, A6XX_RSCC_PDC_MATCH_VALUE_HI, 0x4514);
 
 	/* Load RSC sequencer uCode for sleep and wakeup */
-	if (adreno_is_a650_family(adreno_dev)) {
+	if (adreno_is_a622(adreno_dev)) {
+		_regwrite(rscc, A622_RSCC_SEQ_MEM_0_DRV0, 0xEAAAE5A0);
+		_regwrite(rscc, A622_RSCC_SEQ_MEM_0_DRV0 + 1, 0xE1A1EBAB);
+		_regwrite(rscc, A622_RSCC_SEQ_MEM_0_DRV0 + 2, 0xA2E0A581);
+		_regwrite(rscc, A622_RSCC_SEQ_MEM_0_DRV0 + 3, 0xECAC82E2);
+		_regwrite(rscc, A622_RSCC_SEQ_MEM_0_DRV0 + 4, 0x0020EDAD);
+	} else if (adreno_is_a650_family(adreno_dev)) {
 		_regwrite(rscc, A6XX_RSCC_SEQ_MEM_0_DRV0, 0xEAAAE5A0);
 		_regwrite(rscc, A6XX_RSCC_SEQ_MEM_0_DRV0 + 1, 0xE1A1EBAB);
 		_regwrite(rscc, A6XX_RSCC_SEQ_MEM_0_DRV0 + 2, 0xA2E0A581);
@@ -1061,6 +1067,19 @@ static u32 a6xx_rscc_tcsm_drv0_status_reglist[] = {
 	A6XX_RSCC_TCS9_DRV0_STATUS,
 };
 
+static u32 a622_rscc_tcsm_drv0_status_reglist[] = {
+	A622_RSCC_TCS0_DRV0_STATUS,
+	A622_RSCC_TCS1_DRV0_STATUS,
+	A622_RSCC_TCS2_DRV0_STATUS,
+	A622_RSCC_TCS3_DRV0_STATUS,
+	A622_RSCC_TCS4_DRV0_STATUS,
+	A622_RSCC_TCS5_DRV0_STATUS,
+	A622_RSCC_TCS6_DRV0_STATUS,
+	A622_RSCC_TCS7_DRV0_STATUS,
+	A622_RSCC_TCS8_DRV0_STATUS,
+	A622_RSCC_TCS9_DRV0_STATUS,
+};
+
 static int a6xx_complete_rpmh_votes(struct adreno_device *adreno_dev,
 		unsigned int timeout)
 {
@@ -1070,9 +1089,15 @@ static int a6xx_complete_rpmh_votes(struct adreno_device *adreno_dev,
 				ARRAY_SIZE(a6xx_rscc_tcsm_drv0_status_reglist) : 4;
 	int i, ret = 0;
 
-	for (i = 0; i < count; i++)
-		ret |= timed_poll_check_rscc(device, a6xx_rscc_tcsm_drv0_status_reglist[i],
-				BIT(0), timeout, BIT(0));
+	if (adreno_is_a622(adreno_dev)) {
+		for (i = 0; i < count; i++)
+			ret |= timed_poll_check_rscc(device, a622_rscc_tcsm_drv0_status_reglist[i],
+					BIT(0), timeout, BIT(0));
+	} else {
+		for (i = 0; i < count; i++)
+			ret |= timed_poll_check_rscc(device, a6xx_rscc_tcsm_drv0_status_reglist[i],
+					BIT(0), timeout, BIT(0));
+	}
 
 	if (ret)
 		dev_err(device->dev, "RPMH votes timedout: %d\n", ret);

@@ -2190,6 +2190,16 @@ struct kgsl_read_calibrated_timestamps {
  * @first_step_down_count: Number of consecutive down recommendations before first step down
  * @subsequent_step_down_count: Number of consecutive down recommendations for subsequent step down
  * after first step down
+ * @num_samples_up: Moving average window size used for vote up decision
+ * @num_samples_down: Moving average window size used for vote down decision
+ * @strict_frame: Flag used to enable/disable vote up decision if the average gpu busy% over some
+ * consecutive samples is very high. This node takes effect only when target_fps is configured
+ * @non_linear_ramp_up: Flag used to enable/disable non-linear ramp up which supports a larger
+ * stride jump if the gpu busy% is very high
+ * @non_linear_ramp_down: Flag used to enable/disable non-linear ramp down which supports a
+ * larger stride jump if the gpu busy% is very low enough
+ * @min_bus_freq: Minimum bus frequency in MHz
+ * @max_bus_freq: Maximum bus frequency in MHz
  */
 struct kgsl_dcvs_attrs {
 	__u32 min_gpu_freq;
@@ -2199,8 +2209,13 @@ struct kgsl_dcvs_attrs {
 	__u32 penalty_down;
 	__u32 first_step_down_count;
 	__u32 subsequent_step_down_count;
-	/* private: 64 bit compatibility */
-	__u32 padding;
+	__u32 num_samples_up;
+	__u32 num_samples_down;
+	__u32 strict_frame;
+	__u32 non_linear_ramp_up;
+	__u32 non_linear_ramp_down;
+	__u32 min_bus_freq;
+	__u32 max_bus_freq;
 };
 
 /**

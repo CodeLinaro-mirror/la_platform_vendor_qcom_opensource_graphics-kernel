@@ -1238,11 +1238,18 @@ struct kgsl_device_constraint {
 #define KGSL_CONSTRAINT_L3_NONE	2
 #define KGSL_CONSTRAINT_L3_PWRLEVEL	3
 
-/* PWRLEVEL constraint level*/
-/* set to min frequency */
+/* PWRLEVEL constraint sub type */
+/* Set to min frequency */
 #define KGSL_CONSTRAINT_PWR_MIN    0
-/* set to max frequency */
+/* Set to max frequency */
 #define KGSL_CONSTRAINT_PWR_MAX    1
+/**
+ * Supported PWR_PERC_X constraint values range from 2 to 100, where X is the floor value
+ * of X percent of the maximum gpu frequency. The resulting frequency will be matched to
+ * the closest available lower frequency, with clamping to the minimum gpu frequency.
+ */
+#define KGSL_CONSTRAINT_PWR_PERC_MIN 2
+#define KGSL_CONSTRAINT_PWR_PERC_MAX 100
 
 struct kgsl_device_constraint_pwrlevel {
 	unsigned int level;

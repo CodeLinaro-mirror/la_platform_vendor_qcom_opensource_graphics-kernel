@@ -991,7 +991,10 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 					adreno_slice_mask_override);
 
 		kgsl_regread(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_FINAL, &slice_mask);
-		slice_mask = FIELD_GET(GENMASK(3, 0), slice_mask);
+		if (adreno_is_gen8_9_0(adreno_dev))
+			slice_mask = GET_SLICE_MASK(GEN8_9_0_NUM_PHYSICAL_SLICES, slice_mask);
+		else
+			slice_mask = GET_SLICE_MASK(GEN8_2_0_NUM_PHYSICAL_SLICES, slice_mask);
 
 		/*
 		 * Update the chipid with the number of active slices. This is the number
@@ -3299,10 +3302,14 @@ done:
  */
 u32 gen8_get_gmem_size(struct adreno_device *adreno_dev)
 {
-	if (adreno_is_gen8_2_x(adreno_dev))
-		return (adreno_dev->gpucore->gmem_size / GEN8_2_0_NUM_PHYSICAL_SLICES) *
+	if (adreno_is_gen8_2_x(adreno_dev)) {
+		if (adreno_is_gen8_9_0(adreno_dev))
+			return (adreno_dev->gpucore->gmem_size / GEN8_9_0_NUM_PHYSICAL_SLICES) *
 			gen8_get_num_slices(adreno_dev);
-
+		else
+			return (adreno_dev->gpucore->gmem_size / GEN8_2_0_NUM_PHYSICAL_SLICES) *
+			gen8_get_num_slices(adreno_dev);
+	}
 	return adreno_dev->gpucore->gmem_size;
 }
 

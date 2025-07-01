@@ -17,6 +17,9 @@
 #define GEN8_2_0_NUM_PHYSICAL_SLICES	3
 #define GEN8_3_0_NUM_PHYSICAL_SLICES	1
 #define GEN8_6_0_NUM_PHYSICAL_SLICES	2
+#define GEN8_9_0_NUM_PHYSICAL_SLICES	2
+
+#define GET_SLICE_MASK(num_slices, value) FIELD_GET(GENMASK(num_slices, 0), (value))
 
 /* Forward struct declaration */
 struct gen8_snapshot_block_list;

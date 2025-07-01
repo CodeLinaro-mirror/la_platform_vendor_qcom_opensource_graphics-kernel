@@ -304,6 +304,7 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN8_4_0 = ADRENO_GPUREV_VALUE(8, 4, 0),
 	ADRENO_REV_GEN8_6_0 = ADRENO_GPUREV_VALUE(8, 6, 0),
 	ADRENO_REV_GEN8_8_0 = ADRENO_GPUREV_VALUE(8, 8, 0),
+	ADRENO_REV_GEN8_9_0 = ADRENO_GPUREV_VALUE(8, 9, 0),
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -1400,6 +1401,7 @@ ADRENO_TARGET(gen8_3_0, ADRENO_REV_GEN8_3_0)
 ADRENO_TARGET(gen8_4_0, ADRENO_REV_GEN8_4_0)
 ADRENO_TARGET(gen8_6_0, ADRENO_REV_GEN8_6_0)
 ADRENO_TARGET(gen8_8_0, ADRENO_REV_GEN8_8_0)
+ADRENO_TARGET(gen8_9_0, ADRENO_REV_GEN8_9_0)
 
 static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
 {
@@ -1426,7 +1428,8 @@ static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 
 static inline int adreno_is_gen8_2_x(struct adreno_device *adreno_dev)
 {
-	return adreno_is_gen8_2_0(adreno_dev) || adreno_is_gen8_2_1(adreno_dev);
+	return adreno_is_gen8_2_0(adreno_dev) || adreno_is_gen8_2_1(adreno_dev) ||
+		adreno_is_gen8_9_0(adreno_dev);
 }
 
 static inline int adreno_is_gen8_0_x_family(struct adreno_device *adreno_dev)

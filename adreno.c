@@ -1620,6 +1620,8 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS))
 		device->host_based_dcvs = true;
+	else if (ADRENO_FEATURE(adreno_dev, ADRENO_DCVS_PROFILE))
+		adreno_dev->dcvs_profile_enabled = true;
 
 	kgsl_pwrscale_init(device, pdev);
 

@@ -1761,7 +1761,7 @@ static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
 	 */
 	if ((adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
-			adreno_is_a642l(adreno_dev)))
+			adreno_is_a622(adreno_dev) || adreno_is_a642l(adreno_dev)))
 		gmu_core_regwrite(device, A6XX_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
 
 	/* Check no outstanding RPMh voting */
@@ -1902,7 +1902,7 @@ out:
 	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
 	 */
 	if ((adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
-			adreno_is_a642l(adreno_dev)))
+			adreno_is_a622(adreno_dev) || adreno_is_a642l(adreno_dev)))
 		gmu_core_regwrite(device, A6XX_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
 
 	return ret;

@@ -1827,20 +1827,6 @@ int gen8_start(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-int gen8_scm_gpu_tsens_default(struct adreno_device *adreno_dev, bool default_req)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	u32 gpu_req = GPU_TSENSE_EN_REQ;
-
-	if (!ADRENO_FEATURE(adreno_dev, ADRENO_TSENS_DYNAMIC_PERIOD))
-		return 0;
-
-	if (!default_req)
-		gpu_req |= GPU_TSENSE_MEASURE_DEFAULT_DISABLE;
-
-	return kgsl_scm_gpu_init_regs(&device->pdev->dev, gpu_req);
-}
-
 int gen8_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);

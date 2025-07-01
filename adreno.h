@@ -184,8 +184,6 @@
 #define ADRENO_GMU_MINBW BIT(25)
 /* Enable GMU Based DCVS profile */
 #define ADRENO_DCVS_PROFILE BIT(26)
-/* Enable TSENS power savings during sleep */
-#define ADRENO_TSENS_DYNAMIC_PERIOD BIT(27)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds

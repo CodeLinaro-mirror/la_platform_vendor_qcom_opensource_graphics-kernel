@@ -1589,6 +1589,7 @@ int adreno_device_probe(struct platform_device *pdev,
 	kgsl_mutex_lock(&device->mutex);
 	device->memstore = kgsl_allocate_global(device,
 		KGSL_MEMSTORE_SIZE, 0, 0, priv, "memstore");
+	adreno_profile_init(adreno_dev);
 	kgsl_mutex_unlock(&device->mutex);
 
 	status = PTR_ERR_OR_ZERO(device->memstore);
@@ -1612,7 +1613,6 @@ int adreno_device_probe(struct platform_device *pdev,
 	kgsl_device_snapshot_probe(device, size);
 
 	adreno_debugfs_init(adreno_dev);
-	adreno_profile_init(adreno_dev);
 
 	adreno_dev->perfcounter = false;
 

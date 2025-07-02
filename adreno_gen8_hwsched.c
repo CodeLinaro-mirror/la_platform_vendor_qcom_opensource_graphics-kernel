@@ -12,6 +12,7 @@
 #include "adreno_snapshot.h"
 #include "kgsl_bus.h"
 #include "kgsl_device.h"
+#include "kgsl_gmu_core.h"
 #include "kgsl_trace.h"
 
 static void _wakeup_hw_fence_waiters(struct adreno_device *adreno_dev, u32 fault)
@@ -146,7 +147,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
 {
 	struct device_node *node = NULL;
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 shadow_num_entries = 0;
 
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_HW_FENCE))
@@ -169,7 +170,8 @@ static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
 	 * The return value is ignored as it does not need to be returned to the caller.
 	 * Any errors are logged within the VRB set API if a failure occurs.
 	 */
-	gmu_core_set_vrb_register(gmu->vrb, VRB_HW_FENCE_SHADOW_NUM_ENTRIES, shadow_num_entries);
+	gmu_core_set_vrb_register(device->gmu_core.vrb,
+			VRB_HW_FENCE_SHADOW_NUM_ENTRIES, shadow_num_entries);
 }
 
 void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
@@ -208,19 +210,19 @@ static void gen8_hwsched_gmu_suspend(struct adreno_device *adreno_dev, bool forc
 
 static void gen8_hwsched_set_ctxt_record_vrb(struct adreno_device *adreno_dev)
 {
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (IS_ERR_OR_NULL(gmu->vrb))
+	if (IS_ERR_OR_NULL(device->gmu_core.vrb))
 		return;
 
 	/* Populate context record sizes in VRB */
-	gmu_core_set_vrb_register(gmu->vrb, VRB_CTXRECORD_TOTAL_SZ,
+	gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_CTXRECORD_TOTAL_SZ,
 		adreno_dev->total_ctxt_record_sz >> 10);
-	gmu_core_set_vrb_register(gmu->vrb, VRB_CTXRECORD_GMEM_SZ,
+	gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_CTXRECORD_GMEM_SZ,
 		adreno_dev->gpucore->gmem_size >> 10);
 
 	/* Populate size of AQE context record */
-	gmu_core_set_vrb_register(gmu->vrb, VRB_CTXRECORD_AQE_SZ,
+	gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_CTXRECORD_AQE_SZ,
 		adreno_dev->aqe_ctxt_record_sz >> 10);
 }
 
@@ -651,45 +653,18 @@ static int gen8_gmu_warmboot_init(struct adreno_device *adreno_dev)
 static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+
 	int ret;
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 
-	/* GMU Virtual register bank */
-	if (IS_ERR_OR_NULL(gmu->vrb)) {
-		gmu->vrb = gmu_core_reserve_kernel_block(device, 0, GMU_VRB_SIZE,
-						GMU_NONCACHED_KERNEL, 0);
-
-		if (IS_ERR(gmu->vrb))
-			return PTR_ERR(gmu->vrb);
-
-		/* Populate size of the virtual register bank */
-		ret = gmu_core_set_vrb_register(gmu->vrb, VRB_SIZE_IDX, gmu->vrb->size >> 2);
-		if (ret)
-			return ret;
-	}
-
-	/* GMU trace log */
-	if (IS_ERR_OR_NULL(gmu->trace.md)) {
-		gmu->trace.md = gmu_core_reserve_kernel_block(device, 0,
-					GMU_TRACE_SIZE, GMU_NONCACHED_KERNEL, 0);
-
-		if (IS_ERR(gmu->trace.md))
-			return PTR_ERR(gmu->trace.md);
-
-		/* Pass trace buffer address to GMU through the VRB */
-		ret = gmu_core_set_vrb_register(gmu->vrb, VRB_TRACE_BUFFER_ADDR_IDX,
-					gmu->trace.md->gmuaddr);
-		if (ret)
-			return ret;
-
-		/* Initialize the GMU trace buffer header */
-		gmu_core_trace_header_init(&gmu->trace);
-	}
+	ret = gmu_core_hwsched_memory_init(device);
+	if (ret)
+		return ret;
 
 	/* Set the CL infinite timeout VRB override (if declared in gpulist) */
 	if (gen8_core->cl_no_ft_timeout_ms)
-		gmu_core_set_vrb_register(gmu->vrb, VRB_CL_NO_FT_TIMEOUT,
+		gmu_core_set_vrb_register(gmu_core->vrb, VRB_CL_NO_FT_TIMEOUT,
 				gen8_core->cl_no_ft_timeout_ms);
 
 	return 0;
@@ -1354,7 +1329,8 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 	struct kgsl_context *context = NULL;
 	int id, ret = 0;
 	struct list_head hw_fence_list;
-	struct adreno_hw_fence_entry *entry;
+	struct adreno_hw_fence_entry *entry, *tmp;
+	bool update_out_fence_ts = false;
 
 	/**
 	 * Since we need to wait for ack from GMU when sending each inflight fence back to GMU, we
@@ -1371,9 +1347,31 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 	}
 	read_unlock(&device->context_lock);
 
-	list_for_each_entry(entry, &hw_fence_list, reset_node) {
+	/*
+	 * Although we are not destroying the entries here, they can get destroyed concurrently
+	 * in f2h_main thread once they have been sent to GMU. Hence, to be safe against entry
+	 * destroy, use list_for_each_entry_safe.
+	 */
+	list_for_each_entry_safe(entry, tmp, &hw_fence_list, reset_node) {
 		struct adreno_context *drawctxt = entry->drawctxt;
 		struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
+		u32 entry_ts = (u32)entry->cmd.ts;
+
+		/*
+		 * We must remove this entry from hw_fence_list before sending it to GMU to avoid
+		 * racing with the f2h_main thread
+		 */
+		list_del_init(&entry->reset_node);
+
+		/*
+		 * We must access the hw fence entry before sending it to GMU as once it is
+		 * sent to GMU, it may be freed by f2h_main thread concurrently
+		 */
+		if (((entry->cmd.flags & HW_FENCE_FLAG_SKIP_MEMSTORE) != 0) &&
+			(timestamp_cmp(entry_ts, hdr->out_fence_ts) > 0)) {
+			if (_kgsl_context_get(&drawctxt->base))
+				update_out_fence_ts = true;
+		}
 
 		/*
 		 * This is part of the reset sequence and any error in this path will be handled by
@@ -1387,9 +1385,18 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 		 * If HW_FENCE_FLAG_SKIP_MEMSTORE is set, then GMU context queue header will not be
 		 * updated for this fence. Hence, update it here.
 		 */
-		if (((entry->cmd.flags & HW_FENCE_FLAG_SKIP_MEMSTORE) != 0) &&
-			(timestamp_cmp((u32)entry->cmd.ts, hdr->out_fence_ts) > 0))
-			hdr->out_fence_ts = (u32)entry->cmd.ts;
+		if (update_out_fence_ts) {
+			hdr->out_fence_ts = entry_ts;
+			kgsl_context_put(&drawctxt->base);
+			update_out_fence_ts = false;
+		}
+	}
+
+	/* Remove remaining entries from the list if we hit an error */
+	if (ret) {
+		list_for_each_entry_safe(entry, tmp, &hw_fence_list, reset_node) {
+			list_del_init(&entry->reset_node);
+		}
 	}
 
 	return ret;
@@ -1542,14 +1549,17 @@ done:
 
 ssize_t gen8_hwsched_preempt_info_get(struct adreno_device *adreno_dev, char *buf)
 {
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 preempt_count_l0, preempt_count_l1a, preempt_count_l1b;
 	u32 count = 0, max_size = PAGE_SIZE;
 	int ret;
 
-	ret = gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_L0, &preempt_count_l0);
-	ret |= gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_L1A, &preempt_count_l1a);
-	ret |= gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_L1B, &preempt_count_l1b);
+	ret = gmu_core_get_vrb_register(device->gmu_core.vrb,
+			VRB_PREEMPT_COUNT_L0, &preempt_count_l0);
+	ret |= gmu_core_get_vrb_register(device->gmu_core.vrb,
+			VRB_PREEMPT_COUNT_L1A, &preempt_count_l1a);
+	ret |= gmu_core_get_vrb_register(device->gmu_core.vrb,
+			VRB_PREEMPT_COUNT_L1B, &preempt_count_l1b);
 
 	if (ret)
 		return ret;
@@ -1756,6 +1766,8 @@ DCVS_TUNABLES_SYSFS(non_linear_ramp_down, GPU_TUNING_KEY_NON_LINEAR_RAMP_DOWN);
 DCVS_TUNABLES_SYSFS(min_freq_mhz, GPU_TUNING_KEY_MIN_GPU_FREQUENCY);
 DCVS_TUNABLES_SYSFS(max_freq_mhz, GPU_TUNING_KEY_MAX_GPU_FREQUENCY);
 DCVS_TUNABLES_SYSFS(mod_percent, GPU_TUNING_KEY_MOD_PERCENT);
+DCVS_TUNABLES_SYSFS(bus_min_freq_mhz, GPU_TUNING_KEY_BUS_MIN_FREQUENCY);
+DCVS_TUNABLES_SYSFS(bus_max_freq_mhz, GPU_TUNING_KEY_BUS_MAX_FREQUENCY);
 
 static struct attribute *dcvs_tunables_attrs[] = {
 	&dcvs_attr_penalty_up.attr.attr,
@@ -1771,6 +1783,8 @@ static struct attribute *dcvs_tunables_attrs[] = {
 	&dcvs_attr_min_freq_mhz.attr.attr,
 	&dcvs_attr_max_freq_mhz.attr.attr,
 	&dcvs_attr_mod_percent.attr.attr,
+	&dcvs_attr_bus_min_freq_mhz.attr.attr,
+	&dcvs_attr_bus_max_freq_mhz.attr.attr,
 	NULL,
 };
 
@@ -1926,6 +1940,8 @@ int gen8_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 {
 	struct gen8_device *gen8_dev = container_of(adreno_dev,
 					struct gen8_device, adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct gen8_hwsched_device *gen8_hwsched = container_of(gen8_dev,
 					struct gen8_hwsched_device, gen8_dev);
 	struct gen8_hwsched_hfi *hw_hfi = &gen8_hwsched->hwsched_hfi;
@@ -1956,20 +1972,20 @@ int gen8_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 			return ret;
 	}
 
-	if (!IS_ERR_OR_NULL(gen8_dev->gmu.vrb)) {
+	if (!IS_ERR_OR_NULL(gmu_core->vrb)) {
 		ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev,
 					KGSL_GMU_VRB_ENTRY,
-					gen8_dev->gmu.vrb->hostptr,
-					gen8_dev->gmu.vrb->size);
+					gmu_core->vrb->hostptr,
+					gmu_core->vrb->size);
 			if (ret)
 				return ret;
 	}
 
-	if (!IS_ERR_OR_NULL(gen8_dev->gmu.trace.md)) {
+	if (!IS_ERR_OR_NULL(gmu_core->trace.md)) {
 		ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev,
 					KGSL_GMU_TRACE_ENTRY,
-					gen8_dev->gmu.trace.md->hostptr,
-					gen8_dev->gmu.trace.md->size);
+					gmu_core->trace.md->hostptr,
+					gmu_core->trace.md->size);
 		if (ret)
 			return ret;
 	}

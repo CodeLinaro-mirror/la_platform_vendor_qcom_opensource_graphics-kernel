@@ -107,8 +107,12 @@ static int alloc_map_preempt_record(struct adreno_device *adreno_dev,
 			entry->md->gpuaddr + offset, md_size, 0, flags, priv,
 			(entry->desc.mem_kind == HFI_MEMKIND_CSW_PRIV_SECURE) ?
 			"sec_preempt_record_non_gmem" : "preempt_record_non_gmem");
-	if (!*md)
-		return PTR_ERR(*md);
+	if (IS_ERR(*md)) {
+		int ret = PTR_ERR(*md);
+
+		*md = NULL;
+		return ret;
+	}
 
 	if (!(desc->flags & HFI_MEMFLAG_GMU_ACC))
 		return 0;
@@ -1484,8 +1488,6 @@ void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	struct kgsl_drawobj_cmd *cmdobj)
 {
 	struct kgsl_drawobj *drawobj = DRAWOBJ(cmdobj);
-	struct kgsl_mem_entry *entry;
-	struct kgsl_drawobj_profiling_buffer *profile_buffer;
 	struct kgsl_context *context = drawobj->context;
 
 	msm_perf_events_update(MSM_PERF_GFX, MSM_PERF_RETIRED,
@@ -1496,17 +1498,6 @@ void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME) {
 		atomic64_inc(&drawobj->context->proc_priv->frame_count);
 		atomic_inc(&drawobj->context->proc_priv->period->frames);
-	}
-
-	entry = cmdobj->profiling_buf_entry;
-	if (entry) {
-		profile_buffer = kgsl_gpuaddr_to_vaddr(&entry->memdesc,
-			cmdobj->profiling_buffer_gpuaddr);
-
-		if (profile_buffer == NULL)
-			return;
-
-		kgsl_memdesc_unmap(&entry->memdesc);
 	}
 
 	trace_adreno_cmdbatch_done(drawobj->context->id,
@@ -1530,7 +1521,39 @@ void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj)
 	}
 }
 
-static bool _retire_hw_syncobj(struct kgsl_drawobj *drawobj)
+static void adreno_hwsched_hw_syncobj_cancel_callbacks(struct kgsl_drawobj_sync *syncobj)
+{
+	u32 i;
+
+	for (i = 0; i < syncobj->numsyncs; i++) {
+		struct kgsl_drawobj_sync_event *event = &syncobj->synclist[i];
+
+		if (event->type != KGSL_CMD_SYNCPOINT_TYPE_FENCE)
+			continue;
+
+		kgsl_sync_fence_async_cancel(event->handle);
+
+		/*
+		 * Now that we know the callback is removed, we can safely put back the
+		 * refcount if it isn't already put back
+		 */
+		if (test_and_clear_bit(i, &syncobj->pending))
+			kgsl_drawobj_put(DRAWOBJ(syncobj));
+	}
+}
+
+static void adreno_hwsched_hw_syncobj_destroy(struct kgsl_drawobj *drawobj)
+{
+	/*
+	 * It is still possible that the dma fence callbacks may not yet have
+	 * been invoked. Make sure we cancel the callbacks before we destroy the sync object
+	 */
+	adreno_hwsched_hw_syncobj_cancel_callbacks(SYNCOBJ(drawobj));
+	adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
+	kgsl_drawobj_destroy(drawobj);
+}
+
+static bool adreno_hwsched_hw_syncobj_retired(struct kgsl_drawobj *drawobj)
 {
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
 	struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
@@ -1538,8 +1561,6 @@ static bool _retire_hw_syncobj(struct kgsl_drawobj *drawobj)
 	if (timestamp_cmp(drawobj->timestamp, hdr->sync_obj_ts) > 0)
 		return false;
 
-	adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
-	kgsl_drawobj_destroy(drawobj);
 	return true;
 }
 
@@ -1550,8 +1571,14 @@ static bool drawobj_retired(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj_cmd *cmdobj;
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 
-	if ((drawobj->type & SYNCOBJ_TYPE) != 0)
-		return _retire_hw_syncobj(drawobj);
+	if ((drawobj->type & SYNCOBJ_TYPE) != 0) {
+		if (adreno_hwsched_hw_syncobj_retired(drawobj)) {
+			adreno_hwsched_hw_syncobj_destroy(drawobj);
+			return true;
+		}
+
+		return false;
+	}
 
 	cmdobj = CMDOBJ(drawobj);
 
@@ -1763,8 +1790,15 @@ bool adreno_hwsched_drawobj_replay(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj_cmd *cmdobj;
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 
-	if ((drawobj->type & SYNCOBJ_TYPE) != 0)
-		return _retire_hw_syncobj(drawobj);
+	if ((drawobj->type & SYNCOBJ_TYPE) != 0) {
+		if (kgsl_context_is_bad(drawobj->context) ||
+			adreno_hwsched_hw_syncobj_retired(drawobj)) {
+			adreno_hwsched_hw_syncobj_destroy(drawobj);
+			return false;
+		}
+
+		return true;
+	}
 
 	cmdobj = CMDOBJ(drawobj);
 
@@ -2799,14 +2833,18 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 
 int adreno_hwsched_ctxt_unregister_wait_completion(
 	struct adreno_device *adreno_dev,
-	struct device *dev, struct pending_cmd *ack,
+	struct device *dev, struct kgsl_context *context, struct pending_cmd *ack,
 	void (*process_msgq)(struct adreno_device *adreno_dev),
 	struct hfi_unregister_ctxt_cmd *cmd)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	int rb = adreno_get_level(context);
 	int ret;
+	bool fast = adreno_is_fast_context_destroy_enabled(adreno_dev);
 	u64 start, end;
+	char prefix[60];
 
 	start = gpudev->read_alwayson(adreno_dev);
 	kgsl_mutex_unlock(&device->mutex);
@@ -2826,15 +2864,20 @@ int adreno_hwsched_ctxt_unregister_wait_completion(
 	end = gpudev->read_alwayson(adreno_dev);
 
 	if (completion_done(&ack->complete)) {
+		snprintf(prefix, sizeof(prefix),
+			"Ack unprocessed for %scontext unregister", fast ? "fast " : "");
 		dev_err_ratelimited(dev,
-			"Ack unprocessed for context unregister seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
-			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id,
-			cmd->ts, start, end);
+			"%s type: %s rb: %d seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+			prefix, kgsl_context_type(drawctxt->type), rb,
+			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
 		return 0;
 	}
 
+	snprintf(prefix, sizeof(prefix),
+		"Ack timeout for %scontext unregister", fast ? "fast " : "");
 	dev_err_ratelimited(dev,
-		"Ack timeout for context unregister seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+		"%s type: %s rb: %d seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+		prefix, kgsl_context_type(drawctxt->type), rb,
 		MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
 	return -ETIMEDOUT;
 }

@@ -3573,6 +3573,51 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_1 = {
 	.clx_tbl = &gen8_2_0_clx_table,
 };
 
+static const struct adreno_gen8_core adreno_gpu_core_gen8_5_0 = {
+	.base = {
+		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_5_0,
+				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
+		.compatible = "qcom,adreno-gpu-gen8-5-0",
+		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_PREEMPTION |
+			ADRENO_LPAC | ADRENO_AQE | ADRENO_GMU_WARMBOOT | ADRENO_IFPC |
+			ADRENO_CONTENT_PROTECTION | ADRENO_HW_FENCE | ADRENO_BCL |
+			ADRENO_GMU_AB | ADRENO_GMU_BASED_DCVS | ADRENO_GMU_THERMAL_MITIGATION |
+			ADRENO_DEFER_GMEM_ALLOC | ADRENO_GMU_MINBW |
+			ADRENO_TSENSE_DYNAMIC_PERIOD | ADRENO_DCVS_PROFILE,
+		.gpudev = &adreno_gen8_hwsched_gpudev.base,
+		.perfcounters = &adreno_gen8_2_x_perfcounters,
+		.uche_gmem_alignment = SZ_64M,
+		.gmem_size = 18 * SZ_1M,
+		.bus_width = 32,
+		.snapshot_size = SZ_8M,
+		.num_ddr_channels = 4,
+	},
+	.aqefw_name = "gen80200_aqe.fw",
+	.sqefw_name = "gen80200_sqe.fw",
+	.gmufw_name = "gen80200_gmu.bin",
+	.zap_name = "gen80200_zap.mbn",
+	.ao_hwcg = gen8_2_0_ao_hwcg_regs,
+	.ao_hwcg_count = ARRAY_SIZE(gen8_2_0_ao_hwcg_regs),
+	.gbif = gen8_0_0_gbif_cx_regs,
+	.gbif_count = ARRAY_SIZE(gen8_0_0_gbif_cx_regs),
+	.hang_detect_cycles = 0xcfffff,
+	.protected_regs = gen8_2_0_protected_regs,
+	.nonctxt_regs = gen8_2_0_nonctxt_regs,
+	.highest_bank_bit = 16,
+	.gmu_hub_clk_freq = 150000000,
+	.gen8_snapshot_block_list = &gen8_2_0_snapshot_block_list,
+	.fast_bus_hint = true,
+	.bcl_data = GEN8_2_X_BCL_DATA,
+	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
+	.noc_timeout_us = 3410, /* 3.41 msec */
+	.cl_no_ft_timeout_ms = 6500,
+	.ctxt_record_size = (19708 * SZ_1K),
+	.therm_cfg = &therm_mit_cfg_8_2_0,
+	.limits_mit_cfg = &gen8_2_0_limits_mit_cfg,
+	.preempt_level = 1,
+	.clx_tbl = &gen8_2_0_clx_table,
+};
+
 /* GEN8_4_0 noncontext register list */
 static const struct gen8_nonctxt_regs gen8_4_0_nonctxt_regs[] = {
 	{ GEN8_CP_SMMU_STREAM_ID_LPAC, 0x00000101, BIT(PIPE_NONE) },
@@ -4085,6 +4130,7 @@ static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_gen8_2_1.base,
 	&adreno_gpu_core_gen8_3_0.base,
 	&adreno_gpu_core_gen8_4_0.base,
+	&adreno_gpu_core_gen8_5_0.base,
 	&adreno_gpu_core_gen8_6_0.base,
 	&adreno_gpu_core_gen8_8_0.base,
 	&adreno_gpu_core_gen8_9_0.base,

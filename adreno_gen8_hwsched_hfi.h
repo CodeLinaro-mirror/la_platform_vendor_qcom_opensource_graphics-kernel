@@ -419,4 +419,16 @@ void gen8_hwsched_set_tuning_attrs(struct adreno_device *adreno_dev, u32 type,
  */
 void gen8_hwsched_hfi_get_dcvs_tuning_attrs(struct adreno_device *adreno_dev, u32 subtype,
 	u32 *data);
+
+/**
+ * gen8_hwsched_process_f2h_platform_msg - Handle F2H platform message
+ * @adreno_dev: Pointer to the adreno device
+ * @rcvd: Pointer to the message payload
+ *
+ * This function processes the payload in the received F2H_MSG_PLATFORM_LA message and executes
+ * the corresponding subtype-specific action.
+ *
+ * Return: Zero on success or negative error on failure
+ */
+int gen8_hwsched_process_f2h_platform_msg(struct adreno_device *adreno_dev, u32 *rcvd);
 #endif

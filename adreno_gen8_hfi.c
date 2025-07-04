@@ -519,6 +519,7 @@ int gen8_hfi_process_queue(struct gen8_gmu_device *gmu,
 		u32 queue_idx, struct pending_cmd *ret_cmd)
 {
 	struct kgsl_device *device = KGSL_DEVICE(gen8_gmu_to_adreno(gmu));
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	u32 rcvd[MAX_RCVD_SIZE];
 
 	while (gen8_hfi_queue_read(gmu, queue_idx, rcvd, sizeof(rcvd)) > 0) {
@@ -542,6 +543,9 @@ int gen8_hfi_process_queue(struct gen8_gmu_device *gmu,
 		case F2H_MSG_PROCESS_TRACE:
 			gmu_core_process_trace_data(device,
 					GMU_PDEV_DEV(device), &device->gmu_core.trace);
+			break;
+		case F2H_MSG_PLATFORM_LA:
+			gen8_hwsched_process_f2h_platform_msg(adreno_dev, rcvd);
 			break;
 		default: /* No Reply */
 			dev_err(GMU_PDEV_DEV(device),

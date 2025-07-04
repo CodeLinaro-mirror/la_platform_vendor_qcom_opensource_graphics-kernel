@@ -1041,7 +1041,7 @@ static void process_hw_fence_ack(struct adreno_device *adreno_dev, u32 *rcvd)
 	_disable_hw_fence_throttle(adreno_dev, false);
 }
 
-static void gen8_process_f2h_platform_msg(struct adreno_device *adreno_dev, u32 *rcvd)
+int gen8_hwsched_process_f2h_platform_msg(struct adreno_device *adreno_dev, u32 *rcvd)
 {
 	struct hfi_msg_platform *msg = (struct hfi_msg_platform *)rcvd;
 
@@ -1051,8 +1051,10 @@ static void gen8_process_f2h_platform_msg(struct adreno_device *adreno_dev, u32 
 		u32 index = cmd->gmu_pwrlevel;
 
 		if ((index > 0) && (index <= device->gmu_core.num_freqs))
-			gmu_core_clock_set_rate(device, index - 1);
+			return gmu_core_clock_set_rate(device, index - 1);
 	}
+
+	return 0;
 }
 
 void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
@@ -1119,7 +1121,7 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 			}
 			break;
 		case F2H_MSG_PLATFORM_LA:
-			gen8_process_f2h_platform_msg(adreno_dev, rcvd);
+			gen8_hwsched_process_f2h_platform_msg(adreno_dev, rcvd);
 			break;
 		}
 	}
@@ -1479,6 +1481,9 @@ poll:
 	case F2H_MSG_PROCESS_TRACE:
 		rc = 0;
 		gmu_core_process_trace_data(device, GMU_PDEV_DEV(device), &device->gmu_core.trace);
+		break;
+	case F2H_MSG_PLATFORM_LA:
+		rc = gen8_hwsched_process_f2h_platform_msg(adreno_dev, rcvd);
 		break;
 	default:
 		if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {

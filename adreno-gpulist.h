@@ -2742,6 +2742,41 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_11_0 = {
 	.fast_bus_hint = true,
 };
 
+extern const struct gen7_snapshot_block_list gen7_15_0_snapshot_block_list;
+
+static const struct adreno_gen7_core adreno_gpu_core_gen7_15_0 = {
+	.base = {
+		DEFINE_ADRENO_REV(ADRENO_REV_GEN7_15_0,
+				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
+		.compatible = "qcom,adreno-gpu-gen7-15-0",
+		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_IFPC |
+			ADRENO_PREEMPTION | ADRENO_L3_VOTE | ADRENO_DMS,
+		.gpudev = &adreno_gen7_gmu_gpudev.base,
+		.perfcounters = &adreno_gen7_2_0_perfcounters,
+		.uche_gmem_alignment = SZ_16M,
+		.gmem_size = SZ_1M + SZ_512K,
+		.bus_width = 32,
+		.snapshot_size = SZ_4M,
+		.num_ddr_channels = 8,
+	},
+	.sqefw_name = "gen71500_sqe.fw",
+	.gmufw_name = "gen71500_gmu.bin",
+	.zap_name = "gen71500_zap.mbn",
+	.hwcg = gen7_2_0_hwcg_regs,
+	.hwcg_count = ARRAY_SIZE(gen7_2_0_hwcg_regs),
+	.ao_hwcg = gen7_9_0_ao_hwcg_regs,
+	.ao_hwcg_count = ARRAY_SIZE(gen7_9_0_ao_hwcg_regs),
+	.gbif = gen7_2_0_gbif_cx_regs,
+	.gbif_count = ARRAY_SIZE(gen7_2_0_gbif_cx_regs),
+	.hang_detect_cycles = 0xcfffff,
+	.protected_regs = gen7_2_0_protected_regs,
+	.highest_bank_bit = 16,
+	.gmu_hub_clk_freq = 200000000,
+	.gen7_snapshot_block_list = &gen7_15_0_snapshot_block_list,
+	.preempt_level = 1,
+	.fast_bus_hint = true,
+};
+
 extern const struct gen7_snapshot_block_list gen7_17_0_snapshot_block_list;
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
@@ -4002,6 +4037,7 @@ static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_gen7_9_1.base,
 	&adreno_gpu_core_gen7_14_0.base,
 	&adreno_gpu_core_gen7_11_0.base,
+	&adreno_gpu_core_gen7_15_0.base,
 	&adreno_gpu_core_gen7_17_0.base,
 	&adreno_gpu_core_gen8_0_0.base,
 	&adreno_gpu_core_gen8_0_1.base,

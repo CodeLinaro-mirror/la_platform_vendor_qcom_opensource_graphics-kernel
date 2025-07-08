@@ -38,6 +38,7 @@
 #include "kgsl_sync.h"
 #include "kgsl_sysfs.h"
 #include "kgsl_trace.h"
+#include "kgsl_util.h"
 /* Instantiate tracepoints */
 #define CREATE_TRACE_POINTS
 #include "kgsl_power_trace.h"
@@ -5300,7 +5301,7 @@ error:
 
 void kgsl_device_platform_remove(struct kgsl_device *device)
 {
-	del_timer(&device->work_period_timer);
+	kgsl_delete_timer(&device->work_period_timer);
 
 	kthread_destroy_worker(device->events_worker);
 

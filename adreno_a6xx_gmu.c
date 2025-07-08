@@ -424,6 +424,10 @@ int a6xx_load_pdc_ucode(struct adreno_device *adreno_dev)
 
 	cfg = gmu->pdc_cfg_base;
 
+	/* PDC GPU SEQ start addr register is removed for A622 */
+	if (adreno_is_a622(adreno_dev) && a6xx_core->pdc_in_aop)
+		return 0;
+
 	/* PDC is programmed in AOP for newer platforms */
 	if (a6xx_core->pdc_in_aop)
 		goto done;

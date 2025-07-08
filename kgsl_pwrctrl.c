@@ -1854,6 +1854,17 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 
 	trace_kgsl_thermal_constraint(max_freq);
 
+	/* Make sure pmqos_max_pwrlevel is updated before reading active_cnt */
+	smp_mb();
+
+	/*
+	 * Return early if the device is not active. Constraint will be applied on
+	 * subsequent boot. This will also prevent unnecessarily holding device
+	 * mutex while the device is not active.
+	 */
+	if (!atomic_read(&device->active_cnt))
+		return NOTIFY_OK;
+
 	kgsl_mutex_lock(&device->mutex);
 
 	if (!device->ftbl->gmu_based_dcvs_pwr_ops(device, 0, GPU_PWRLEVEL_OP_THERMAL))

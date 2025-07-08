@@ -288,7 +288,8 @@ __get_gmu_ao_cgc_mode_cntl(struct adreno_device *adreno_dev)
 	else if (adreno_is_a615_family(adreno_dev))
 		return 0x00000222;
 	/* a662 should be checked before a660 */
-	else if (adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev))
+	else if (adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
+			adreno_is_a622(adreno_dev))
 		return 0x00020200;
 	else if (adreno_is_a660(adreno_dev))
 		return 0x00020000;
@@ -1949,10 +1950,14 @@ int a6xx_probe_common(struct platform_device *pdev,
 
 	adreno_reg_offset_init(gpudev->reg_offsets);
 
-	if (gmu_core_isenabled(device) && (gpudev != &adreno_a6xx_rgmu_gpudev))
+	if (gmu_core_isenabled(device) && (gpudev != &adreno_a6xx_rgmu_gpudev)) {
 		device->pwrctrl.cx_cfg_gdsc_offset = (adreno_is_a662(adreno_dev) ||
 			adreno_is_a621(adreno_dev)) ? A662_GPU_CC_CX_CFG_GDSCR :
 			A6XX_GPU_CC_CX_CFG_GDSCR;
+
+		if (adreno_is_a622(adreno_dev))
+			device->pwrctrl.cx_cfg_gdsc_offset = A622_GPU_CC_CX_CFG_GDSCR;
+	}
 
 	adreno_dev->hwcg_enabled = true;
 	adreno_dev->uche_client_pf = 1;

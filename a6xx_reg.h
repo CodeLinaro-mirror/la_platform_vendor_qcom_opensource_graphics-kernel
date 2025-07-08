@@ -1136,6 +1136,9 @@
 #define A662_GPU_CC_GX_DOMAIN_MISC3		0x26541
 #define A662_GPU_CC_CX_CFG_GDSCR		0x26443
 
+/* GPUCC offsets are different for A622 */
+#define A622_GPU_CC_CX_CFG_GDSCR		0x26445
+
 /* GPU CPR registers */
 #define A6XX_GPU_CPR_FSM_CTL			0x26801
 

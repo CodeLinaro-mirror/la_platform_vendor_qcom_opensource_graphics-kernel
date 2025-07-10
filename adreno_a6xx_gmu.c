@@ -2388,6 +2388,13 @@ static int a6xx_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto gdsc_off;
 
+	/*
+	 * TLB operations are skipped during slumber. Incase CX doesn't
+	 * go down, it can result in incorrect translations due to stale
+	 * TLB entries. Flush TLB before boot up to ensure fresh start.
+	 */
+	kgsl_mmu_flush_tlb(&device->mmu);
+
 	ret = a6xx_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;
@@ -2486,9 +2493,7 @@ static void a6xx_send_tlb_hint(struct kgsl_device *device, bool val)
 	if (!gmu->domain)
 		return;
 
-#if (KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE)
-	qcom_skip_tlb_management(&gmu->pdev->dev, val);
-#endif
+
 	if (!val)
 		iommu_flush_iotlb_all(gmu->domain);
 }

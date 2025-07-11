@@ -60,6 +60,7 @@ struct kgsl_snapshot_section_header {
 #define KGSL_SNAPSHOT_SECTION_SIDE_DEBUGBUS 0x1801
 #define KGSL_SNAPSHOT_SECTION_TRACE_BUFFER 0x1901
 #define KGSL_SNAPSHOT_SECTION_EVENTLOG     0x1A01
+#define KGSL_SNAPSHOT_SECTION_FAULTLOG     0x1B01
 
 #define KGSL_SNAPSHOT_SECTION_END          0xFFFF
 
@@ -314,6 +315,11 @@ struct kgsl_snapshot_eventlog {
 	/** @version: Version of the event log buffer */
 	__u16 version;
 	/** @size: Size of the eventlog buffer in bytes */
+	u32 size;
+} __packed;
+
+struct kgsl_snapshot_faultlog {
+	/** @size: Size of the faultlog buffer in bytes */
 	u32 size;
 } __packed;
 

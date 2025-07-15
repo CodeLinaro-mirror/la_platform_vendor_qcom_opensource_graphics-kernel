@@ -541,10 +541,9 @@ static void kgsl_device_snapshot_atomic(struct kgsl_device *device)
 	if (device->snapshot && device->force_panic)
 		return;
 
-	if (!atomic_read(&device->active_cnt)) {
-		dev_err(device->dev, "snapshot: device is powered off\n");
+	if (WARN(!kgsl_state_is_awake(device),
+		"snapshot: device is powered off\n"))
 		return;
-	}
 
 	if (device->snapshot_memory_atomic.ptr)
 		goto snapshot;

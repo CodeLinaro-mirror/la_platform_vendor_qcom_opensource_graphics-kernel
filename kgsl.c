@@ -27,6 +27,8 @@
 #include <soc/qcom/of_common.h>
 #include <soc/qcom/secure_buffer.h>
 
+#include "adreno.h"
+
 #include "kgsl_compat.h"
 #include "kgsl_debugfs.h"
 #include "kgsl_device.h"
@@ -4255,6 +4257,7 @@ struct kgsl_mem_entry *gpumem_alloc_entry(
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_mem_entry *entry;
 	struct kgsl_device *device = dev_priv->device;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	u32 cachemode;
 
 	/* For 32-bit kernel world nothing to do with this flag */
@@ -4283,6 +4286,14 @@ struct kgsl_mem_entry *gpumem_alloc_entry(
 	/* For now only allow allocations up to 4G */
 	if (size == 0 || size > UINT_MAX)
 		return ERR_PTR(-EINVAL);
+
+	/*
+	 * Apply WB cache policy to prevent data inconsistency for A622.
+	 * A622 requires writeback cache policy to maintain coherency between
+	 * CPU and GPU memory accesses.
+	 */
+	if (adreno_is_a622(adreno_dev))
+		flags |= FIELD_PREP(KGSL_CACHEMODE_MASK, KGSL_CACHEMODE_WRITEBACK);
 
 	flags = kgsl_filter_cachemode(flags);
 

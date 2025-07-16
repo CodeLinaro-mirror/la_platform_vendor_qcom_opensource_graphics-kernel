@@ -620,6 +620,9 @@ static void gen7_hwcg_set(struct adreno_device *adreno_dev, bool on)
 		kgsl_regwrite(device, gen7_core->hwcg[i].offset,
 			on ? gen7_core->hwcg[i].val : 0);
 
+	if (adreno_is_gen7_15_0(adreno_dev) || adreno_is_gen7_11_0(adreno_dev))
+		kgsl_regwrite(device, GEN7_RBBM_CLOCK_MODE_GPC, 0x02222222);
+
 	/* enable top level HWCG */
 	kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL,
 		on ? RBBM_CLOCK_CNTL_ON : 0);
@@ -994,7 +997,8 @@ int gen7_start(struct adreno_device *adreno_dev)
 		kgsl_regwrite(device, GEN7_TPL1_DBG_ECO_CNTL1, 0xc0700);
 	} else {
 		/* Disable non-ubwc read reqs from passing write reqs */
-		kgsl_regrmw(device, GEN7_RB_CMP_DBG_ECO_CNTL, BIT(11), BIT(11));
+		if (!adreno_is_gen7_15_0(adreno_dev) && !adreno_is_gen7_11_0(adreno_dev))
+			kgsl_regrmw(device, GEN7_RB_CMP_DBG_ECO_CNTL, BIT(11), BIT(11));
 	}
 
 	/* Enable GMU power counter 0 to count GPU busy */

@@ -303,6 +303,10 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto clks_gdsc_off;
 
+	ret = gen8_gmu_set_non_bufferable_carveout(adreno_dev);
+	if (ret)
+		goto clks_gdsc_off;
+
 	_get_hw_fence_entries(adreno_dev);
 
 	gen8_gmu_register_config(adreno_dev);

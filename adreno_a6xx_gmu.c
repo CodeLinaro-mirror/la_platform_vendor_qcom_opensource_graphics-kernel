@@ -58,6 +58,11 @@ static struct gmu_vma_entry a6xx_gmu_vma_legacy[] = {
 			.size = SZ_512M,
 			.next_va = 0x60000000
 		},
+	[GMU_MEM_TYPE_MAX] = {
+			.start = UINT_MAX,
+			.size = UINT_MAX,
+			.next_va = UINT_MAX
+		},
 };
 
 static struct gmu_vma_entry a6xx_gmu_vma[] = {
@@ -82,6 +87,11 @@ static struct gmu_vma_entry a6xx_gmu_vma[] = {
 			.start = 0x60000000,
 			.size = SZ_512M,
 			.next_va = 0x60000000
+		},
+	[GMU_MEM_TYPE_MAX] = {
+			.start = UINT_MAX,
+			.size = UINT_MAX,
+			.next_va = UINT_MAX
 		},
 };
 

@@ -96,8 +96,7 @@ static void kgsl_snapshot_put_object(struct kgsl_snapshot_object *obj)
 {
 	list_del(&obj->node);
 
-	obj->entry->memdesc.priv &= ~KGSL_MEMDESC_FROZEN;
-	obj->entry->memdesc.priv &= ~KGSL_MEMDESC_SKIP_RECLAIM;
+	CLEAR_FLAG(KGSL_MEMDESC_FROZEN | KGSL_MEMDESC_SKIP_RECLAIM, &obj->entry->memdesc.priv);
 	kgsl_mem_entry_put(obj->entry);
 
 	kfree(obj);
@@ -267,14 +266,14 @@ int kgsl_snapshot_get_object(struct kgsl_snapshot *snapshot,
 	 * 0 so it doesn't get counted twice
 	 */
 
-	ret = (entry->memdesc.priv & KGSL_MEMDESC_FROZEN) ? 0
+	ret = (TEST_FLAG(KGSL_MEMDESC_FROZEN, &entry->memdesc.priv)) ? 0
 		: entry->memdesc.size;
 
-	entry->memdesc.priv |= KGSL_MEMDESC_FROZEN;
+	SET_FLAG(KGSL_MEMDESC_FROZEN, &entry->memdesc.priv);
 
 	return ret;
 err_put:
-	entry->memdesc.priv &= ~KGSL_MEMDESC_SKIP_RECLAIM;
+	CLEAR_FLAG(KGSL_MEMDESC_SKIP_RECLAIM, &entry->memdesc.priv);
 	kgsl_mem_entry_put(entry);
 	return ret;
 }
@@ -542,10 +541,9 @@ static void kgsl_device_snapshot_atomic(struct kgsl_device *device)
 	if (device->snapshot && device->force_panic)
 		return;
 
-	if (!atomic_read(&device->active_cnt)) {
-		dev_err(device->dev, "snapshot: device is powered off\n");
+	if (WARN(!kgsl_state_is_awake(device),
+		"snapshot: device is powered off\n"))
 		return;
-	}
 
 	if (device->snapshot_memory_atomic.ptr)
 		goto snapshot;
@@ -1089,7 +1087,8 @@ static int kgsl_panic_notifier_callback(struct notifier_block *nb,
 							panic_nb);
 
 	/* To send NMI to GMU */
-	device->gmu_fault = true;
+	device->gmu_fault = gmu_core_isenabled(device);
+
 	kgsl_device_snapshot_atomic(device);
 
 	return NOTIFY_OK;

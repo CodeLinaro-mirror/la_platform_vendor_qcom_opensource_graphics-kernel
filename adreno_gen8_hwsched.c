@@ -14,6 +14,7 @@
 #include "kgsl_device.h"
 #include "kgsl_gmu_core.h"
 #include "kgsl_trace.h"
+#include "kgsl_util.h"
 
 static void _wakeup_hw_fence_waiters(struct adreno_device *adreno_dev, u32 fault)
 {
@@ -48,7 +49,7 @@ static void _wakeup_hw_fence_waiters(struct adreno_device *adreno_dev, u32 fault
 
 	wake_up_all(&hwf->unack_wq);
 
-	del_timer_sync(&hfi->hw_fence_timer);
+	kgsl_delete_timer_sync(&hfi->hw_fence_timer);
 }
 
 void gen8_hwsched_fault(struct adreno_device *adreno_dev, u32 fault)
@@ -241,7 +242,8 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = gmu_core_enable_clks(device, device->gmu_core.num_freqs - 1);
+	/* Start the GMU at the lowest available frequency level */
+	ret = gmu_core_enable_clks(device, 0);
 	if (ret)
 		goto gdsc_off;
 
@@ -315,12 +317,6 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	ret = gmu_core_clock_set_rate(device, 0);
-	if (ret) {
-		gen8_hwsched_hfi_stop(adreno_dev);
-		goto err;
-	}
-
 	if (gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1 &&
 		!WARN_ONCE(!adreno_dev->gpucore->num_ddr_channels,
 			"Number of DDR channel is not specified in gpu core")) {
@@ -369,7 +365,8 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = gmu_core_enable_clks(device, device->gmu_core.num_freqs - 1);
+	/* Start the GMU at the lowest available frequency level */
+	ret = gmu_core_enable_clks(device, 0);
 	if (ret)
 		goto gdsc_off;
 
@@ -407,12 +404,6 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	ret = gen8_hwsched_hfi_start(adreno_dev);
 	if (ret)
 		goto err;
-
-	ret = gmu_core_clock_set_rate(device, 0);
-	if (ret) {
-		gen8_hwsched_hfi_stop(adreno_dev);
-		goto err;
-	}
 
 	device->gmu_fault = false;
 
@@ -971,7 +962,7 @@ no_gx_power:
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
-	del_timer_sync(&device->idle_timer);
+	kgsl_delete_timer_sync(&device->idle_timer);
 
 	kgsl_pwrscale_sleep(device);
 

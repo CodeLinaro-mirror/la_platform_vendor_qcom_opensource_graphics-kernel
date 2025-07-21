@@ -177,6 +177,11 @@ static const u32 gen7_9_x_ifpc_pwrup_reglist[] = {
 	GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_4,
 };
 
+static const u32 gen7_2_0_ifpc_pwrup_reglist[] = {
+	GEN7_SP_CHICKEN_BITS_2,
+	GEN7_SP_LPAC_CHICKEN_BITS_2,
+};
+
 static const struct gen7_pwrup_extlist gen7_pwrup_extlist_cb[] = {
 	{ GEN7_GRAS_NC_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
 	{ GEN7_RB_CMP_DBG_ECO_CNTL, BIT(PIPE_BR)},
@@ -641,6 +646,16 @@ static void gen7_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	lock->ifpc_list_len = reglist[items].count;
 	items++;
 
+	if (adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
+		adreno_is_gen7_6_0(adreno_dev)) {
+		if (adreno_dev->lpac_enabled) {
+			reglist[items].regs = gen7_2_0_ifpc_pwrup_reglist;
+			reglist[items].count = ARRAY_SIZE(gen7_2_0_ifpc_pwrup_reglist);
+			lock->ifpc_list_len += reglist[items].count;
+			items++;
+		}
+	}
+
 	if (adreno_is_gen7_9_x(adreno_dev)) {
 		reglist[items].regs = gen7_9_x_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen7_9_x_ifpc_pwrup_reglist);
@@ -1014,12 +1029,21 @@ int gen7_start(struct adreno_device *adreno_dev)
 	if (adreno_is_gen7_0_0(adreno_dev) || adreno_is_gen7_0_1(adreno_dev) ||
 		adreno_is_gen7_4_0(adreno_dev) || adreno_is_gen7_2_0(adreno_dev) ||
 		adreno_is_gen7_2_1(adreno_dev) || adreno_is_gen7_6_0(adreno_dev) ||
-		adreno_is_gen7_11_0(adreno_dev)) {
+		adreno_is_gen7_11_0(adreno_dev) || adreno_is_gen7_15_0(adreno_dev)) {
 		kgsl_regwrite(device, GEN7_CP_CHICKEN_DBG, 0x1);
 		kgsl_regwrite(device, GEN7_CP_BV_CHICKEN_DBG, 0x1);
 		/* Avoid configuring LPAC pipe on targets which do not have LPAC. */
 		if (adreno_dev->lpac_enabled)
 			kgsl_regwrite(device, GEN7_CP_LPAC_CHICKEN_DBG, 0x1);
+	}
+
+	/* Disable L0 STCHE to avoid deadlock in GPU pipeline */
+	if (adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
+		adreno_is_gen7_6_0(adreno_dev)) {
+		if (adreno_dev->lpac_enabled) {
+			kgsl_regwrite(device, GEN7_SP_CHICKEN_BITS_2, BIT(4));
+			kgsl_regwrite(device, GEN7_SP_LPAC_CHICKEN_BITS_2, BIT(4));
+		}
 	}
 
 	_set_secvid(device);
@@ -2122,7 +2146,7 @@ static void gen7_remove(struct adreno_device *adreno_dev)
 	/* Make sure timer is initialized, otherwise WARN_ON is generated */
 	if (adreno_preemption_feature_set(adreno_dev) &&
 	    (test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags)))
-		del_timer(&adreno_dev->preempt.timer);
+		kgsl_delete_timer(&adreno_dev->preempt.timer);
 }
 
 static void gen7_read_bus_stats(struct kgsl_device *device,

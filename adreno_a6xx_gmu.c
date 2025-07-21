@@ -424,6 +424,10 @@ int a6xx_load_pdc_ucode(struct adreno_device *adreno_dev)
 
 	cfg = gmu->pdc_cfg_base;
 
+	/* PDC GPU SEQ start addr register is removed for A622 */
+	if (adreno_is_a622(adreno_dev) && a6xx_core->pdc_in_aop)
+		return 0;
+
 	/* PDC is programmed in AOP for newer platforms */
 	if (a6xx_core->pdc_in_aop)
 		goto done;
@@ -681,7 +685,8 @@ int a6xx_rscc_wakeup_sequence(struct adreno_device *adreno_dev)
 	if (!test_bit(GMU_PRIV_RSCC_SLEEP_DONE, &gmu->flags))
 		return 0;
 	 /* A660 has a replacement register */
-	if (adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev))
+	if (adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
+				adreno_is_a622(adreno_dev))
 		gmu_core_regread(device, A662_GPU_CC_GX_DOMAIN_MISC3, &val);
 	else if (adreno_is_a660(ADRENO_DEVICE(device)) ||
 			adreno_is_a663(adreno_dev))
@@ -3134,7 +3139,7 @@ no_gx_power:
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
-	del_timer_sync(&device->idle_timer);
+	kgsl_delete_timer_sync(&device->idle_timer);
 
 	kgsl_pwrscale_sleep(device);
 

@@ -186,6 +186,8 @@
 #define ADRENO_DCVS_PROFILE BIT(26)
 /* Enable TSENSE power savings during sleep */
 #define ADRENO_TSENSE_DYNAMIC_PERIOD BIT(27)
+/* Enable GMU Based AB voting */
+#define ADRENO_GMU_AB BIT(28)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds

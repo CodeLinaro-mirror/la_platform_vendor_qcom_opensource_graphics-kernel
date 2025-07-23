@@ -3266,7 +3266,7 @@ static const struct hfi_limits_mit_tbl gen8_2_0_limits_mit_tbl[] = {
 			.msg_path = 0,
 			.lkgen = 0,
 			.mode = 0,
-			.sid_val = 0x12,
+			.sid_val = 0x9,
 			.mit_time = 2000,
 			.curr_limit = 6000,
 		}
@@ -3452,6 +3452,9 @@ static const struct hfi_therm_profile_ctrl therm_profile_8_2_0 = {
 	.throttle_cfg.throttle_lvls[2] = 20,
 };
 
+/* Set the BCL throttle levels to 62/75/83 percent */
+#define GEN8_2_X_BCL_DATA ((62 << 15) | (75 << 8) | (83 << 1) | 0x1)
+
 static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_2_0,
@@ -3486,7 +3489,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 	.gmu_hub_clk_freq = 150000000,
 	.gen8_snapshot_block_list = &gen8_2_0_snapshot_block_list,
 	.fast_bus_hint = true,
-	.bcl_data = 1,
+	.bcl_data = GEN8_2_X_BCL_DATA,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
 	.cl_no_ft_timeout_ms = 6500,
@@ -3531,7 +3534,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_1 = {
 	.gmu_hub_clk_freq = 150000000,
 	.gen8_snapshot_block_list = &gen8_2_0_snapshot_block_list,
 	.fast_bus_hint = true,
-	.bcl_data = 1,
+	.bcl_data = GEN8_2_X_BCL_DATA,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
 	.cl_no_ft_timeout_ms = 6500,

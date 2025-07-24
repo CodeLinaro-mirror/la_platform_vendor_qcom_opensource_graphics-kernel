@@ -2751,7 +2751,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_15_0 = {
 				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
 		.compatible = "qcom,adreno-gpu-gen7-15-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_IFPC |
-			ADRENO_PREEMPTION | ADRENO_L3_VOTE | ADRENO_DMS,
+			ADRENO_PREEMPTION | ADRENO_L3_VOTE | ADRENO_DMS | ADRENO_CONTENT_PROTECTION,
 		.gpudev = &adreno_gen7_gmu_gpudev.base,
 		.perfcounters = &adreno_gen7_2_0_perfcounters,
 		.uche_gmem_alignment = SZ_16M,

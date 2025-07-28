@@ -1135,7 +1135,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a622 = {
 	.hang_detect_cycles = 0x3ffff,
 	.protected_regs = a620_protected_regs,
 	.disable_tseskip = true,
-	.highest_bank_bit = 13,
+	.highest_bank_bit = 14,
 	.gmu_hub_clk_freq = 200000000,
 };
 

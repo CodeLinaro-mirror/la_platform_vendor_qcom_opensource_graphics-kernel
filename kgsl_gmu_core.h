@@ -329,6 +329,7 @@ enum gmu_trace_id {
 	GMU_TRACE_DCVS_BUSLVL = 6,
 	GMU_TRACE_DCVS_PWRSTATS = 7,
 	GMU_TRACE_PWR_CONSTRAINT = 8,
+	GMU_TRACE_DCVS_PROFILE = 9,
 	GMU_TRACE_MAX,
 };
 
@@ -398,6 +399,13 @@ struct trace_pwr_constraint {
 	u32 value;
 	u32 status;
 } __packed;
+
+struct trace_dcvs_profile {
+	u32 action;
+	u32 profile;
+	struct kgsl_dcvs_attrs attrs;
+} __packed;
+
 /**
  * struct kgsl_gmu_trace  - wrapper for gmu trace memory object
  */

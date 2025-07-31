@@ -985,8 +985,8 @@ static void kgsl_destroy_process_private(struct kref *kref)
 			struct kgsl_process_private, refcount);
 	struct kgsl_device *device = KGSL_MMU_DEVICE(private->pagetable->mmu);
 
-	if (private->profile.md.hostptr)
-		gmu_core_free_block(device, private->profile.md.hostptr);
+	if (private->profile.md.gmuaddr)
+		gmu_core_free_block(device, &private->profile.md);
 
 	kgsl_put_work_period(private->period);
 	/*

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
@@ -9,8 +9,6 @@
 #include <linux/of.h>
 #include <linux/of_fdt.h>
 #include <linux/of_device.h>
-#include <linux/regulator/consumer.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 #include <soc/qcom/of_common.h>
 
 #include "adreno.h"
@@ -179,6 +177,11 @@ static const u32 gen7_9_x_ifpc_pwrup_reglist[] = {
 	GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_4,
 };
 
+static const u32 gen7_2_0_ifpc_pwrup_reglist[] = {
+	GEN7_SP_CHICKEN_BITS_2,
+	GEN7_SP_LPAC_CHICKEN_BITS_2,
+};
+
 static const struct gen7_pwrup_extlist gen7_pwrup_extlist_cb[] = {
 	{ GEN7_GRAS_NC_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
 	{ GEN7_RB_CMP_DBG_ECO_CNTL, BIT(PIPE_BR)},
@@ -212,7 +215,7 @@ static int acd_calibrate_set(void *data, u64 val)
 	u32 debug_val = (u32) val;
 	int ret;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	ret = adreno_active_count_get(adreno_dev);
 	if (ret)
 		goto err;
@@ -223,7 +226,7 @@ static int acd_calibrate_set(void *data, u64 val)
 
 	adreno_active_count_put(adreno_dev);
 err:
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 	return ret;
 }
 
@@ -344,10 +347,8 @@ int gen7_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
-	u64 freq = gen7_core->gmu_hub_clk_freq;
 
 	adreno_dev->highest_bank_bit = gen7_core->highest_bank_bit;
-	adreno_dev->gmu_hub_clk_freq = freq ? freq : 150000000;
 	adreno_dev->ahb_timeout_val = adreno_get_ahb_timeout_val(adreno_dev,
 			gen7_core->noc_timeout_us);
 	adreno_dev->bcl_data = gen7_core->bcl_data;
@@ -644,6 +645,16 @@ static void gen7_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	}
 	lock->ifpc_list_len = reglist[items].count;
 	items++;
+
+	if (adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
+		adreno_is_gen7_6_0(adreno_dev)) {
+		if (adreno_dev->lpac_enabled) {
+			reglist[items].regs = gen7_2_0_ifpc_pwrup_reglist;
+			reglist[items].count = ARRAY_SIZE(gen7_2_0_ifpc_pwrup_reglist);
+			lock->ifpc_list_len += reglist[items].count;
+			items++;
+		}
+	}
 
 	if (adreno_is_gen7_9_x(adreno_dev)) {
 		reglist[items].regs = gen7_9_x_ifpc_pwrup_reglist;
@@ -1018,12 +1029,21 @@ int gen7_start(struct adreno_device *adreno_dev)
 	if (adreno_is_gen7_0_0(adreno_dev) || adreno_is_gen7_0_1(adreno_dev) ||
 		adreno_is_gen7_4_0(adreno_dev) || adreno_is_gen7_2_0(adreno_dev) ||
 		adreno_is_gen7_2_1(adreno_dev) || adreno_is_gen7_6_0(adreno_dev) ||
-		adreno_is_gen7_11_0(adreno_dev)) {
+		adreno_is_gen7_11_0(adreno_dev) || adreno_is_gen7_15_0(adreno_dev)) {
 		kgsl_regwrite(device, GEN7_CP_CHICKEN_DBG, 0x1);
 		kgsl_regwrite(device, GEN7_CP_BV_CHICKEN_DBG, 0x1);
 		/* Avoid configuring LPAC pipe on targets which do not have LPAC. */
 		if (adreno_dev->lpac_enabled)
 			kgsl_regwrite(device, GEN7_CP_LPAC_CHICKEN_DBG, 0x1);
+	}
+
+	/* Disable L0 STCHE to avoid deadlock in GPU pipeline */
+	if (adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
+		adreno_is_gen7_6_0(adreno_dev)) {
+		if (adreno_dev->lpac_enabled) {
+			kgsl_regwrite(device, GEN7_SP_CHICKEN_BITS_2, BIT(4));
+			kgsl_regwrite(device, GEN7_SP_LPAC_CHICKEN_BITS_2, BIT(4));
+		}
 	}
 
 	_set_secvid(device);
@@ -1046,36 +1066,6 @@ int gen7_start(struct adreno_device *adreno_dev)
 	}
 
 	return 0;
-}
-
-/* Offsets into the MX/CX mapped register regions */
-#define GEN7_RDPM_MX_OFFSET 0xf00
-#define GEN7_RDPM_CX_OFFSET 0xf14
-
-void gen7_rdpm_mx_freq_update(struct gen7_gmu_device *gmu, u32 freq)
-{
-	if (gmu->rdpm_mx_virt) {
-		writel_relaxed(freq/1000, (gmu->rdpm_mx_virt + GEN7_RDPM_MX_OFFSET));
-
-		/*
-		 * ensure previous writes post before this one,
-		 * i.e. act like normal writel()
-		 */
-		wmb();
-	}
-}
-
-void gen7_rdpm_cx_freq_update(struct gen7_gmu_device *gmu, u32 freq)
-{
-	if (gmu->rdpm_cx_virt) {
-		writel_relaxed(freq/1000, (gmu->rdpm_cx_virt + GEN7_RDPM_CX_OFFSET));
-
-		/*
-		 * ensure previous writes post before this one,
-		 * i.e. act like normal writel()
-		 */
-		wmb();
-	}
 }
 
 int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
@@ -1526,16 +1516,16 @@ static const char *gen7_fault_block_uche(struct kgsl_device *device,
 	 * to turn off CX gdsc will fail during the reset. So to avoid blocking
 	 * here, try to lock device mutex and return if it fails.
 	 */
-	if (!mutex_trylock(&device->mutex))
+	if (!kgsl_mutex_trylock(&device->mutex))
 		goto regread_fail;
 
 	if (!kgsl_state_is_awake(device)) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		goto regread_fail;
 	}
 
 	kgsl_regread(device, GEN7_UCHE_CLIENT_PF, &uche_client_id);
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	/* Ignore the value if the gpu is in IFPC */
 	if (uche_client_id == SCOOBYDOO) {
@@ -1843,6 +1833,9 @@ int gen7_probe_common(struct platform_device *pdev,
 
 	if (adreno_preemption_feature_set(adreno_dev)) {
 		const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
+
+		adreno_dev->total_ctxt_record_sz = gen7_core->ctxt_record_size ?
+			gen7_core->ctxt_record_size : GEN7_CP_CTXRECORD_SIZE_IN_BYTES;
 
 		adreno_dev->preempt.preempt_level = gen7_core->preempt_level;
 		adreno_dev->preempt.skipsaverestore = true;
@@ -2153,7 +2146,7 @@ static void gen7_remove(struct adreno_device *adreno_dev)
 	/* Make sure timer is initialized, otherwise WARN_ON is generated */
 	if (adreno_preemption_feature_set(adreno_dev) &&
 	    (test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags)))
-		del_timer(&adreno_dev->preempt.timer);
+		kgsl_delete_timer(&adreno_dev->preempt.timer);
 }
 
 static void gen7_read_bus_stats(struct kgsl_device *device,

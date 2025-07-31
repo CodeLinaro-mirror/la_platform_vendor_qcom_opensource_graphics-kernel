@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "adreno.h"
 #include "adreno_gen8.h"
 #include "adreno_pm4types.h"
 #include "adreno_trace.h"
+#include "kgsl_util.h"
 
 #define PREEMPT_RECORD(_field) \
 		offsetof(struct gen8_cp_preemption_record, _field)
@@ -106,7 +107,7 @@ static void _gen8_preemption_done(struct adreno_device *adreno_dev)
 
 	adreno_dev->preempt.count++;
 
-	del_timer_sync(&adreno_dev->preempt.timer);
+	kgsl_delete_timer_sync(&adreno_dev->preempt.timer);
 
 	kgsl_regread(device, GEN8_CP_CONTEXT_SWITCH_LEVEL_STATUS, &status);
 
@@ -171,12 +172,12 @@ static void _gen8_preemption_worker(struct work_struct *work)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	/* Need to take the mutex to make sure that the power stays on */
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (adreno_in_preempt_state(adreno_dev, ADRENO_PREEMPT_FAULTED))
 		_gen8_preemption_fault(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 /* Find the highest priority active ringbuffer */
@@ -242,7 +243,7 @@ void gen8_preemption_trigger(struct adreno_device *adreno_dev, bool atomic)
 	}
 
 	/* Turn off the dispatcher timer */
-	del_timer(&adreno_dev->dispatcher.timer);
+	kgsl_delete_timer(&adreno_dev->dispatcher.timer);
 
 	/*
 	 * This is the most critical section - we need to take care not to race
@@ -370,7 +371,7 @@ void gen8_preemption_trigger(struct adreno_device *adreno_dev, bool atomic)
 	if (gen8_fenced_write(adreno_dev, GEN8_CP_CONTEXT_SWITCH_CNTL, cntl,
 					FENCE_STATUS_WRITEDROPPED1_MASK)) {
 		adreno_dev->next_rb = NULL;
-		del_timer(&adreno_dev->preempt.timer);
+		kgsl_delete_timer(&adreno_dev->preempt.timer);
 		goto err;
 	}
 
@@ -425,7 +426,7 @@ void gen8_preemption_callback(struct adreno_device *adreno_dev, int bit)
 	 */
 	_power_collapse_set(adreno_dev, false);
 
-	del_timer(&adreno_dev->preempt.timer);
+	kgsl_delete_timer(&adreno_dev->preempt.timer);
 
 	kgsl_regread(device, GEN8_CP_CONTEXT_SWITCH_LEVEL_STATUS, &status);
 
@@ -508,14 +509,14 @@ void gen8_preemption_schedule(struct adreno_device *adreno_dev)
 	if (!adreno_is_preemption_enabled(adreno_dev))
 		return;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (adreno_in_preempt_state(adreno_dev, ADRENO_PREEMPT_COMPLETE))
 		_gen8_preemption_done(adreno_dev);
 
 	gen8_preemption_trigger(adreno_dev, false);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 u32 gen8_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
@@ -677,12 +678,8 @@ static int gen8_preemption_ringbuffer_init(struct adreno_device *adreno_dev,
 	struct adreno_ringbuffer *rb)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
-	u64 ctxt_record_size = GEN8_CP_CTXRECORD_SIZE_IN_BYTES;
+	u64 ctxt_record_size = adreno_dev->total_ctxt_record_sz;
 	int ret;
-
-	if (gen8_core->ctxt_record_size)
-		ctxt_record_size = gen8_core->ctxt_record_size;
 
 	/*
 	 * Since RB0 always runs to completion, there is no need to

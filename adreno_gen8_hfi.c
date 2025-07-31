@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -12,6 +12,7 @@
 #include "adreno_gen8_gmu.h"
 #include "adreno_gen8_hfi.h"
 #include "kgsl_device.h"
+#include "kgsl_gmu_core.h"
 #include "kgsl_trace.h"
 
 /* Below section is for all structures related to HFI queues */
@@ -539,7 +540,8 @@ int gen8_hfi_process_queue(struct gen8_gmu_device *gmu,
 			adreno_gen8_receive_debug_req(gmu, rcvd);
 			break;
 		case F2H_MSG_PROCESS_TRACE:
-			gmu_core_process_trace_data(device, GMU_PDEV_DEV(device), &gmu->trace);
+			gmu_core_process_trace_data(device,
+					GMU_PDEV_DEV(device), &device->gmu_core.trace);
 			break;
 		default: /* No Reply */
 			dev_err(GMU_PDEV_DEV(device),
@@ -609,13 +611,36 @@ int gen8_hfi_send_iff_pclx_feature_ctrl(struct adreno_device *adreno_dev)
 	return gen8_hfi_send_generic_req(adreno_dev, tbl_cmd, hdr_size);
 }
 
+int gen8_hfi_send_minbw_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+
+	if (!adreno_dev->minbw_enabled)
+		return 0;
+
+	/* minbw can be enabled only if IFPC is enabled */
+	if (gmu->idle_level == GPU_HW_ACTIVE)
+		return 0;
+
+	return gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_MINBW, 1,
+			adreno_dev->minbw_data);
+}
+
 int gen8_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
 {
-	int ret = 0;
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	struct hfi_clx_table_v2_cmd cmd = {0};
+	int ret;
 
 	if (!adreno_dev->clx_enabled)
 		return 0;
+
+	if (WARN_ON(!gen8_core->clx_tbl)) {
+		adreno_dev->clx_enabled = false;
+		return 0;
+	}
+
+	memcpy(&cmd, gen8_core->clx_tbl, sizeof(struct hfi_clx_table_v2_cmd));
 
 	/* Make sure the table is valid before enabling feature */
 	ret = CMD_MSG_HDR(cmd, H2F_MSG_CLX_TBL);
@@ -625,31 +650,6 @@ int gen8_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
 	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_CLX, 1, 0);
 	if (ret)
 		return ret;
-
-	cmd.version = FIELD_PREP(GENMASK(31, 16), 0x2) | FIELD_PREP(GENMASK(15, 0), 0x1);
-	/* GFX domain */
-	cmd.domain[0].data0 = FIELD_PREP(GENMASK(31, 29), 1) |
-				FIELD_PREP(GENMASK(28, 28), 1) |
-				FIELD_PREP(GENMASK(27, 22), 4) |
-				FIELD_PREP(GENMASK(21, 16), 55) |
-				FIELD_PREP(GENMASK(15, 0), 0);
-	cmd.domain[0].clxt = 0;
-	cmd.domain[0].clxh = 0;
-	cmd.domain[0].urgmode = 1;
-	cmd.domain[0].lkgen = 0;
-	cmd.domain[0].currbudget = 100;
-
-	/* MxG domain */
-	cmd.domain[1].data0 = FIELD_PREP(GENMASK(31, 29), 1) |
-				FIELD_PREP(GENMASK(28, 28), 1) |
-				FIELD_PREP(GENMASK(27, 22), 1) |
-				FIELD_PREP(GENMASK(21, 16), 55) |
-				FIELD_PREP(GENMASK(15, 0), 0);
-	cmd.domain[1].clxt = 0;
-	cmd.domain[1].clxh = 0;
-	cmd.domain[1].urgmode = 1;
-	cmd.domain[1].lkgen = 0;
-	cmd.domain[1].currbudget = 50;
 
 	ret = gen8_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
 	if (ret)
@@ -687,7 +687,7 @@ int gen8_hfi_send_ifpc_feature_ctrl(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 
-	if (gmu->idle_level == GPU_HW_IFPC)
+	if ((gmu->idle_level == GPU_HW_MINBW) || (gmu->idle_level == GPU_HW_IFPC))
 		return gen8_hfi_send_feature_ctrl(adreno_dev,
 				HFI_FEATURE_IFPC, 1, adreno_dev->ifpc_hyst);
 	return 0;
@@ -731,66 +731,36 @@ int gen8_hfi_send_gpu_perf_table(struct adreno_device *adreno_dev)
 	 */
 	static u32 cmd_buf[200];
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_dcvs_table *tbl = &gmu->dcvs_table;
-	int ret = 0;
+	struct hfi_table_cmd *cmd = (struct hfi_table_cmd *)&cmd_buf[0];
+	u32 dword_off;
 
-	/* Starting with GMU HFI Version 2.6.1, use H2F_MSG_TABLE */
-	if (device->gmu_core.ver.hfi >= HFI_VERSION(2, 6, 1)) {
-		struct hfi_table_cmd *cmd = (struct hfi_table_cmd *)&cmd_buf[0];
-		u32 dword_off;
+	/* Already setup, so just send cmd */
+	if (cmd->hdr)
+		return gen8_hfi_send_generic_req(adreno_dev, cmd,
+				MSG_HDR_GET_SIZE(cmd->hdr) << 2);
 
-		/* Already setup, so just send cmd */
-		if (cmd->hdr)
-			return gen8_hfi_send_generic_req(adreno_dev, cmd,
-					MSG_HDR_GET_SIZE(cmd->hdr) << 2);
+	if (tbl->gpu_level_num > MAX_GX_LEVELS || tbl->gmu_level_num > MAX_CX_LEVELS)
+		return -EINVAL;
 
-		if (tbl->gpu_level_num > MAX_GX_LEVELS || tbl->gmu_level_num > MAX_CX_LEVELS)
-			return -EINVAL;
+	/* CMD starts with struct hfi_table_cmd data */
+	cmd->type = HFI_TABLE_GPU_PERF;
+	dword_off = sizeof(*cmd) >> 2;
 
-		/* CMD starts with struct hfi_table_cmd data */
-		cmd->type = HFI_TABLE_GPU_PERF;
-		dword_off = sizeof(*cmd) >> 2;
+	/* Fill in the table entry and data starting at dword_off */
+	dword_off += _fill_table_entry((struct hfi_table_entry *)&cmd_buf[dword_off],
+			tbl->gpu_level_num, sizeof(struct opp_gx_desc),
+			(u32 *)tbl->gx_votes);
 
-		/* Fill in the table entry and data starting at dword_off */
-		dword_off += _fill_table_entry((struct hfi_table_entry *)&cmd_buf[dword_off],
-				tbl->gpu_level_num, sizeof(struct opp_gx_desc),
-				(u32 *)tbl->gx_votes);
+	/* Fill in the table entry and data starting at dword_off */
+	dword_off += _fill_table_entry((struct hfi_table_entry *)&cmd_buf[dword_off],
+			tbl->gmu_level_num, sizeof(struct opp_desc),
+			(u32 *)tbl->cx_votes);
 
-		/* Fill in the table entry and data starting at dword_off */
-		dword_off += _fill_table_entry((struct hfi_table_entry *)&cmd_buf[dword_off],
-				tbl->gmu_level_num, sizeof(struct opp_desc),
-				(u32 *)tbl->cx_votes);
+	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_TABLE, HFI_MSG_CMD);
+	cmd->hdr = MSG_HDR_SET_SIZE(cmd->hdr, dword_off);
 
-		cmd->hdr = CREATE_MSG_HDR(H2F_MSG_TABLE, HFI_MSG_CMD);
-		cmd->hdr = MSG_HDR_SET_SIZE(cmd->hdr, dword_off);
-
-		ret = gen8_hfi_send_generic_req(adreno_dev, cmd, dword_off << 2);
-	} else {
-		struct hfi_dcvstable_cmd *cmd = (struct hfi_dcvstable_cmd *)&cmd_buf[0];
-
-		/* Already setup, so just send cmd */
-		if (cmd->hdr)
-			return gen8_hfi_send_generic_req(adreno_dev, cmd, sizeof(*cmd));
-
-		if (tbl->gpu_level_num > MAX_GX_LEVELS_LEGACY || tbl->gmu_level_num > MAX_CX_LEVELS)
-			return -EINVAL;
-
-		ret = CMD_MSG_HDR(*cmd, H2F_MSG_PERF_TBL);
-		if (ret)
-			return ret;
-
-		cmd->gpu_level_num = tbl->gpu_level_num;
-		cmd->gmu_level_num = tbl->gmu_level_num;
-		memcpy(&cmd->gx_votes, tbl->gx_votes,
-				sizeof(struct opp_gx_desc) * cmd->gpu_level_num);
-		memcpy(&cmd->cx_votes, tbl->cx_votes,
-				sizeof(struct opp_desc) * cmd->gmu_level_num);
-
-		ret = gen8_hfi_send_generic_req(adreno_dev, cmd, sizeof(*cmd));
-	}
-
-	return ret;
+	return gen8_hfi_send_generic_req(adreno_dev, cmd, dword_off << 2);
 }
 
 int gen8_hfi_start(struct adreno_device *adreno_dev)
@@ -815,6 +785,10 @@ int gen8_hfi_start(struct adreno_device *adreno_dev)
 		goto err;
 
 	result = gen8_hfi_send_bcl_feature_ctrl(adreno_dev);
+	if (result)
+		goto err;
+
+	result = gen8_hfi_send_minbw_feature_ctrl(adreno_dev);
 	if (result)
 		goto err;
 

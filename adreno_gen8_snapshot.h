@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __ADRENO_GEN8_SNAPSHOT_H
 #define __ADRENO_GEN8_SNAPSHOT_H
@@ -30,6 +30,12 @@ enum location_id {
 	SP_TOP      = 2,
 	USPTP       = 3,
 	HLSQ_DP_STR = 4,
+};
+
+enum uSPTP_id {
+	uSPTP0 = 0,
+	uSPTP1 = 1,
+	SPTOP  = 15,
 };
 
 #define STATE_NON_CONTEXT     0
@@ -100,8 +106,8 @@ struct gen8_shader_block {
 	u32 size;
 	/* num_sps: The number of SPs to dump */
 	u32 num_sps;
-	/* num_usptps: The number of USPTPs to dump */
-	u32 num_usptps;
+	/* usptp_id: The ID of USPTPs to dump */
+	u32 usptp_id;
 	/* pipeid: Pipe identifier for the block data  */
 	u32 pipeid;
 	/* location: Location identifier for the block data */
@@ -679,8 +685,6 @@ struct gen8_snapshot_block_list {
 	struct gen8_sptp_cluster_registers *sptp_clusters;
 	/* num_sptp_clusters : Length of GPU SPTP cluster registers list */
 	size_t num_sptp_clusters;
-	/* post_crashdumper_regs : Registers which need to be dumped after CD runs */
-	const u32 *post_crashdumper_regs;
 	/* index_registers : List of index_registers */
 	struct gen8_cp_indexed_reg *index_registers;
 	/* index_registers_len : Length of the index registers */

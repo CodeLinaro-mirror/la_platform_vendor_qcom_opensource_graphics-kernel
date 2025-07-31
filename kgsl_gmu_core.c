@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
-#include <linux/iopoll.h>
+#include <dt-bindings/power/qcom-rpmpd.h>
 #include <linux/of.h>
 #include <linux/io.h>
-#include <linux/iopoll.h>
+#include <linux/pm_opp.h>
 
 #include "adreno.h"
 #include "adreno_trace.h"
 #include "kgsl_device.h"
 #include "kgsl_gmu_core.h"
+#include "kgsl_power_trace.h"
 #include "kgsl_sync.h"
 #include "kgsl_trace.h"
 
@@ -258,7 +259,7 @@ void gmu_core_free_globals(struct kgsl_device *device)
 
 		iommu_unmap(gmu->domain, md->gmuaddr, md->size);
 
-		if (md->priv & KGSL_MEMDESC_SYSMEM)
+		if (TEST_FLAG(KGSL_MEMDESC_SYSMEM, &md->priv))
 			kgsl_sharedmem_free(md);
 
 		memset(md, 0, sizeof(*md));
@@ -439,7 +440,37 @@ static int _map_gmu_static(struct kgsl_device *device, struct kgsl_memdesc *md,
 	return 0;
 }
 
-static int _map_gmu(struct kgsl_device *device, struct kgsl_memdesc *md,
+int gmu_core_reserve_gmuaddr(struct kgsl_device *device, struct kgsl_memdesc *md, u32 vma_id,
+	u32 align)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct gmu_vma_entry *vma = &gmu->vma[vma_id];
+	u32 addr, size = ALIGN(md->size, hfi_get_gmu_sz_alignment(align));
+
+	if (vma_is_dynamic(device, vma_id)) {
+		spin_lock(&vma->lock);
+		addr = find_unmapped_va(vma, size, hfi_get_gmu_va_alignment(align));
+		spin_unlock(&vma->lock);
+		if (addr == 0)
+			goto error;
+	} else {
+		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(align));
+		if ((addr + size) >= (vma->start + vma->size))
+			goto error;
+		vma->next_va = addr + size;
+	}
+
+	md->gmuaddr = addr;
+
+	return 0;
+
+error:
+	dev_err_ratelimited(GMU_PDEV_DEV(device),
+		"Insufficient VA space size: %x in vma:%u\n", size, vma_id);
+	return -ENOMEM;
+}
+
+int gmu_core_map_gmu(struct kgsl_device *device, struct kgsl_memdesc *md,
 	u32 addr, u32 vma_id, int attrs, u32 align)
 {
 	return vma_is_dynamic(device, vma_id) ?
@@ -477,7 +508,7 @@ int gmu_core_import_buffer(struct kgsl_device *device, struct hfi_mem_alloc_entr
 		attrs |= IOMMU_CACHE;
 	}
 
-	return _map_gmu(device, entry->md, 0, vma_id, attrs, desc->align);
+	return gmu_core_map_gmu(device, entry->md, 0, vma_id, attrs, desc->align);
 }
 
 struct kgsl_memdesc *gmu_core_reserve_kernel_block(struct kgsl_device *device,
@@ -499,7 +530,7 @@ struct kgsl_memdesc *gmu_core_reserve_kernel_block(struct kgsl_device *device,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	ret = _map_gmu(device, md, addr, vma_id, attrs, align);
+	ret = gmu_core_map_gmu(device, md, addr, vma_id, attrs, align);
 	if (ret) {
 		kgsl_sharedmem_free(md);
 		memset(md, 0x0, sizeof(*md));
@@ -527,7 +558,7 @@ struct kgsl_memdesc *gmu_core_reserve_kernel_block_fixed(struct kgsl_device *dev
 	if (ret)
 		return ERR_PTR(ret);
 
-	ret = _map_gmu(device, md, addr, vma_id, attrs, align);
+	ret = gmu_core_map_gmu(device, md, addr, vma_id, attrs, align);
 
 	sg_free_table(md->sgt);
 	kfree(md->sgt);
@@ -554,7 +585,7 @@ int gmu_core_alloc_kernel_block(struct kgsl_device *device,
 	if (ret)
 		return ret;
 
-	ret = _map_gmu(device, md, 0, vma_id, attrs, 0);
+	ret = gmu_core_map_gmu(device, md, 0, vma_id, attrs, 0);
 	if (ret)
 		kgsl_sharedmem_free(md);
 
@@ -636,12 +667,24 @@ static int gmu_core_iommu_fault_handler(struct iommu_domain *domain,
 	return 0;
 }
 
+#if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
+static struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
+{
+	return iommu_paging_domain_alloc(dev);
+}
+#else
+static struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
+{
+	return iommu_domain_alloc(&platform_bus_type);
+}
+#endif
+
 int gmu_core_iommu_init(struct kgsl_device *device)
 {
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
 	int ret;
 
-	device->gmu_core.domain = iommu_domain_alloc(&platform_bus_type);
+	device->gmu_core.domain = gmu_core_iommu_domain_alloc(gmu_pdev_dev);
 	if (!device->gmu_core.domain) {
 		dev_err(gmu_pdev_dev, "Unable to allocate GMU IOMMU domain\n");
 		return -ENODEV;
@@ -730,13 +773,26 @@ static void _gmu_trace_dcvs_pwrlevel(struct kgsl_device *device, struct gmu_trac
 		data->prev_pwrlvl = pwr->active_pwrlevel;
 
 	if (pwr->active_pwrlevel != data->new_pwrlvl) {
+		u32 penalty = FIELD_PREP(GENMASK(31, 16), data->penalty_down) |
+				FIELD_PREP(GENMASK(15, 0), data->penalty_up);
+		u32 step_down_cnt = FIELD_PREP(GENMASK(31, 16), data->subsequent_step_down_count) |
+				FIELD_PREP(GENMASK(15, 0), data->first_step_down_count);
+		u32 freq_cap = FIELD_PREP(GENMASK(31, 16), data->max_freq) |
+				FIELD_PREP(GENMASK(15, 0), data->min_freq);
+		u32 num_samples = FIELD_PREP(GENMASK(31, 16), data->num_samples_down) |
+				FIELD_PREP(GENMASK(15, 0), data->num_samples_up);
+
 		trace_kgsl_pwrlevel(device, data->new_pwrlvl,
 					pwr->pwrlevels[data->new_pwrlvl].gpu_freq,
 					data->prev_pwrlvl,
 					pwr->pwrlevels[data->prev_pwrlvl].gpu_freq,
 					pkt->ticks);
-		trace_gpu_frequency(pwr->pwrlevels[data->new_pwrlvl].gpu_freq/1000,
+		KGSL_TRACE_GPU_FREQ(pwr->pwrlevels[data->new_pwrlvl].gpu_freq/1000,
 					0, pkt->ticks);
+
+		trace_adreno_gpu_vote_params(data->new_pwrlvl, data->prev_pwrlvl,
+				data->avg_busy, data->flag, penalty, step_down_cnt, freq_cap,
+				num_samples, data->target_fps, data->mod_percent, pkt->ticks);
 	}
 
 	pwr->active_pwrlevel = data->new_pwrlvl;
@@ -773,6 +829,8 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 	pwr->time_in_pwrlevel[pwr->active_pwrlevel] += data->total_time;
 	if (pwr->thermal_pwrlevel)
 		pwr->thermal_time += data->gpu_time;
+
+	pwr->aggr_max_pwrlevel = data->aggr_max_pwrlevel;
 }
 
 static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packet *pkt)
@@ -942,20 +1000,20 @@ void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace)
 	trace->reset_hdr = false;
 }
 
-int gmu_core_soccp_vote(struct device *dev, unsigned long *gmu_flags, bool pwr_on)
+int gmu_core_soccp_vote(struct kgsl_device *device, bool pwr_on)
 {
 	int ret;
 
-	if (!(test_bit(GMU_PRIV_SOCCP_VOTE_ON, gmu_flags) ^ pwr_on))
+	if (!(test_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags) ^ pwr_on))
 		return 0;
 
 	ret = kgsl_hw_fence_soccp_vote(pwr_on);
 	if (!ret) {
-		change_bit(GMU_PRIV_SOCCP_VOTE_ON, gmu_flags);
+		change_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags);
 		return 0;
 	}
 
-	dev_err(dev, "soccp power %s failed: %d. Disabling hw fences\n",
+	dev_err(GMU_PDEV_DEV(device), "soccp power %s failed: %d. Disabling hw fences\n",
 		pwr_on ? "on" : "off", ret);
 
 	return ret;
@@ -981,4 +1039,307 @@ void gmu_core_mark_for_coldboot(struct kgsl_device *device)
 		return;
 
 	set_bit(GMU_FORCE_COLDBOOT, &gmu_core->flags);
+}
+
+void gmu_core_rdpm_probe(struct kgsl_device *device)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct resource *res;
+
+	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM, "rdpm_cx");
+	if (res)
+		gmu->rdpm_cx_virt = devm_ioremap(&device->pdev->dev,
+				res->start, resource_size(res));
+
+	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM, "rdpm_mx");
+	if (res)
+		gmu->rdpm_mx_virt = devm_ioremap(&device->pdev->dev,
+				res->start, resource_size(res));
+}
+
+void gmu_core_rdpm_mx_freq_update(struct kgsl_device *device, u32 freq)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+
+	if (!gmu->rdpm_mx_virt)
+		return;
+
+	writel_relaxed(freq / 1000, (gmu->rdpm_mx_virt + gmu->rdpm_mx_offset));
+
+	/* Ensure previous writes post before this one, i.e. act like normal writel() */
+	wmb();
+}
+
+void gmu_core_rdpm_cx_freq_update(struct kgsl_device *device, u32 freq)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+
+	if (!gmu->rdpm_cx_virt)
+		return;
+
+	writel_relaxed(freq / 1000, (gmu->rdpm_cx_virt + gmu->rdpm_cx_offset));
+
+	/* Ensure previous writes post before this one, i.e. act like normal writel() */
+	wmb();
+}
+
+static void build_hub_opp_table(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct device_node *opp_table, *opp;
+	int i = 0;
+
+	opp_table = of_find_node_by_name(NULL, "hub_opp_table");
+	if (!opp_table)
+		goto err;
+
+	for_each_child_of_node(opp_table, opp) {
+		if (of_property_read_u64(opp, "opp-hz", (u64 *)&gmu->hub_freqs[i]))
+			goto err;
+
+		if (of_property_read_u32(opp, "opp-level", &gmu->hub_vlvls[i]))
+			goto err;
+
+		i++;
+	}
+
+	gmu->num_hub_freqs = i;
+	of_node_put(opp_table);
+	return;
+
+err:
+	if (opp_table)
+		of_node_put(opp_table);
+
+	gmu->hub_freqs[0] = adreno_dev->gmu_hub_clk_freq;
+	gmu->num_hub_freqs = 1;
+}
+
+#define GMU_FREQ_MIN   200000000
+#define GMU_FREQ_MAX   500000000
+
+int gmu_core_clk_probe(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct platform_device *gmu_pdev = GMU_PDEV(device);
+	struct gmu_core_device *gmu = &device->gmu_core;
+	int tbl_size, num_freqs, num_perf_ddr_bw, offset, ret, i;
+
+	ret = devm_clk_bulk_get_all(GMU_PDEV_DEV(device), &gmu->clks);
+	if (ret < 0)
+		return ret;
+
+	/*
+	 * Voting for apb_pclk will enable power and clocks required for
+	 * QDSS path to function. However, if QCOM_KGSL_QDSS_STM is not enabled,
+	 * QDSS is essentially unusable. Hence, if QDSS cannot be used,
+	 * don't vote for this clock.
+	 */
+	if (!IS_ENABLED(CONFIG_QCOM_KGSL_QDSS_STM)) {
+		for (i = 0; i < ret; i++) {
+			if (!strcmp(gmu->clks[i].id, "apb_pclk")) {
+				gmu->clks[i].clk = NULL;
+				break;
+			}
+		}
+	}
+
+	gmu->num_clks = ret;
+
+	if (of_get_property(gmu_pdev->dev.of_node,
+		"qcom,gmu-perf-ddr-bw", &tbl_size) == NULL)
+		goto read_gmu_freq;
+
+	num_perf_ddr_bw = (tbl_size / sizeof(u32));
+	if (num_perf_ddr_bw >= ARRAY_SIZE(gmu->perf_ddr_bw))
+		goto read_gmu_freq;
+
+	for (i = 0; i < num_perf_ddr_bw; i++) {
+		ret = of_property_read_u32_index(gmu_pdev->dev.of_node,
+			"qcom,gmu-perf-ddr-bw", i, &gmu->perf_ddr_bw[i]);
+		if (ret)
+			goto read_gmu_freq;
+	}
+
+read_gmu_freq:
+	/* Read the optional list of GMU frequencies */
+	if (of_get_property(gmu_pdev->dev.of_node,
+		"qcom,gmu-freq-table", &tbl_size) == NULL)
+		goto default_gmu_freq;
+
+	num_freqs = (tbl_size / sizeof(u32)) / 2;
+	if (num_freqs >= ARRAY_SIZE(gmu->freqs))
+		goto default_gmu_freq;
+
+	for (i = 0; i < num_freqs; i++) {
+		offset = i * 2;
+		ret = of_property_read_u32_index(gmu_pdev->dev.of_node,
+			"qcom,gmu-freq-table", offset, &gmu->freqs[i]);
+		if (ret)
+			goto default_gmu_freq;
+		ret = of_property_read_u32_index(gmu_pdev->dev.of_node,
+			"qcom,gmu-freq-table", offset + 1, &gmu->vlvls[i]);
+		if (ret)
+			goto default_gmu_freq;
+	}
+
+	gmu->num_freqs = num_freqs;
+
+	build_hub_opp_table(device);
+
+	return 0;
+
+default_gmu_freq:
+	/* The GMU frequency table is missing or invalid. Go with a default */
+	gmu->freqs[0] = GMU_FREQ_MIN;
+	gmu->vlvls[0] = RPMH_REGULATOR_LEVEL_LOW_SVS;
+	gmu->freqs[1] = GMU_FREQ_MAX;
+	gmu->vlvls[1] = RPMH_REGULATOR_LEVEL_SVS;
+
+	gmu->num_freqs = 2;
+
+	if (adreno_is_a6xx(adreno_dev) && !adreno_is_a660(adreno_dev))
+		gmu->vlvls[0] = RPMH_REGULATOR_LEVEL_MIN_SVS;
+
+	return 0;
+}
+
+static int scale_hub_clock(struct kgsl_device *device, u32 cx_voltage)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	int ret, i;
+
+	for (i = 0; i < gmu->num_hub_freqs; i++) {
+		if (gmu->hub_vlvls[i] <= cx_voltage)
+			break;
+	}
+
+	/* Default to minimum hub frequency if no match found */
+	if (i == gmu->num_hub_freqs)
+		i = gmu->num_hub_freqs - 1;
+
+	if (i == gmu->cur_hub_level)
+		return 0;
+
+	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "hub_clk", gmu->hub_freqs[i]);
+	if (ret && ret != -ENODEV) {
+		dev_err(GMU_PDEV_DEV(device), "Unable to set the HUB clock ret %d\n", ret);
+		return ret;
+	}
+
+	gmu->cur_hub_level = i;
+	return 0;
+}
+
+int gmu_core_clock_set_rate(struct kgsl_device *device, u32 gmu_level)
+{
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+	int ret;
+	u32 req_freq = gmu_core->freqs[gmu_level];
+
+	gmu_core_rdpm_cx_freq_update(device, req_freq / 1000);
+
+	ret = kgsl_clk_set_rate(gmu_core->clks, gmu_core->num_clks, "gmu_clk", req_freq);
+	if (ret) {
+		dev_err(GMU_PDEV_DEV(device), "GMU clock:%d set failed:%d\n", req_freq, ret);
+		return ret;
+	}
+
+	trace_kgsl_gmu_pwrlevel(req_freq, gmu_core->freqs[gmu_core->cur_level]);
+
+	gmu_core->cur_level = gmu_level;
+
+	return scale_hub_clock(device, gmu_core->vlvls[gmu_level]);
+}
+
+int gmu_core_enable_clks(struct kgsl_device *device, u32 level)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	int ret;
+
+	/* Reset hub clock level */
+	gmu->cur_hub_level = gmu->num_hub_freqs;
+
+	ret = gmu_core_clock_set_rate(device, level);
+	if (ret)
+		return ret;
+
+	ret = clk_bulk_prepare_enable(gmu->num_clks, gmu->clks);
+	if (ret) {
+		dev_err(GMU_PDEV_DEV(device), "Cannot enable GMU clocks ret %d\n", ret);
+		return ret;
+	}
+
+	device->state = KGSL_STATE_AWARE;
+
+	return 0;
+}
+
+void gmu_core_disable_clks(struct kgsl_device *device)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+
+	clk_bulk_disable_unprepare(gmu->num_clks, gmu->clks);
+}
+
+void gmu_core_scale_gmu_frequency(struct kgsl_device *device, int buslevel)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 i, gmu_level = 0;
+
+	if (!gmu->perf_ddr_bw[0])
+		return;
+
+	/* Check if IB threshold has been breached to scale gmu */
+	for (i = 0; i < MAX_CX_LEVELS; i++) {
+		if ((pwr->ddr_table[buslevel] >= gmu->perf_ddr_bw[i]) && (gmu->perf_ddr_bw[i] != 0))
+			gmu_level = (i + 1);
+	}
+
+	if ((gmu_level < MAX_CX_LEVELS) && (gmu->cur_level != gmu_level))
+		gmu_core_clock_set_rate(device, gmu_level);
+
+	return;
+}
+
+int gmu_core_hwsched_memory_init(struct kgsl_device *device)
+{
+	int ret;
+
+	/* GMU Virtual register bank */
+	if (IS_ERR_OR_NULL(device->gmu_core.vrb)) {
+		device->gmu_core.vrb = gmu_core_reserve_kernel_block(device, 0, GMU_VRB_SIZE,
+				GMU_NONCACHED_KERNEL, 0);
+
+		if (IS_ERR(device->gmu_core.vrb))
+			return PTR_ERR(device->gmu_core.vrb);
+
+		/* Populate size of the virtual register bank */
+		ret = gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_SIZE_IDX,
+					device->gmu_core.vrb->size >> 2);
+		if (ret)
+			return ret;
+	}
+
+	/* GMU trace log */
+	if (IS_ERR_OR_NULL(device->gmu_core.trace.md)) {
+		device->gmu_core.trace.md = gmu_core_reserve_kernel_block(device, 0,
+					GMU_TRACE_SIZE, GMU_NONCACHED_KERNEL, 0);
+
+		if (IS_ERR(device->gmu_core.trace.md))
+			return PTR_ERR(device->gmu_core.trace.md);
+
+		/* Pass trace buffer address to GMU through the VRB */
+		ret = gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_TRACE_BUFFER_ADDR_IDX,
+					device->gmu_core.trace.md->gmuaddr);
+		if (ret)
+			return ret;
+
+		/* Initialize the GMU trace buffer header */
+		gmu_core_trace_header_init(&device->gmu_core.trace);
+	}
+
+	return 0;
 }

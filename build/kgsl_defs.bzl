@@ -106,7 +106,7 @@ def external_deps(target, variant):
             "//vendor/qcom/opensource/synx-kernel:synx_headers"
             ]
 
-    if target in [ "monaco", "parrot", "vienna" ]:
+    if target in [ "monaco", "parrot", "vienna", "lahaina" ]:
         deplist = deplist + [
             "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers"
             ]
@@ -123,10 +123,18 @@ def external_deps(target, variant):
 def define_target_variant_module(target, variant):
     tv = "{}_{}".format(target, variant)
     rule_name = "{}_msm_kgsl".format(tv)
-    kernel_build = select({
-        "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_base_kernel".format(tv),
-        "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}".format(tv),
-    })
+
+    if target in [ "neo-la" ]:
+        kernel_build = select({
+            "//build/kernel/kleaf:microxr_kernel_build_true": "//:target_kernel_build",
+            "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_base_kernel".format(tv),
+            "//conditions:default": "//msm-kernel:{}".format(tv),
+        })
+    else:
+        kernel_build = select({
+            "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_base_kernel".format(tv),
+            "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}".format(tv),
+        })
 
     ext_deps = external_deps(target, variant)
 
@@ -134,6 +142,7 @@ def define_target_variant_module(target, variant):
                 "//build/kernel/kleaf:socrepo_true": [
                   "//soc-repo:all_headers",
                   "//soc-repo:{}/drivers/clk/qcom/clk-qcom".format(tv),
+                  "//soc-repo:{}/drivers/devfreq/governor_msm_adreno_tz".format(tv),
                   "//soc-repo:{}/drivers/firmware/qcom/qcom-scm".format(tv),
                   "//soc-repo:{}/drivers/hwtracing/coresight/coresight".format(tv),
                   "//soc-repo:{}/drivers/iommu/qcom_iommu_util".format(tv),

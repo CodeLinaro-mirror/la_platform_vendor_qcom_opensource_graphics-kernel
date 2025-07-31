@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __KGSL_SHAREDMEM_H
 #define __KGSL_SHAREDMEM_H
@@ -41,6 +41,10 @@ struct kgsl_process_private;
 #define KGSL_MEMDESC_SKIP_RECLAIM BIT(12)
 /* The memdesc is hypassigned to HLOS*/
 #define KGSL_MEMDESC_HYPASSIGNED_HLOS BIT(13)
+
+#define TEST_FLAG(_bit, _val) ((atomic_read(_val) & (_bit)) != 0)
+#define SET_FLAG(_bit, _val) atomic_or((int)(_bit), (_val))
+#define CLEAR_FLAG(_bit, _val) atomic_and(~(int)(_bit), (_val))
 
 struct kgsl_memdesc;
 
@@ -82,7 +86,7 @@ struct kgsl_memdesc {
 	u64 gpuaddr;
 	phys_addr_t physaddr;
 	u64 size;
-	u32 priv;
+	atomic_t priv;
 	struct sg_table *sgt;
 	const struct kgsl_memdesc_ops *ops;
 	u64 flags;
@@ -270,6 +274,39 @@ int kgsl_allocate_kernel(struct kgsl_device *device,
 		struct kgsl_memdesc *memdesc, u64 size, u64 flags, u32 priv);
 
 /**
+ * kgsl_get_global_gpuaddr - Get global gpu address based on input parameters
+ * @device: A GPU device handle
+ * @memdesc: Pointer to memory descriptor
+ * @size: Size of the allocation in bytes
+ * @flags: Control flags for the allocation
+ * @priv: Internal flags for the allocation
+ *
+ * Get a gpu address in the global VA range based on the input parameters
+ * without allocating and mapping any physical pages.
+ *
+ * Return: 0 on success and negative error on failure
+ */
+int kgsl_get_global_gpuaddr(struct kgsl_device *device, struct kgsl_memdesc *memdesc,
+	u64 size, u64 flags, u32 priv);
+
+/**
+ * kgsl_alloc_map_gpu_global - Allocate and map a global GPU memory object
+ * @device: A GPU device handle
+ * @gpuaddr: pre-allocated GPU VA for this memory object
+ * @size: Size of the allocation in bytes
+ * @padding: Amount of extra adding to add to the VA allocation
+ * @flags: Control flags for the allocation
+ * @priv: Internal flags for the allocation
+ * @name: Name of the allocation (for the debugfs file)
+ *
+ * Allocate a global GPU object that is mapped into the default pagetables only.
+ *
+ * Return: 0 on success or negative error on failure
+ */
+struct kgsl_memdesc *kgsl_alloc_map_gpu_global(struct kgsl_device *device,
+	u64 gpuaddr, u64 size, u32 padding, u64 flags, u32 priv, const char *name);
+
+/**
  * kgsl_allocate_global - Allocate a global GPU memory object
  * @device: A GPU device handle
  * @size: Size of the allocation in bytes
@@ -419,7 +456,7 @@ int kgsl_memdesc_sg_dma(struct kgsl_memdesc *memdesc,
  */
 static inline bool kgsl_memdesc_is_global(const struct kgsl_memdesc *memdesc)
 {
-	return memdesc && (memdesc->priv & KGSL_MEMDESC_GLOBAL);
+	return memdesc && (TEST_FLAG(KGSL_MEMDESC_GLOBAL, &memdesc->priv));
 }
 
 /*
@@ -430,7 +467,7 @@ static inline bool kgsl_memdesc_is_global(const struct kgsl_memdesc *memdesc)
  */
 static inline bool kgsl_memdesc_is_secured(const struct kgsl_memdesc *memdesc)
 {
-	return memdesc && (memdesc->priv & KGSL_MEMDESC_SECURE);
+	return memdesc && (TEST_FLAG(KGSL_MEMDESC_SECURE, &memdesc->priv));
 }
 
 /*
@@ -441,7 +478,7 @@ static inline bool kgsl_memdesc_is_secured(const struct kgsl_memdesc *memdesc)
  */
 static inline bool kgsl_memdesc_is_reclaimed(const struct kgsl_memdesc *memdesc)
 {
-	return memdesc && (memdesc->priv & KGSL_MEMDESC_RECLAIMED);
+	return memdesc && (TEST_FLAG(KGSL_MEMDESC_RECLAIMED, &memdesc->priv));
 }
 
 /*
@@ -468,7 +505,7 @@ kgsl_memdesc_use_cpu_map(const struct kgsl_memdesc *memdesc)
 static inline uint64_t
 kgsl_memdesc_footprint(const struct kgsl_memdesc *memdesc)
 {
-	if (!(memdesc->priv & KGSL_MEMDESC_GUARD_PAGE))
+	if (!(TEST_FLAG(KGSL_MEMDESC_GUARD_PAGE, &memdesc->priv)))
 		return memdesc->size;
 
 	return PAGE_ALIGN(memdesc->size + PAGE_SIZE);

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _KGSL_SNAPSHOT_H_
@@ -217,6 +217,9 @@ struct kgsl_snapshot_mvc_regs_v3 {
 #define SNAPSHOT_DEBUG_GMU_HFI_VERSION 19
 #define SNAPSHOT_DEBUG_AQE_VERSION 20
 
+/* Slice mask info */
+#define SNAPSHOT_DEBUG_SLICE_MASK 32
+
 struct kgsl_snapshot_debug {
 	int type;    /* Type identifier for the attached tata */
 	int size;   /* Size of the section in dwords */
@@ -317,6 +320,15 @@ struct kgsl_snapshot_gmu_version {
 	/** @value: GMU FW version value */
 	u32 value;
 } __packed;
+
+struct kgsl_snapshot_indexed_registers_v2 {
+	u32 index;
+	u32 data;
+	u32 start;
+	u32 count;
+	u32 pipe_id;
+	u32 slice_id;
+};
 
 struct kgsl_device;
 struct kgsl_process_private;

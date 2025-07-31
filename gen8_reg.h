@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _GEN8_REG_H
@@ -491,6 +491,24 @@
 #define GEN8_RBBM_PERFCTR_BV_LRZ_2_HI            0x369
 #define GEN8_RBBM_PERFCTR_BV_LRZ_3_LO            0x36a
 #define GEN8_RBBM_PERFCTR_BV_LRZ_3_HI            0x36b
+#define GEN8_RBBM_PERFCTR_BV_CCU_0_LO            0x36c
+#define GEN8_RBBM_PERFCTR_BV_CCU_0_HI            0x36d
+#define GEN8_RBBM_PERFCTR_BV_CCU_1_LO            0x36e
+#define GEN8_RBBM_PERFCTR_BV_CCU_1_HI            0x36f
+#define GEN8_RBBM_PERFCTR_BV_CCU_2_LO            0x370
+#define GEN8_RBBM_PERFCTR_BV_CCU_2_HI            0x371
+#define GEN8_RBBM_PERFCTR_BV_RB_0_LO             0x372
+#define GEN8_RBBM_PERFCTR_BV_RB_0_HI             0x373
+#define GEN8_RBBM_PERFCTR_BV_RB_1_LO             0x374
+#define GEN8_RBBM_PERFCTR_BV_RB_1_HI             0x375
+#define GEN8_RBBM_PERFCTR_BV_RB_2_LO             0x376
+#define GEN8_RBBM_PERFCTR_BV_RB_2_HI             0x377
+#define GEN8_RBBM_PERFCTR_BV_RB_3_LO             0x378
+#define GEN8_RBBM_PERFCTR_BV_RB_3_HI             0x379
+#define GEN8_RBBM_PERFCTR_BV_RB_4_LO             0x37a
+#define GEN8_RBBM_PERFCTR_BV_RB_4_HI             0x37b
+#define GEN8_RBBM_PERFCTR_BV_RB_5_LO             0x37c
+#define GEN8_RBBM_PERFCTR_BV_RB_5_HI             0x37d
 
 #define GEN8_RBBM_NC_MODE_CNTL                   0x440
 #define GEN8_RBBM_PERFCTR_RBBM_SEL_0             0x441
@@ -1369,6 +1387,7 @@
 #define GEN8_CX_DBGC_CFG_DBGBUS_OVER                    0x18426
 #define GEN8_CX_DBGC_CFG_DBGBUS_TRACE_BUF1              0x1842f
 #define GEN8_CX_DBGC_CFG_DBGBUS_TRACE_BUF2              0x18430
+#define GEN8_CX_DBGC_CFG_DBGBUS_TRACE_BUF3              0x18431
 #define GEN8_CX_DBGC_EVT_CFG                            0x18435
 #define GEN8_CX_DBGC_EVT_INTF_SEL_0                     0x18436
 #define GEN8_CX_DBGC_EVT_INTF_SEL_1                     0x18437
@@ -1638,6 +1657,8 @@
 #define GEN8_GPU_CX_MISC_INT_CLEAR_CMD		0x27831
 #define GEN8_GPU_CX_MISC_INT_0_MASK		0x27833
 #define GEN8_GPU_CX_MISC_INT_0_STATUS		0x27834
+#define GEN8_GPU_CX_MISC_SMMU_INTR_MASK0	0x27846
+#define GEN8_GPU_CX_MISC_SMMU_INTR_MASK1	0x27847
 #define GEN8_GPU_CX_MISC_AO_COUNTER_LO		0x27880
 #define GEN8_GPU_CX_MISC_AO_COUNTER_HI		0x27881
 #define GEN8_GPU_CX_MISC_SLICE_ENABLE_TEST	0x27886

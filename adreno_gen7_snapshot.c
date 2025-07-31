@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <uapi/linux/sched/types.h>
@@ -15,6 +15,7 @@
 #include "adreno_gen7_9_0_snapshot.h"
 #include "adreno_gen7_11_0_snapshot.h"
 #include "adreno_gen7_14_0_snapshot.h"
+#include "adreno_gen7_15_0_snapshot.h"
 #include "adreno_gen7_17_0_snapshot.h"
 
 static struct kgsl_memdesc *gen7_capturescript;
@@ -208,6 +209,32 @@ const struct gen7_snapshot_block_list gen7_11_0_snapshot_block_list = {
 	.index_registers_len = ARRAY_SIZE(gen7_11_0_cp_indexed_reg_list),
 };
 
+const struct gen7_snapshot_block_list gen7_15_0_snapshot_block_list = {
+	.pre_crashdumper_regs = gen7_0_0_pre_crashdumper_gpu_registers,
+	.debugbus_blocks = gen7_11_0_debugbus_blocks,
+	.debugbus_blocks_len = ARRAY_SIZE(gen7_11_0_debugbus_blocks),
+	.gbif_debugbus_blocks = gen7_11_0_gbif_debugbus_blocks,
+	.gbif_debugbus_blocks_len = ARRAY_SIZE(gen7_11_0_gbif_debugbus_blocks),
+	.cx_debugbus_blocks = gen7_11_0_cx_debugbus_blocks,
+	.cx_debugbus_blocks_len = ARRAY_SIZE(gen7_11_0_cx_debugbus_blocks),
+	.external_core_regs = gen7_15_0_external_core_regs,
+	.num_external_core_regs = ARRAY_SIZE(gen7_15_0_external_core_regs),
+	.gmu_regs = gen7_11_0_gmu_registers,
+	.gmu_gx_regs = gen7_11_0_gmugx_registers,
+	.rscc_regs = gen7_11_0_rscc_registers,
+	.reg_list = gen7_11_0_reg_list,
+	.cx_misc_regs = gen7_11_0_cx_misc_registers,
+	.shader_blocks = gen7_11_0_shader_blocks,
+	.num_shader_blocks = ARRAY_SIZE(gen7_11_0_shader_blocks),
+	.clusters = gen7_11_0_clusters,
+	.num_clusters = ARRAY_SIZE(gen7_11_0_clusters),
+	.sptp_clusters = gen7_11_0_sptp_clusters,
+	.num_sptp_clusters = ARRAY_SIZE(gen7_11_0_sptp_clusters),
+	.post_crashdumper_regs = gen7_0_0_post_crashdumper_registers,
+	.index_registers = gen7_11_0_cp_indexed_reg_list,
+	.index_registers_len = ARRAY_SIZE(gen7_11_0_cp_indexed_reg_list),
+};
+
 const struct gen7_snapshot_block_list gen7_17_0_snapshot_block_list = {
 	.pre_crashdumper_regs = gen7_9_0_pre_crashdumper_gpu_registers,
 	.debugbus_blocks = gen7_14_0_debugbus_blocks,
@@ -310,9 +337,9 @@ static bool _gen7_do_crashdump(struct kgsl_device *device)
 			break;
 		if (ktime_compare(ktime_get(), timeout) > 0)
 			break;
-		/* Wait 1msec to avoid unnecessary looping */
+		/* Wait 50us to avoid unnecessary looping */
 		if (!device->snapshot_atomic)
-			usleep_range(100, 1000);
+			usleep_range(5, 50);
 	}
 
 	kgsl_regread(device, GEN7_CP_CRASH_DUMP_STATUS, &reg);
@@ -1347,6 +1374,9 @@ static void gen7_snapshot_debugbus(struct adreno_device *adreno_dev,
 {
 	int i;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (device->debug_bus_bin)
+		return;
 
 	kgsl_regwrite(device, GEN7_DBGC_CFG_DBGBUS_CNTLT,
 			FIELD_PREP(GENMASK(31, 28), 0xf));

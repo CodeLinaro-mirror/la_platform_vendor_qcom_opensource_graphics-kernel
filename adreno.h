@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -178,7 +178,12 @@
 #define ADRENO_GMU_BASED_DCVS BIT(22)
 /* RT hint feature for RB0 workloads */
 #define ADRENO_RT_HINT BIT(23)
-
+/* Defer allocation of preemption record gmem memory when needed */
+#define ADRENO_DEFER_GMEM_ALLOC BIT(24)
+/* The GMU supports MINBW voting */
+#define ADRENO_GMU_MINBW BIT(25)
+/* Enable GMU Based DCVS profile */
+#define ADRENO_DCVS_PROFILE BIT(26)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -261,9 +266,11 @@ enum adreno_gpurev {
 	ADRENO_REV_A619 = 619,
 	ADRENO_REV_A620 = 620,
 	ADRENO_REV_A621 = 621,
+	ADRENO_REV_A622 = 622,
 	ADRENO_REV_A630 = 630,
-	ADRENO_REV_A635 = 635,
 	ADRENO_REV_A640 = 640,
+	ADRENO_REV_A642 = 642,
+	ADRENO_REV_A643 = 643,
 	ADRENO_REV_A650 = 650,
 	ADRENO_REV_A660 = 660,
 	ADRENO_REV_A662 = 662,
@@ -288,14 +295,17 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN7_9_1 = ADRENO_GPUREV_VALUE(7, 9, 1),
 	ADRENO_REV_GEN7_14_0 = ADRENO_GPUREV_VALUE(7, 14, 0),
 	ADRENO_REV_GEN7_11_0 = ADRENO_GPUREV_VALUE(7, 11, 0),
+	ADRENO_REV_GEN7_15_0 = ADRENO_GPUREV_VALUE(7, 15, 0),
 	ADRENO_REV_GEN7_17_0 = ADRENO_GPUREV_VALUE(7, 17, 0),
 	ADRENO_REV_GEN8_0_0 = ADRENO_GPUREV_VALUE(8, 0, 0),
 	ADRENO_REV_GEN8_0_1 = ADRENO_GPUREV_VALUE(8, 0, 1),
 	ADRENO_REV_GEN8_2_0 = ADRENO_GPUREV_VALUE(8, 2, 0),
+	ADRENO_REV_GEN8_2_1 = ADRENO_GPUREV_VALUE(8, 2, 1),
 	ADRENO_REV_GEN8_3_0 = ADRENO_GPUREV_VALUE(8, 3, 0),
 	ADRENO_REV_GEN8_4_0 = ADRENO_GPUREV_VALUE(8, 4, 0),
 	ADRENO_REV_GEN8_6_0 = ADRENO_GPUREV_VALUE(8, 6, 0),
 	ADRENO_REV_GEN8_8_0 = ADRENO_GPUREV_VALUE(8, 8, 0),
+	ADRENO_REV_GEN8_9_0 = ADRENO_GPUREV_VALUE(8, 9, 0),
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -557,7 +567,7 @@ struct adreno_dispatch_ops {
 	/* @queue_context: Queue a context to be dispatched */
 	void (*queue_context)(struct adreno_device *adreno_dev,
 			struct adreno_context *drawctxt);
-	void (*setup_context)(struct adreno_device *adreno_dev,
+	int (*setup_context)(struct adreno_device *adreno_dev,
 			struct adreno_context *drawctxt);
 	/* @create_hw_fence: Create a hardware fence */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev, struct kgsl_sync_fence *kfence);
@@ -632,6 +642,8 @@ struct adreno_fault_proc {
  * @gpu_llc_slice_enable: To enable the GPU system cache slice or not
  * @gpuhtw_llc_slice: GPU pagetables system cache slice descriptor
  * @gpuhtw_llc_slice_enable: To enable the GPUHTW system cache slice or not
+ * @gpumv_llc_slice: GPU MV buffer system cache slice descriptor
+ * @gpumv_llc_slice_enable: To enable GPUMV buffer system cache slice or not
  * @zap_loaded: Used to track if zap was successfully loaded or not
  */
 struct adreno_device {
@@ -687,6 +699,8 @@ struct adreno_device {
 	bool lpac_enabled;
 	/** @dms_enabled: True if DMS is enabled */
 	bool dms_enabled;
+	/** @minbw_enabled: True if minbw vote is enabled */
+	bool minbw_enabled;
 	/** @preempt_override: True if command line param enables preemption */
 	bool preempt_override;
 	struct kgsl_memdesc *profile_buffer;
@@ -724,6 +738,8 @@ struct adreno_device {
 	bool gpu_llc_slice_enable;
 	void *gpuhtw_llc_slice;
 	bool gpuhtw_llc_slice_enable;
+	void *gpumv_llc_slice;
+	bool gpumv_llc_slice_enable;
 	unsigned int zap_loaded;
 	/**
 	 * @critpkts: Memory descriptor for 5xx critical packets if applicable
@@ -758,6 +774,8 @@ struct adreno_device {
 	 * throttle level for bcl alarm levels 0-2. If not set, gmu fw sets default throttle levels.
 	 */
 	u32 bcl_data;
+	/* @minbw_data: Min bw level to vote for when entering ifpc */
+	u32 minbw_data;
 	/*
 	 * @bcl_debugfs_dir: Debugfs directory node for bcl related nodes
 	 */
@@ -819,6 +837,12 @@ struct adreno_device {
 	u32 dcvs_tuning_penalty_lvl;
 	/** @dcvs_tuning_numbusy_lvl: Current DCVS tuning level for numbusy */
 	u32 dcvs_tuning_numbusy_lvl;
+	/** @total_ctxt_record_sz: Size of the total preemption record in bytes */
+	u64 total_ctxt_record_sz;
+	/** @dcvs_profile_enabled: True if DCVS profile is enabled */
+	bool dcvs_profile_enabled;
+	/** @aqe_ctxt_record_sz: Size of the AQE section in preemption record in bytes */
+	u64 aqe_ctxt_record_sz;
 };
 
 /* Time to wait for suspend recovery gate to complete */
@@ -1174,6 +1198,14 @@ int adreno_active_count_get(struct adreno_device *adreno_dev);
  */
 void adreno_active_count_put(struct adreno_device *adreno_dev);
 
+/**
+ * adreno_populate_ctxt_record_size - Populate the context record size
+ * @adreno_dev: Pointer to the adreno device structure
+ *
+ * Return: 0 on success, or an error code on failure.
+ */
+int adreno_populate_ctxt_record_size(struct adreno_device *adreno_dev);
+
 #define ADRENO_TARGET(_name, _id) \
 static inline int adreno_is_##_name(struct adreno_device *adreno_dev) \
 { \
@@ -1219,6 +1251,13 @@ static inline int adreno_is_a6xx(struct adreno_device *adreno_dev)
 			ADRENO_GPUREV(adreno_dev) == ADRENO_REV_GEN6_3_26_0;
 }
 
+static inline int adreno_is_a642l(struct adreno_device *adreno_dev)
+{
+	return (adreno_dev->gpucore->compatible &&
+		!strcmp(adreno_dev->gpucore->compatible,
+		"qcom,adreno-gpu-a642l"));
+}
+
 static inline int adreno_is_a660_shima(struct adreno_device *adreno_dev)
 {
 	return (ADRENO_GPUREV(adreno_dev) == ADRENO_REV_A660) &&
@@ -1233,23 +1272,24 @@ ADRENO_TARGET(a612, ADRENO_REV_A612)
 ADRENO_TARGET(a618, ADRENO_REV_A618)
 ADRENO_TARGET(a619, ADRENO_REV_A619)
 ADRENO_TARGET(a621, ADRENO_REV_A621)
+ADRENO_TARGET(a622, ADRENO_REV_A622)
 ADRENO_TARGET(a630, ADRENO_REV_A630)
-ADRENO_TARGET(a635, ADRENO_REV_A635)
 ADRENO_TARGET(a662, ADRENO_REV_A662)
 ADRENO_TARGET(a640, ADRENO_REV_A640)
+ADRENO_TARGET(a643, ADRENO_REV_A643)
 ADRENO_TARGET(a650, ADRENO_REV_A650)
 ADRENO_TARGET(a663, ADRENO_REV_A663)
 ADRENO_TARGET(a680, ADRENO_REV_A680)
 ADRENO_TARGET(gen6_3_26_0, ADRENO_REV_GEN6_3_26_0)
 ADRENO_TARGET(a702, ADRENO_REV_A702)
 
-/* A635 is derived from A660 and shares same logic */
+/* A642L and A643 is derived from A660 and shares same logic */
 static inline int adreno_is_a660(struct adreno_device *adreno_dev)
 {
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
 
-	return (rev == ADRENO_REV_A660 || rev == ADRENO_REV_A635 ||
-			rev == ADRENO_REV_A662);
+	return (rev == ADRENO_REV_A660 || adreno_is_a642l(adreno_dev) ||
+		rev == ADRENO_REV_A643 || rev == ADRENO_REV_A662);
 }
 
 /*
@@ -1279,7 +1319,8 @@ static inline int adreno_is_a640_family(struct adreno_device *adreno_dev)
  * Derived GPUs from A650 needs to be added to this list.
  * A650 is derived from A640 but register specs has been
  * changed hence do not belongs to A640 family. A620, A621,
- * A660, A663, A690 follows the register specs of A650.
+ * A622, A642L, A643, A660, A663, A690 follows the register
+ * specs of A650.
  *
  */
 static inline int adreno_is_a650_family(struct adreno_device *adreno_dev)
@@ -1287,8 +1328,9 @@ static inline int adreno_is_a650_family(struct adreno_device *adreno_dev)
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
 
 	return (rev == ADRENO_REV_A650 || rev == ADRENO_REV_A620 ||
-		rev == ADRENO_REV_A660 || rev == ADRENO_REV_A635 ||
-		rev == ADRENO_REV_A662 || rev == ADRENO_REV_A621 ||
+		rev == ADRENO_REV_A660 || adreno_is_a642l(adreno_dev) ||
+		rev == ADRENO_REV_A643 || rev == ADRENO_REV_A662 ||
+		rev == ADRENO_REV_A621 || rev == ADRENO_REV_A622 ||
 		rev == ADRENO_REV_A663);
 }
 
@@ -1302,7 +1344,8 @@ static inline int adreno_is_a620(struct adreno_device *adreno_dev)
 {
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
 
-	return (rev == ADRENO_REV_A620 || rev == ADRENO_REV_A621);
+	return (rev == ADRENO_REV_A620 || rev == ADRENO_REV_A621 ||
+		rev == ADRENO_REV_A622);
 }
 
 static inline int adreno_is_a610_family(struct adreno_device *adreno_dev)
@@ -1348,14 +1391,17 @@ ADRENO_TARGET(gen7_9_0, ADRENO_REV_GEN7_9_0)
 ADRENO_TARGET(gen7_9_1, ADRENO_REV_GEN7_9_1)
 ADRENO_TARGET(gen7_14_0, ADRENO_REV_GEN7_14_0)
 ADRENO_TARGET(gen7_11_0, ADRENO_REV_GEN7_11_0)
+ADRENO_TARGET(gen7_15_0, ADRENO_REV_GEN7_15_0)
 ADRENO_TARGET(gen7_17_0, ADRENO_REV_GEN7_17_0)
 ADRENO_TARGET(gen8_0_0, ADRENO_REV_GEN8_0_0)
 ADRENO_TARGET(gen8_0_1, ADRENO_REV_GEN8_0_1)
 ADRENO_TARGET(gen8_2_0, ADRENO_REV_GEN8_2_0)
+ADRENO_TARGET(gen8_2_1, ADRENO_REV_GEN8_2_1)
 ADRENO_TARGET(gen8_3_0, ADRENO_REV_GEN8_3_0)
 ADRENO_TARGET(gen8_4_0, ADRENO_REV_GEN8_4_0)
 ADRENO_TARGET(gen8_6_0, ADRENO_REV_GEN8_6_0)
 ADRENO_TARGET(gen8_8_0, ADRENO_REV_GEN8_8_0)
+ADRENO_TARGET(gen8_9_0, ADRENO_REV_GEN8_9_0)
 
 static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
 {
@@ -1377,7 +1423,14 @@ static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
 		adreno_is_gen7_6_0(adreno_dev) || adreno_is_gen7_9_x(adreno_dev) ||
-		adreno_is_gen7_14_0_family(adreno_dev) || adreno_is_gen7_11_0(adreno_dev);
+		adreno_is_gen7_14_0_family(adreno_dev) || adreno_is_gen7_11_0(adreno_dev) ||
+		adreno_is_gen7_15_0(adreno_dev);
+}
+
+static inline int adreno_is_gen8_2_x(struct adreno_device *adreno_dev)
+{
+	return adreno_is_gen8_2_0(adreno_dev) || adreno_is_gen8_2_1(adreno_dev) ||
+		adreno_is_gen8_9_0(adreno_dev);
 }
 
 static inline int adreno_is_gen8_0_x_family(struct adreno_device *adreno_dev)
@@ -2131,6 +2184,9 @@ static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev
 
 	if (adreno_dev->gpuhtw_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
 		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+
+	if (adreno_dev->gpumv_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpumv_llc_slice))
+		llcc_slice_deactivate(adreno_dev->gpumv_llc_slice);
 }
 
 /**

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
@@ -9,6 +9,7 @@
 #include "adreno.h"
 #include "adreno_pm4types.h"
 #include "adreno_trace.h"
+#include "kgsl_util.h"
 
 static void wait_callback(struct kgsl_device *device,
 		struct kgsl_event_group *group, void *priv, int result)
@@ -56,8 +57,8 @@ void adreno_drawctxt_dump(struct kgsl_device *device,
 	 * Use Spin trylock because dispatcher can acquire drawctxt->lock
 	 * if context is pending and the fence it is waiting on just got
 	 * signalled. Dispatcher acquires drawctxt->lock and tries to
-	 * delete the sync obj timer using del_timer_sync().
-	 * del_timer_sync() waits till timer and its pending handlers
+	 * delete the sync obj timer using kgsl_delete_timer_sync().
+	 * kgsl_delete_timer_sync() waits till timer and its pending handlers
 	 * are deleted. But if the timer expires at the same time,
 	 * timer handler could be waiting on drawctxt->lock leading to a
 	 * deadlock. To prevent this use spin_trylock_bh.
@@ -509,8 +510,15 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 	INIT_LIST_HEAD(&drawctxt->hw_fence_list);
 	INIT_LIST_HEAD(&drawctxt->hw_fence_inflight_list);
 
-	if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->setup_context)
-		adreno_dev->dispatch_ops->setup_context(adreno_dev, drawctxt);
+	if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->setup_context) {
+		ret = adreno_dev->dispatch_ops->setup_context(adreno_dev, drawctxt);
+		if (ret) {
+			dev_err_ratelimited(device->dev,
+				"Context initialization failed ret:%d\n", ret);
+			kgsl_context_detach(&drawctxt->base);
+			return ERR_PTR(ret);
+		}
+	}
 
 	ret = drawctxt_preemption_init(&drawctxt->base);
 	if (ret) {
@@ -535,7 +543,7 @@ static void wait_for_timestamp_rb(struct kgsl_device *device,
 	 * internal_timestamp is set in adreno_ringbuffer_addcmds,
 	 * which holds the device mutex.
 	 */
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	/*
 	 * Wait for the last global timestamp to pass before continuing.
@@ -564,7 +572,7 @@ static void wait_for_timestamp_rb(struct kgsl_device *device,
 
 		adreno_set_gpu_fault(adreno_dev,
 				ADRENO_CTX_DETATCH_TIMEOUT_FAULT);
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 
 		/* Schedule dispatcher to kick in recovery */
 		adreno_scheduler_queue(adreno_dev);
@@ -586,7 +594,7 @@ static void wait_for_timestamp_rb(struct kgsl_device *device,
 
 	adreno_profile_process_results(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 void adreno_drawctxt_detach(struct kgsl_context *context)

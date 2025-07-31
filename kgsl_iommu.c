@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/bitfield.h>
 #include <linux/compat.h>
 #include <linux/io.h>
-#include <linux/iopoll.h>
 #include <linux/of_device.h>
 #include <linux/of_platform.h>
 #include <linux/scatterlist.h>
@@ -111,13 +110,13 @@ static int _iommu_get_protection_flags(struct kgsl_mmu *mmu,
 	if (memdesc->flags & KGSL_MEMFLAGS_GPUREADONLY)
 		flags &= ~IOMMU_WRITE;
 
-	if (memdesc->priv & KGSL_MEMDESC_PRIVILEGED)
+	if (TEST_FLAG(KGSL_MEMDESC_PRIVILEGED, &memdesc->priv))
 		flags |= IOMMU_PRIV;
 
 	if (memdesc->flags & KGSL_MEMFLAGS_IOCOHERENT)
 		flags |= IOMMU_CACHE;
 
-	if (memdesc->priv & KGSL_MEMDESC_UCODE)
+	if (TEST_FLAG(KGSL_MEMDESC_UCODE, &memdesc->priv))
 		flags &= ~IOMMU_NOEXEC;
 
 	return flags;
@@ -788,27 +787,10 @@ static u32 KGSL_IOMMU_GET_CTX_REG(struct kgsl_iommu_context *ctx, u32 offset)
 static int kgsl_iommu_get_gpuaddr(struct kgsl_pagetable *pagetable,
 		struct kgsl_memdesc *memdesc);
 
-static void kgsl_iommu_map_secure_global(struct kgsl_mmu *mmu,
-		struct kgsl_memdesc *memdesc)
-{
-	if (IS_ERR_OR_NULL(mmu->securepagetable))
-		return;
-
-	if (!memdesc->gpuaddr) {
-		int ret = kgsl_iommu_get_gpuaddr(mmu->securepagetable,
-			memdesc);
-
-		if (WARN_ON(ret))
-			return;
-	}
-
-	kgsl_iommu_secure_map(mmu->securepagetable, memdesc);
-}
-
 #define KGSL_GLOBAL_MEM_PAGES (KGSL_IOMMU_GLOBAL_MEM_SIZE >> PAGE_SHIFT)
 
 static u64 global_get_offset(struct kgsl_device *device, u64 size,
-		unsigned long priv)
+		atomic_t *priv)
 {
 	int start = 0, bit;
 
@@ -820,7 +802,7 @@ static u64 global_get_offset(struct kgsl_device *device, u64 size,
 			return (unsigned long) -ENOMEM;
 	}
 
-	if (priv & KGSL_MEMDESC_RANDOM) {
+	if (TEST_FLAG(KGSL_MEMDESC_RANDOM, priv)) {
 		u32 offset = KGSL_GLOBAL_MEM_PAGES - (size >> PAGE_SHIFT);
 
 		start = get_random_u32() % offset;
@@ -848,29 +830,45 @@ static u64 global_get_offset(struct kgsl_device *device, u64 size,
 	return bit << PAGE_SHIFT;
 }
 
+static int kgsl_iommu_reserve_global_gpuaddr(struct kgsl_mmu *mmu,
+	struct kgsl_memdesc *memdesc, u32 padding)
+{
+	struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
+	u64 offset;
+
+	if (memdesc->gpuaddr)
+		return -EINVAL;
+
+	if (memdesc->flags & KGSL_MEMFLAGS_SECURE) {
+		int ret = kgsl_iommu_get_gpuaddr(mmu->securepagetable, memdesc);
+
+		WARN_ON(ret);
+
+		return ret;
+	}
+
+	offset = global_get_offset(device, memdesc->size + padding, &memdesc->priv);
+
+	if (IS_ERR_VALUE(offset))
+		return -ENOSPC;
+
+	memdesc->gpuaddr = mmu->defaultpagetable->global_base + offset;
+
+	return 0;
+}
+
 static void kgsl_iommu_map_global(struct kgsl_mmu *mmu,
 		struct kgsl_memdesc *memdesc, u32 padding)
 {
-	struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
-
-	if (memdesc->flags & KGSL_MEMFLAGS_SECURE) {
-		kgsl_iommu_map_secure_global(mmu, memdesc);
-		return;
-	}
-
 	if (!memdesc->gpuaddr) {
-		u64 offset;
-
-		offset = global_get_offset(device, memdesc->size + padding,
-			memdesc->priv);
-
-		if (IS_ERR_VALUE(offset))
+		if (kgsl_iommu_reserve_global_gpuaddr(mmu, memdesc, padding))
 			return;
-
-		memdesc->gpuaddr = mmu->defaultpagetable->global_base + offset;
 	}
 
-	kgsl_iommu_default_map(mmu->defaultpagetable, memdesc);
+	if (memdesc->flags & KGSL_MEMFLAGS_SECURE)
+		kgsl_iommu_secure_map(mmu->securepagetable, memdesc);
+	else
+		kgsl_iommu_default_map(mmu->defaultpagetable, memdesc);
 }
 
 /* Print the mem entry for the pagefault debugging */
@@ -889,7 +887,7 @@ static void print_entry(struct device *dev, struct kgsl_mem_entry *entry,
 	dev_err(dev, "[%016llX - %016llX] %s %s (pid = %d) (%s)\n",
 	      entry->memdesc.gpuaddr,
 	      entry->memdesc.gpuaddr + entry->memdesc.size - 1,
-	      entry->memdesc.priv & KGSL_MEMDESC_GUARD_PAGE ? "(+guard)" : "",
+	      TEST_FLAG(KGSL_MEMDESC_GUARD_PAGE, &entry->memdesc.priv) ? "(+guard)" : "",
 	      entry->pending_free ? "(pending free)" : "",
 	      pid, name);
 }
@@ -1186,7 +1184,7 @@ static bool kgsl_iommu_check_stall_on_fault(struct kgsl_iommu_context *ctx,
 	if (ctx->stalled_on_fault)
 		return false;
 
-	if (!mutex_trylock(&device->mutex))
+	if (!kgsl_mutex_trylock(&device->mutex))
 		return true;
 
 	/*
@@ -1198,7 +1196,7 @@ static bool kgsl_iommu_check_stall_on_fault(struct kgsl_iommu_context *ctx,
 	else
 		kgsl_pwrctrl_change_state(device, KGSL_STATE_AWARE);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 	return true;
 }
 
@@ -2505,6 +2503,18 @@ static bool kgsl_iommu_addr_in_range(struct kgsl_pagetable *pagetable,
 	return false;
 }
 
+#if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
+static struct iommu_domain *kgsl_iommu_domain_alloc(struct device *dev)
+{
+	return iommu_paging_domain_alloc(dev);
+}
+#else
+static struct iommu_domain *kgsl_iommu_domain_alloc(struct device *dev)
+{
+	return iommu_domain_alloc(&platform_bus_type);
+}
+#endif
+
 static int kgsl_iommu_setup_context(struct kgsl_mmu *mmu,
 		struct device_node *parent,
 		struct kgsl_iommu_context *context, const char *name,
@@ -2535,7 +2545,7 @@ static int kgsl_iommu_setup_context(struct kgsl_mmu *mmu,
 	dev_set_drvdata(&pdev->dev, &context->adreno_smmu);
 
 	/* Create a new context */
-	context->domain = iommu_domain_alloc(&platform_bus_type);
+	context->domain = kgsl_iommu_domain_alloc(&context->pdev->dev);
 	if (!context->domain) {
 		/*FIXME: Put back the pdev here? */
 		return -ENODEV;
@@ -2679,7 +2689,7 @@ static int iommu_probe_secure_context(struct kgsl_device *device,
 	context->pdev = pdev;
 	ratelimit_default_init(&context->ratelimit);
 
-	context->domain = iommu_domain_alloc(&platform_bus_type);
+	context->domain = kgsl_iommu_domain_alloc(&context->pdev->dev);
 	if (!context->domain) {
 		/* FIXME: put away the device */
 		return -ENODEV;
@@ -3033,6 +3043,7 @@ static const struct kgsl_mmu_ops kgsl_iommu_ops = {
 	.mmu_pagefault_resume = kgsl_iommu_pagefault_resume,
 	.mmu_getpagetable = kgsl_iommu_getpagetable,
 	.mmu_map_global = kgsl_iommu_map_global,
+	.mmu_reserve_global_gpuaddr = kgsl_iommu_reserve_global_gpuaddr,
 	.mmu_send_tlb_hint = kgsl_iommu_send_tlb_hint,
 	.mmu_sysfs_init = kgsl_iommu_sysfs_init,
 };

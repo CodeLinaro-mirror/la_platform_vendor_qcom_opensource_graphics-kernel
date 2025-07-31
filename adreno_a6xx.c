@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/clk/qcom.h>
@@ -10,8 +10,6 @@
 #include <linux/of.h>
 #include <linux/of_fdt.h>
 #include <linux/of_device.h>
-#include <linux/regulator/consumer.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 #include <soc/qcom/of_common.h>
 
 #include "adreno.h"
@@ -96,7 +94,7 @@ static u32 a6xx_ifpc_pwrup_reglist[] = {
 	A6XX_CP_AHB_CNTL,
 };
 
-/* Applicable to a620, a621, a635, a650 and a660 */
+/* Applicable to a620, a621, a622, a642l, a643, a650 and a660 */
 static u32 a650_ifpc_pwrup_reglist[] = {
 	A6XX_CP_PROTECT_REG+32,
 	A6XX_CP_PROTECT_REG+33,
@@ -116,7 +114,7 @@ static u32 a650_ifpc_pwrup_reglist[] = {
 	A6XX_CP_PROTECT_REG+47,
 };
 
-/* Applicable to a620, a621, a635, a650 and a660 */
+/* Applicable to a620, a621, a622, a642l, a643, a650 and a660 */
 static u32 a650_pwrup_reglist[] = {
 	A6XX_TPL1_BICUBIC_WEIGHTS_TABLE_0,
 	A6XX_TPL1_BICUBIC_WEIGHTS_TABLE_1,
@@ -187,11 +185,8 @@ int a6xx_fenced_write(struct adreno_device *adreno_dev, u32 offset,
 int a6xx_init(struct adreno_device *adreno_dev)
 {
 	const struct adreno_a6xx_core *a6xx_core = to_a6xx_core(adreno_dev);
-	u64 freq = a6xx_core->gmu_hub_clk_freq;
 
 	adreno_dev->highest_bank_bit = a6xx_core->highest_bank_bit;
-
-	adreno_dev->gmu_hub_clk_freq = freq ? freq : 150000000;
 
 	adreno_dev->cooperative_reset = ADRENO_FEATURE(adreno_dev,
 							ADRENO_COOP_RESET);
@@ -199,7 +194,8 @@ int a6xx_init(struct adreno_device *adreno_dev)
 	/* If the memory type is DDR 4, override the existing configuration */
 	if (of_fdt_get_ddrtype() == 0x7) {
 		if (adreno_is_a660_shima(adreno_dev) ||
-			adreno_is_a635(adreno_dev) ||
+			adreno_is_a642l(adreno_dev) ||
+			adreno_is_a643(adreno_dev) ||
 			adreno_is_a662(adreno_dev) ||
 			adreno_is_gen6_3_26_0(adreno_dev))
 			adreno_dev->highest_bank_bit = 14;
@@ -292,7 +288,8 @@ __get_gmu_ao_cgc_mode_cntl(struct adreno_device *adreno_dev)
 	else if (adreno_is_a615_family(adreno_dev))
 		return 0x00000222;
 	/* a662 should be checked before a660 */
-	else if (adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev))
+	else if (adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
+			adreno_is_a622(adreno_dev))
 		return 0x00020200;
 	else if (adreno_is_a660(adreno_dev))
 		return 0x00020000;
@@ -513,6 +510,7 @@ static void a6xx_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 
 static void a6xx_llc_configure_gpu_scid(struct adreno_device *adreno_dev);
 static void a6xx_llc_configure_gpuhtw_scid(struct adreno_device *adreno_dev);
+static void a6xx_llc_configure_gpumv_scid(struct adreno_device *adreno_dev);
 static void a6xx_llc_enable_overrides(struct adreno_device *adreno_dev);
 
 static void a6xx_set_secvid(struct kgsl_device *device)
@@ -814,6 +812,7 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	/* Configure LLCC */
 	a6xx_llc_configure_gpu_scid(adreno_dev);
 	a6xx_llc_configure_gpuhtw_scid(adreno_dev);
+	a6xx_llc_configure_gpumv_scid(adreno_dev);
 
 	a6xx_llc_enable_overrides(adreno_dev);
 
@@ -826,8 +825,9 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		kgsl_regwrite(device, A6XX_CP_CHICKEN_DBG, 0x1);
 		kgsl_regwrite(device, A6XX_RBBM_GBIF_CLIENT_QOS_CNTL, 0x0);
 
-		/* Set dualQ + disable afull for A660 GPU but not for A635 */
-		if (!adreno_is_a635(adreno_dev))
+		/* Set dualQ + disable afull for A660 GPU but not for A642L and A643  */
+		if (!adreno_is_a642l(adreno_dev) &&
+				!adreno_is_a643(adreno_dev))
 			kgsl_regwrite(device, A6XX_UCHE_CMDQ_CONFIG, 0x66906);
 	}
 
@@ -865,40 +865,6 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	 */
 	a6xx_deassert_gbif_halt(adreno_dev);
 
-}
-
-/* Offsets into the MX/CX mapped register regions */
-#define RDPM_MX_OFFSET 0xf00
-#define RDPM_CX_OFFSET 0xf18
-
-void a6xx_rdpm_mx_freq_update(struct a6xx_gmu_device *gmu,
-		u32 freq)
-{
-	if (gmu->rdpm_mx_virt) {
-		writel_relaxed(freq/1000,
-			(gmu->rdpm_mx_virt + RDPM_MX_OFFSET));
-
-		/*
-		 * ensure previous writes post before this one,
-		 * i.e. act like normal writel()
-		 */
-		wmb();
-	}
-}
-
-void a6xx_rdpm_cx_freq_update(struct a6xx_gmu_device *gmu,
-		u32 freq)
-{
-	if (gmu->rdpm_cx_virt) {
-		writel_relaxed(freq/1000,
-			(gmu->rdpm_cx_virt + RDPM_CX_OFFSET));
-
-		/*
-		 * ensure previous writes post before this one,
-		 * i.e. act like normal writel()
-		 */
-		wmb();
-	}
 }
 
 /* This is the start point for non GMU/RGMU targets */
@@ -1657,6 +1623,29 @@ static void a6xx_llc_configure_gpuhtw_scid(struct adreno_device *adreno_dev)
 }
 
 /*
+ * a6xx_llc_configure_gpumv_scid() - Program the sub-cache ID for CCU block
+ * @adreno_dev: The adreno device pointer
+ */
+static void a6xx_llc_configure_gpumv_scid(struct adreno_device *adreno_dev)
+{
+	u32 gpumv_scid = 0;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_mmu *mmu = &device->mmu;
+
+	if (IS_ERR_OR_NULL(adreno_dev->gpumv_llc_slice) ||
+		!adreno_dev->gpumv_llc_slice_enable ||
+		mmu->subtype != KGSL_IOMMU_SMMU_V500)
+		return;
+
+	if (llcc_slice_activate(adreno_dev->gpumv_llc_slice))
+		return;
+
+	gpumv_scid = llcc_get_slice_id(adreno_dev->gpumv_llc_slice);
+	kgsl_regrmw(device, A6XX_GBIF_SCACHE_CNTL1,
+		A6XX_GPUMV_LLC_SCID_MASK, FIELD_PREP(GENMASK(19, 15), gpumv_scid));
+}
+
+/*
  * a6xx_llc_enable_overrides() - Override the page attributes
  * @adreno_dev: The adreno device pointer
  */
@@ -1709,16 +1698,16 @@ static const char *a6xx_fault_block_uche(struct kgsl_device *device,
 	 * to turn off CX gdsc will fail during the reset. So to avoid blocking
 	 * here, try to lock device mutex and return if it fails.
 	 */
-	if (!mutex_trylock(&device->mutex))
+	if (!kgsl_mutex_trylock(&device->mutex))
 		return "UCHE: unknown";
 
 	if (!kgsl_state_is_awake(device)) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		return "UCHE: unknown";
 	}
 
 	kgsl_regread(device, A6XX_UCHE_CLIENT_PF, &uche_client_id);
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	/* Ignore the value if the gpu is in IFPC */
 	if (uche_client_id == SCOOBYDOO)
@@ -1961,17 +1950,28 @@ int a6xx_probe_common(struct platform_device *pdev,
 
 	adreno_reg_offset_init(gpudev->reg_offsets);
 
-	if (gmu_core_isenabled(device) && (gpudev != &adreno_a6xx_rgmu_gpudev))
+	if (gmu_core_isenabled(device) && (gpudev != &adreno_a6xx_rgmu_gpudev)) {
 		device->pwrctrl.cx_cfg_gdsc_offset = (adreno_is_a662(adreno_dev) ||
 			adreno_is_a621(adreno_dev)) ? A662_GPU_CC_CX_CFG_GDSCR :
 			A6XX_GPU_CC_CX_CFG_GDSCR;
 
+		if (adreno_is_a622(adreno_dev))
+			device->pwrctrl.cx_cfg_gdsc_offset = A622_GPU_CC_CX_CFG_GDSCR;
+	}
+
 	adreno_dev->hwcg_enabled = true;
 	adreno_dev->uche_client_pf = 1;
 
-	adreno_dev->preempt.preempt_level = 1;
-	adreno_dev->preempt.skipsaverestore = true;
-	adreno_dev->preempt.usesgmem = true;
+	if (adreno_preemption_feature_set(adreno_dev)) {
+		const struct adreno_a6xx_core *a6xx_core = to_a6xx_core(adreno_dev);
+
+		adreno_dev->total_ctxt_record_sz = a6xx_core->ctxt_record_size ?
+			a6xx_core->ctxt_record_size : A6XX_CP_CTXRECORD_SIZE_IN_BYTES;
+
+		adreno_dev->preempt.preempt_level = 1;
+		adreno_dev->preempt.skipsaverestore = true;
+		adreno_dev->preempt.usesgmem = true;
+	}
 
 	ret = adreno_device_probe(pdev, adreno_dev);
 
@@ -2124,7 +2124,7 @@ u64 a6xx_read_alwayson(struct adreno_device *adreno_dev)
 static void a6xx_remove(struct adreno_device *adreno_dev)
 {
 	if (adreno_preemption_feature_set(adreno_dev))
-		del_timer(&adreno_dev->preempt.timer);
+		kgsl_delete_timer(&adreno_dev->preempt.timer);
 }
 
 static void a6xx_read_bus_stats(struct kgsl_device *device,

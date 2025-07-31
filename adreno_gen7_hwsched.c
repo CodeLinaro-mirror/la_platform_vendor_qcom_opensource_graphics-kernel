@@ -48,7 +48,7 @@ static void _wakeup_hw_fence_waiters(struct adreno_device *adreno_dev, u32 fault
 
 	wake_up_all(&hwf->unack_wq);
 
-	kgsl_delete_timer_sync(&hfi->hw_fence_timer);
+	kgsl_delete_timer(&hfi->hw_fence_timer);
 }
 
 void gen7_hwsched_fault(struct adreno_device *adreno_dev, u32 fault)

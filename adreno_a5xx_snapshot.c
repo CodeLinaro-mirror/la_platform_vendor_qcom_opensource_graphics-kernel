@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -752,7 +753,6 @@ static void _a5xx_do_crashdump(struct kgsl_device *device)
 {
 	unsigned long wait_time;
 	unsigned int reg = 0;
-	unsigned int val;
 
 	crash_dump_valid = false;
 
@@ -763,8 +763,7 @@ static void _a5xx_do_crashdump(struct kgsl_device *device)
 		return;
 
 	/* IF the SMMU is stalled we cannot do a crash dump */
-	kgsl_regread(device, A5XX_RBBM_STATUS3, &val);
-	if (val & BIT(24))
+	if (adreno_smmu_is_stalled(ADRENO_DEVICE(device)))
 		return;
 
 	/* Turn on APRIV so we can access the buffers */
@@ -1032,11 +1031,11 @@ void a5xx_snapshot(struct adreno_device *adreno_dev,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, a5xx_snapshot_cp_pm4, NULL);
 
-	/* Shader memory */
-	a5xx_snapshot_shader(device, snapshot);
-
 	/* Debug bus */
 	a5xx_snapshot_debugbus(device, snapshot);
+
+	/* Shader memory */
+	a5xx_snapshot_shader(device, snapshot);
 
 	/* Preemption record */
 	if (adreno_is_preemption_enabled(adreno_dev)) {

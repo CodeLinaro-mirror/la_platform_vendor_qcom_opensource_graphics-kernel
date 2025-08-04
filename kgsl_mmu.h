@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_MMU_H
 #define __KGSL_MMU_H
@@ -18,6 +18,10 @@
 
 #define MMU_DEFAULT_TTBR0(_d) \
 	(kgsl_mmu_pagetable_get_ttbr0((_d)->mmu.defaultpagetable))
+
+/* Mask ASID fields to match 48bit ptbase address*/
+#define MMU_SW_PT_BASE(_ttbr0) \
+	(_ttbr0 & (BIT_ULL(KGSL_IOMMU_ASID_START_BIT) - 1))
 
 #define KGSL_MMU_DEVICE(_mmu) \
 	container_of((_mmu), struct kgsl_device, mmu)
@@ -169,8 +173,6 @@ enum kgsl_mmu_feature {
 	KGSL_MMU_SUPPORT_VBO,
 	/** @KGSL_MMU_PAGEFAULT_TERMINATE: Set to make pagefaults fatal */
 	KGSL_MMU_PAGEFAULT_TERMINATE,
-	/** @KGSL_MMU_LLCC_NWA: Set to make no write allocate the default LLCC policy */
-	KGSL_MMU_FORCE_LLCC_NWA,
 };
 
 #include "kgsl_iommu.h"
@@ -208,7 +210,6 @@ void kgsl_mmu_exit(void);
 
 int kgsl_mmu_start(struct kgsl_device *device);
 
-void kgsl_print_global_pt_entries(struct seq_file *s);
 void kgsl_mmu_putpagetable(struct kgsl_pagetable *pagetable);
 
 int kgsl_mmu_map(struct kgsl_pagetable *pagetable,
@@ -227,13 +228,6 @@ unsigned int kgsl_mmu_log_fault_addr(struct kgsl_mmu *mmu,
 		u64 ttbr0, uint64_t addr);
 bool kgsl_mmu_gpuaddr_in_range(struct kgsl_pagetable *pt, uint64_t gpuaddr,
 		uint64_t size);
-
-int kgsl_mmu_get_region(struct kgsl_pagetable *pagetable,
-		uint64_t gpuaddr, uint64_t size);
-
-int kgsl_mmu_find_region(struct kgsl_pagetable *pagetable,
-		uint64_t region_start, uint64_t region_end,
-		uint64_t *gpuaddr, uint64_t size, unsigned int align);
 
 uint64_t kgsl_mmu_find_svm_region(struct kgsl_pagetable *pagetable,
 		uint64_t start, uint64_t end, uint64_t size,
@@ -422,4 +416,18 @@ static inline int kgsl_iommu_bind(struct kgsl_device *device, struct platform_de
 	return -ENODEV;
 }
 #endif
+
+/**
+ * kgsl_mmu_map_sg - Map the given buffer to the IOMMU domain
+ * @domain: The IOMMU domain to perform the mapping
+ * @iova: The start address to map the buffer
+ * @sgt: The sg_table object describing the buffer
+ * @prot: IOMMU protection bits
+ *
+ * Creates a mapping at @iova for the buffer described by a scatterlist
+ * stored in the given sg_table object in the provided IOMMU domain.
+ */
+ssize_t kgsl_mmu_map_sg(struct iommu_domain *domain,
+				unsigned long iova, struct scatterlist *sg,
+				unsigned int nents, int prot);
 #endif /* __KGSL_MMU_H */

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "gen7_reg.h"
@@ -9,7 +9,8 @@
 #include "adreno_gen7.h"
 #include "adreno_gen7_gmu.h"
 #include "adreno_snapshot.h"
-#include "adreno_gen7_snapshot.h"
+#include "adreno_gen7_0_0_snapshot.h"
+#include "adreno_gen7_2_0_snapshot.h"
 #include "kgsl_device.h"
 
 size_t gen7_snapshot_gmu_mem(struct kgsl_device *device,
@@ -36,7 +37,11 @@ size_t gen7_snapshot_gmu_mem(struct kgsl_device *device,
 	mem_hdr->gmuaddr = desc->memdesc->gmuaddr;
 	mem_hdr->gpuaddr = 0;
 
-	memcpy(data, desc->memdesc->hostptr, desc->memdesc->size);
+	/* The hw fence queues are mapped as iomem in the kernel */
+	if (desc->type == SNAPSHOT_GMU_MEM_HW_FENCE)
+		memcpy_fromio(data, desc->memdesc->hostptr, desc->memdesc->size);
+	else
+		memcpy(data, desc->memdesc->hostptr, desc->memdesc->size);
 
 	return desc->memdesc->size + sizeof(*mem_hdr);
 }
@@ -131,6 +136,12 @@ static void gen7_gmu_snapshot_memories(struct kgsl_device *device,
 			desc.type = SNAPSHOT_GMU_MEM_LOG;
 		else if (md == gmu->dump_mem)
 			desc.type = SNAPSHOT_GMU_MEM_DEBUG;
+		else if ((md == gmu->gmu_init_scratch) || (md == gmu->gpu_boot_scratch))
+			desc.type = SNAPSHOT_GMU_MEM_WARMBOOT;
+		else if (md == gmu->vrb)
+			desc.type = SNAPSHOT_GMU_MEM_VRB;
+		else if (md == gmu->trace.md)
+			desc.type = SNAPSHOT_GMU_MEM_TRACE;
 		else
 			desc.type = SNAPSHOT_GMU_MEM_BIN_BLOCK;
 
@@ -274,7 +285,7 @@ static void gen7_gmu_device_snapshot(struct kgsl_device *device,
 	 * A stalled SMMU can lead to NoC timeouts when host accesses DTCM.
 	 * DTCM can be read through side-band DBGC interface on gen7_2_x family.
 	 */
-	if (gen7_is_smmu_stalled(device) && !adreno_is_gen7_2_x_family(adreno_dev)) {
+	if (adreno_smmu_is_stalled(adreno_dev) && !adreno_is_gen7_2_x_family(adreno_dev)) {
 		dev_err(&gmu->pdev->dev,
 			"Not dumping dtcm because SMMU is stalled\n");
 		return;

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _A6XX_REG_H
@@ -415,6 +415,7 @@
 #define A6XX_RBBM_ISDB_CNT                       0x533
 #define A6XX_RBBM_NC_MODE_CNTL                   0X534
 #define A6XX_RBBM_SNAPSHOT_STATUS                0x535
+#define A6XX_RBBM_LPAC_GBIF_CLIENT_QOS_CNTL      0x5ff
 
 #define A6XX_RBBM_SECVID_TRUST_CNTL              0xF400
 #define A6XX_RBBM_SECVID_TSB_TRUSTED_BASE_LO     0xF800
@@ -557,6 +558,13 @@
 #define A6XX_RBBM_CLOCK_DELAY_GLC        0x00129
 #define A6XX_RBBM_CLOCK_HYST_GLC         0x0012a
 #define A6XX_RBBM_CLOCK_CNTL_GLC         0x0012b
+
+#define A6XX_GMUAO_GMU_CGC_MODE_CNTL     0x23b09
+#define A6XX_GMUAO_GMU_CGC_DELAY_CNTL    0x23b0a
+#define A6XX_GMUAO_GMU_CGC_HYST_CNTL     0x23b0b
+#define A6XX_GMUCX_GMU_WFI_CONFIG        0x1f802
+#define A6XX_GMUGX_GMU_SP_RF_CONTROL_0   0x1a883
+#define A6XX_GMUGX_GMU_SP_RF_CONTROL_1   0x1a884
 
 /* DBGC_CFG registers */
 #define A6XX_DBGC_CFG_DBGBUS_SEL_A                  0x600
@@ -1011,8 +1019,6 @@
 #define A6XX_GMU_CX_GMU_POWER_COUNTER_XOCLK_8_H	0x1F875
 #define A6XX_GMU_CX_GMU_POWER_COUNTER_XOCLK_9_L	0x1F876
 #define A6XX_GMU_CX_GMU_POWER_COUNTER_XOCLK_9_H	0x1F877
-#define A6XX_GMU_CX_GMU_ALWAYS_ON_COUNTER_L	0x1F888
-#define A6XX_GMU_CX_GMU_ALWAYS_ON_COUNTER_H	0x1F889
 #define A6XX_GMU_CX_GMU_PERF_COUNTER_ENABLE	0x1F8A0
 #define A6XX_GMU_CX_GMU_PERF_COUNTER_SELECT_0	0x1F8A1
 #define A6XX_GMU_CX_GMU_PERF_COUNTER_SELECT_1	0x1F8A2
@@ -1073,6 +1079,7 @@
 #define A6XX_GMU_GENERAL_1			0x1F9C6
 #define A6XX_GMU_GENERAL_6			0x1F9CB
 #define A6XX_GMU_GENERAL_7			0x1F9CC
+#define A6XX_GMU_GENERAL_11			0x1F9D0
 
 /* ISENSE registers */
 #define A6XX_GMU_ISENSE_CTRL			0x1F95D
@@ -1115,16 +1122,19 @@
 #define A6XX_GMU_AHB_FENCE_RANGE_0		0x23B11
 #define A6XX_GMU_AHB_FENCE_RANGE_1		0x23B12
 
+/* GMU countables */
+#define A6XX_GMU_CM3_BUSY_CYCLES		0
+
 /* GPUCC registers */
-#define A6XX_GPU_CC_GX_GDSCR                   0x24403
-#define A6XX_GPU_CC_GX_DOMAIN_MISC             0x24542
-#define A6XX_GPU_CC_GX_DOMAIN_MISC3            0x24563
-#define A6XX_GPU_CC_CX_GDSCR                   0x2441B
+#define A6XX_GPU_CC_GX_GDSCR			0x24403
+#define A6XX_GPU_CC_GX_DOMAIN_MISC		0x24542
+#define A6XX_GPU_CC_GX_DOMAIN_MISC3		0x24563
+#define A6XX_GPU_CC_CX_CFG_GDSCR		0x2441C
 
 /* GPUCC offsets are different for A662 */
-#define A662_GPU_CC_GX_GDSCR                   0x26417
-#define A662_GPU_CC_GX_DOMAIN_MISC3            0x26541
-#define A662_GPU_CC_CX_GDSCR                   0x26442
+#define A662_GPU_CC_GX_GDSCR			0x26417
+#define A662_GPU_CC_GX_DOMAIN_MISC3		0x26541
+#define A662_GPU_CC_CX_CFG_GDSCR		0x26443
 
 /* GPU CPR registers */
 #define A6XX_GPU_CPR_FSM_CTL			0x26801
@@ -1145,15 +1155,15 @@
 #define A6XX_RSCC_SEQ_BUSY_DRV0				0x00101
 #define A6XX_RSCC_SEQ_MEM_0_DRV0			0x00180
 #define A6XX_RSCC_TCS0_DRV0_STATUS			0x00346
-#define A6XX_RSCC_TCS1_DRV0_STATUS			0x003EE
-#define A6XX_RSCC_TCS2_DRV0_STATUS			0x00496
-#define A6XX_RSCC_TCS3_DRV0_STATUS			0x0053E
-#define A6XX_RSCC_TCS4_DRV0_STATUS			0x005E6
-#define A6XX_RSCC_TCS5_DRV0_STATUS			0x0068E
-#define A6XX_RSCC_TCS6_DRV0_STATUS			0x00736
-#define A6XX_RSCC_TCS7_DRV0_STATUS			0x007DE
-#define A6XX_RSCC_TCS8_DRV0_STATUS			0x00886
-#define A6XX_RSCC_TCS9_DRV0_STATUS			0x0092E
+#define A6XX_RSCC_TCS1_DRV0_STATUS                      0x003EE
+#define A6XX_RSCC_TCS2_DRV0_STATUS                      0x00496
+#define A6XX_RSCC_TCS3_DRV0_STATUS                      0x0053E
+#define A6XX_RSCC_TCS4_DRV0_STATUS                      0x005E6
+#define A6XX_RSCC_TCS5_DRV0_STATUS                      0x0068E
+#define A6XX_RSCC_TCS6_DRV0_STATUS                      0x00736
+#define A6XX_RSCC_TCS7_DRV0_STATUS                      0x007DE
+#define A6XX_RSCC_TCS8_DRV0_STATUS                      0x00886
+#define A6XX_RSCC_TCS9_DRV0_STATUS                      0x0092E
 
 /* GPU PDC sequencer registers in AOSS.RPMh domain */
 #define PDC_GPU_ENABLE_PDC			0x1140
@@ -1218,6 +1228,15 @@
 #define A6XX_GPUHTW_LLC_SCID_SHIFT		25
 #define A6XX_GPUHTW_LLC_SCID_MASK \
 	(((1 << A6XX_GPU_LLC_SCID_NUM_BITS) - 1) << A6XX_GPUHTW_LLC_SCID_SHIFT)
+
+/* FUSA registers */
+#define A6XX_GPU_FUSA_REG_BASE			0x3FC00
+#define A6XX_GPU_FUSA_REG_ECC_CTRL			0x3FC00
+#define A6XX_GPU_FUSA_REG_CSR_PRIY			0x3FC52
+#define A6XX_GPU_FUSA_DISABLE_NUM_BITS			4
+#define A6XX_GPU_FUSA_DISABLE_BITS			0x5
+#define A6XX_GPU_FUSA_DISABLE_MASK \
+	((1 << A6XX_GPU_FUSA_DISABLE_NUM_BITS) - 1)
 
 #endif /* _A6XX_REG_H */
 

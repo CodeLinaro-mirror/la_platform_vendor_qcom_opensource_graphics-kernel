@@ -4,8 +4,6 @@
  * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
-#include <linux/iopoll.h>
-
 #include "adreno.h"
 #include "adreno_a6xx.h"
 #include "adreno_snapshot.h"
@@ -239,6 +237,12 @@ static const unsigned int a6xx_gbif_registers[] = {
 	0x3C00, 0X3C0B, 0X3C40, 0X3C47, 0X3CC0, 0X3CD1, 0xE3A, 0xE3A,
 };
 
+static const unsigned int a6xx_gbif_reinit_registers[] = {
+	/* GBIF with REINIT */
+	0x3C00, 0X3C0B, 0X3C40, 0X3C47, 0X3C49, 0X3C4A, 0X3CC0, 0X3CD1,
+	0xE3A, 0xE3A, 0x0016, 0x0017,
+};
+
 static const unsigned int a6xx_rb_rac_registers[] = {
 	0x8E04, 0x8E05, 0x8E07, 0x8E08, 0x8E10, 0x8E1C, 0x8E20, 0x8E25,
 	0x8E28, 0x8E28, 0x8E2C, 0x8E2F, 0x8E50, 0x8E52,
@@ -326,13 +330,7 @@ static const unsigned int a6xx_holi_gmu_wrapper_registers[] = {
 	/* GMU CX */
 	0x1f840, 0x1f840, 0x1f844, 0x1f845, 0x1f887, 0x1f889, 0x1f8d0, 0x1f8d0,
 	/* GMU AO*/
-	0x23b0C, 0x23b0E, 0x23b15, 0x23b15,
-	/* GPU CC */
-	0x24000, 0x24012, 0x24040, 0x24052, 0x24400, 0x24404, 0x24407, 0x2440B,
-	0x24415, 0x2441C, 0x2441E, 0x2442D, 0x2443C, 0x2443D, 0x2443F, 0x24440,
-	0x24442, 0x24449, 0x24458, 0x2445A, 0x24540, 0x2455E, 0x24800, 0x24802,
-	0x24C00, 0x24C02, 0x25400, 0x25402, 0x25800, 0x25802, 0x25C00, 0x25C02,
-	0x26000, 0x26002,
+	0x23b0c, 0x23b0e, 0x23b15, 0x23b15,
 };
 
 enum a6xx_debugbus_id {
@@ -858,6 +856,12 @@ static size_t a6xx_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 
 	read_sel = ((cur_cluster->statetype + info->ctxt_id * 2) & 0xff) << 8;
 	kgsl_regwrite(device, A6XX_HLSQ_DBG_READ_SEL, read_sel);
+
+	/*
+	 * An explicit barrier is needed so that reads do not happen before
+	 * the register write.
+	 */
+	mb();
 
 	for (i = 0; i < cur_cluster->num_sets; i++) {
 		unsigned int start = cur_cluster->regs[2 * i];
@@ -1589,7 +1593,7 @@ static void _a6xx_do_crashdump(struct kgsl_device *device)
 		return;
 
 	/* IF the SMMU is stalled we cannot do a crash dump */
-	if (a6xx_is_smmu_stalled(device))
+	if (adreno_smmu_is_stalled(ADRENO_DEVICE(device)))
 		return;
 
 	/* Turn on APRIV for legacy targets so we can access the buffers */
@@ -1734,6 +1738,17 @@ static size_t a6xx_snapshot_cp_roq(struct kgsl_device *device, u8 *buf,
 	return DEBUG_SECTION_SZ(size);
 }
 
+static inline bool a6xx_has_gbif_reinit(struct adreno_device *adreno_dev)
+{
+	/*
+	 * Some targets in a6xx do not have reinit support in hardware.
+	 * This check is only for hardware capability and not for finding
+	 * whether gbif reinit sequence in software is enabled or not.
+	 */
+	return !(adreno_is_a630(adreno_dev) || adreno_is_a615_family(adreno_dev) ||
+		 adreno_is_a640_family(adreno_dev));
+}
+
 /*
  * a6xx_snapshot() - A6XX GPU snapshot function
  * @adreno_dev: Device being snapshotted
@@ -1784,6 +1799,10 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 
 	sptprac_on = a6xx_gmu_sptprac_is_on(adreno_dev);
 
+	/* SQE Firmware */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, a6xx_snapshot_sqe, NULL);
+
 	if (!adreno_gx_is_on(adreno_dev))
 		return;
 
@@ -1811,6 +1830,10 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 	/* Dump vbif registers as well which get affected by crash dumper */
 	if (adreno_is_a630(adreno_dev))
 		SNAPSHOT_REGISTERS(device, snapshot, a6xx_vbif_registers);
+	else if (a6xx_has_gbif_reinit(adreno_dev))
+		adreno_snapshot_registers(device, snapshot,
+					  a6xx_gbif_reinit_registers,
+					  ARRAY_SIZE(a6xx_gbif_reinit_registers) / 2);
 	else
 		adreno_snapshot_registers(device, snapshot,
 			a6xx_gbif_registers,
@@ -1876,10 +1899,6 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, a6xx_snapshot_cp_roq, NULL);
 
-	/* SQE Firmware */
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-		snapshot, a6xx_snapshot_sqe, NULL);
-
 	/* Mempool debug data */
 	if (adreno_is_a650_family(adreno_dev))
 		a650_snapshot_mempool(device, snapshot);
@@ -1887,16 +1906,16 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 		a6xx_snapshot_mempool(device, snapshot);
 
 	if (sptprac_on) {
-		/* Shader memory */
-		a6xx_snapshot_shader(device, snapshot);
-
 		/* MVC register section */
 		a6xx_snapshot_mvc_regs(device, snapshot);
 
 		/* registers dumped through DBG AHB */
 		a6xx_snapshot_dbgahb_regs(device, snapshot);
 
-		if (!a6xx_is_smmu_stalled(device))
+		/* Shader memory */
+		a6xx_snapshot_shader(device, snapshot);
+
+		if (!adreno_smmu_is_stalled(adreno_dev))
 			memset(a6xx_crashdump_registers->hostptr, 0xaa,
 					a6xx_crashdump_registers->size);
 	}
@@ -2266,9 +2285,11 @@ void a6xx_crashdump_init(struct adreno_device *adreno_dev)
 	/* Program the capturescript for the MVC regsiters */
 	ptr += _a6xx_crashdump_init_mvc(adreno_dev, ptr, &offset);
 
-	ptr += _a6xx_crashdump_init_ctx_dbgahb(ptr, &offset);
+	if (!adreno_is_a663(adreno_dev)) {
+		ptr += _a6xx_crashdump_init_ctx_dbgahb(ptr, &offset);
 
-	ptr += _a6xx_crashdump_init_non_ctx_dbgahb(ptr, &offset);
+		ptr += _a6xx_crashdump_init_non_ctx_dbgahb(ptr, &offset);
+	}
 
 	/* Save CD register end pointer to check CD status completion */
 	a6xx_cd_reg_end = a6xx_crashdump_registers->hostptr + offset;

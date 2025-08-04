@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -11,6 +11,7 @@
 
 #include "adreno_cp_parser.h"
 #include "kgsl_device.h"
+#include "kgsl_eventlog.h"
 #include "kgsl_sharedmem.h"
 #include "kgsl_snapshot.h"
 #include "kgsl_util.h"
@@ -100,7 +101,7 @@ static void kgsl_snapshot_put_object(struct kgsl_snapshot_object *obj)
 /**
  * kgsl_snapshot_have_object() - return 1 if the object has been processed
  * @snapshot: the snapshot data
- * @process: The process that owns the the object to freeze
+ * @process: The process that owns the object to freeze
  * @gpuaddr: The gpu address of the object to freeze
  * @size: the size of the object (may not always be the size of the region)
  *
@@ -162,13 +163,13 @@ int kgsl_snapshot_have_object(struct kgsl_snapshot *snapshot,
  */
 int kgsl_snapshot_get_object(struct kgsl_snapshot *snapshot,
 	struct kgsl_process_private *process, uint64_t gpuaddr,
-	uint64_t size, unsigned int type)
+	uint64_t size, u32 type)
 {
 	struct kgsl_mem_entry *entry;
 	struct kgsl_snapshot_object *obj;
 	uint64_t offset;
 	int ret = -EINVAL;
-	unsigned int mem_type;
+	u32 mem_type;
 
 	if (!gpuaddr)
 		return 0;
@@ -289,7 +290,7 @@ size_t kgsl_snapshot_dump_registers(struct kgsl_device *device, u8 *buf,
 {
 	struct kgsl_snapshot_regs *header = (struct kgsl_snapshot_regs *)buf;
 	struct kgsl_snapshot_registers *regs = priv;
-	unsigned int *data = (unsigned int *)(buf + sizeof(*header));
+	u32 *data = (u32 *)(buf + sizeof(*header));
 	int count = 0, j, k;
 
 	/* Figure out how many registers we are going to dump */
@@ -307,11 +308,11 @@ size_t kgsl_snapshot_dump_registers(struct kgsl_device *device, u8 *buf,
 	}
 
 	for (j = 0; j < regs->count; j++) {
-		unsigned int start = regs->regs[j * 2];
-		unsigned int end = regs->regs[j * 2 + 1];
+		u32 start = regs->regs[j * 2];
+		u32 end = regs->regs[j * 2 + 1];
 
 		for (k = start; k <= end; k++) {
-			unsigned int val;
+			u32 val;
 
 			kgsl_regread(device, k, &val);
 			*data++ = k;
@@ -326,10 +327,10 @@ size_t kgsl_snapshot_dump_registers(struct kgsl_device *device, u8 *buf,
 }
 
 struct kgsl_snapshot_indexed_registers {
-	unsigned int index;
-	unsigned int data;
-	unsigned int start;
-	unsigned int count;
+	u32 index;
+	u32 data;
+	u32 start;
+	u32 count;
 };
 
 static size_t kgsl_snapshot_dump_indexed_regs(struct kgsl_device *device,
@@ -338,7 +339,7 @@ static size_t kgsl_snapshot_dump_indexed_regs(struct kgsl_device *device,
 	struct kgsl_snapshot_indexed_registers *iregs = priv;
 	struct kgsl_snapshot_indexed_regs *header =
 		(struct kgsl_snapshot_indexed_regs *)buf;
-	unsigned int *data = (unsigned int *)(buf + sizeof(*header));
+	u32 *data = (u32 *)(buf + sizeof(*header));
 
 	if (remain < (iregs->count * 4) + sizeof(*header)) {
 		SNAPSHOT_ERR_NOMEM(device, "INDEXED REGS");
@@ -370,9 +371,9 @@ static size_t kgsl_snapshot_dump_indexed_regs(struct kgsl_device *device,
  */
 void kgsl_snapshot_indexed_registers(struct kgsl_device *device,
 		struct kgsl_snapshot *snapshot,
-		unsigned int index, unsigned int data,
-		unsigned int start,
-		unsigned int count)
+		u32 index, u32 data,
+		u32 start,
+		u32 count)
 {
 	struct kgsl_snapshot_indexed_registers iregs;
 
@@ -383,6 +384,59 @@ void kgsl_snapshot_indexed_registers(struct kgsl_device *device,
 
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_INDEXED_REGS,
 		snapshot, kgsl_snapshot_dump_indexed_regs, &iregs);
+}
+
+struct kgsl_snapshot_indexed_registers_v2 {
+	u32 index;
+	u32 data;
+	u32 start;
+	u32 count;
+	u32 pipe_id;
+	u32 slice_id;
+};
+
+static size_t kgsl_snapshot_dump_indexed_regs_v2(struct kgsl_device *device,
+	u8 *buf, size_t remain, void *priv)
+{
+	struct kgsl_snapshot_indexed_registers_v2 *iregs = priv;
+	struct kgsl_snapshot_indexed_regs_v2 *header =
+		(struct kgsl_snapshot_indexed_regs_v2 *)buf;
+	u32 *data = (u32 *)(buf + sizeof(*header));
+
+	if (remain < ((iregs->count * 4) + sizeof(*header))) {
+		SNAPSHOT_ERR_NOMEM(device, "INDEXED REGS");
+		return 0;
+	}
+
+	header->index_reg = iregs->index;
+	header->data_reg = iregs->data;
+	header->count = iregs->count;
+	header->start = iregs->start;
+	header->pipe_id = iregs->pipe_id;
+	header->slice_id = iregs->slice_id;
+
+	kgsl_regmap_read_indexed_interleaved(&device->regmap, iregs->index,
+		iregs->data, data, iregs->start, iregs->count);
+
+	return (iregs->count * 4) + sizeof(*header);
+}
+
+void kgsl_snapshot_indexed_registers_v2(struct kgsl_device *device,
+		struct kgsl_snapshot *snapshot,
+		u32 index, u32 data, u32 start, u32 count,
+		u32 pipe_id, u32 slice_id)
+{
+	struct kgsl_snapshot_indexed_registers_v2 iregs;
+
+	iregs.index = index;
+	iregs.data = data;
+	iregs.start = start;
+	iregs.count = count;
+	iregs.pipe_id = pipe_id;
+	iregs.slice_id = slice_id;
+
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_INDEXED_REGS_V2,
+		snapshot, kgsl_snapshot_dump_indexed_regs_v2, &iregs);
 }
 
 /**
@@ -544,6 +598,9 @@ static void kgsl_device_snapshot_atomic(struct kgsl_device *device)
 	if (device->ftbl->snapshot)
 		device->ftbl->snapshot(device, snapshot, NULL, NULL);
 
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_EVENTLOG,
+		snapshot, kgsl_snapshot_eventlog_buffer, NULL);
+
 	/*
 	 * The timestamp is the seconds since boot so it is easier to match to
 	 * the kernel log
@@ -560,16 +617,17 @@ static void kgsl_device_snapshot_atomic(struct kgsl_device *device)
 }
 
 /**
- * kgsl_snapshot() - construct a device snapshot
+ * kgsl_device_snapshot() - construct a device snapshot
  * @device: device to snapshot
  * @context: the context that is hung, might be NULL if unknown.
+ * @context_lpac: the lpac context that is hung, might be NULL if unknown.
  * @gmu_fault: whether this snapshot is triggered by a GMU fault.
  *
  * Given a device, construct a binary snapshot dump of the current device state
  * and store it in the device snapshot memory.
  */
 void kgsl_device_snapshot(struct kgsl_device *device,
-		struct kgsl_context *context,  struct kgsl_context *context_lpac,
+		struct kgsl_context *context, struct kgsl_context *context_lpac,
 		bool gmu_fault)
 {
 	struct kgsl_snapshot *snapshot;
@@ -635,6 +693,9 @@ void kgsl_device_snapshot(struct kgsl_device *device,
 	snapshot->sysfs_read = 0;
 
 	device->ftbl->snapshot(device, snapshot, context, context_lpac);
+
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_EVENTLOG,
+		snapshot, kgsl_snapshot_eventlog_buffer, NULL);
 
 	/*
 	 * The timestamp is the seconds since boot so it is easier to match to
@@ -1092,6 +1153,9 @@ void kgsl_device_snapshot_close(struct kgsl_device *device)
 
 	kgsl_remove_from_minidump("GPU_SNAPSHOT", (u64) device->snapshot_memory.ptr,
 			snapshot_phy_addr(device), device->snapshot_memory.size);
+
+	atomic_notifier_chain_unregister(&panic_notifier_list,
+					 &device->panic_nb);
 
 	sysfs_remove_bin_file(&device->snapshot_kobj, &snapshot_attr);
 	sysfs_remove_files(&device->snapshot_kobj, snapshot_attrs);

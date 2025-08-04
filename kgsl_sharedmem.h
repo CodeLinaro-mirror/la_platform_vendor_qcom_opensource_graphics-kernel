@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_SHAREDMEM_H
 #define __KGSL_SHAREDMEM_H
@@ -193,13 +193,14 @@ int kgsl_memdesc_init_fixed(struct kgsl_device *device,
 void kgsl_free_globals(struct kgsl_device *device);
 
 /**
- * kgsl_page_sync_for_device - Initialize SG table with page & sync it for device
+ * kgsl_page_sync_for_device - Initialize SG table with page & sync to/from device
  * @dev: A GPU device handle
  * @page: Pointer to the struct page
  * @size: Size of the page
+ * @dir: DMA direction flag
  */
-void kgsl_page_sync_for_device(struct device *dev, struct page *page,
-		size_t size);
+void kgsl_page_sync(struct device *dev, struct page *page,
+		size_t size, enum dma_data_direction dir);
 
 /*
  * kgsl_memdesc_get_align - Get alignment flags from a memdesc
@@ -483,4 +484,10 @@ static inline void kgsl_sharedmem_put_bind_op(struct kgsl_sharedmem_bind_op *op)
 	if (!IS_ERR_OR_NULL(op))
 		kref_put(&op->ref, kgsl_sharedmem_bind_range_destroy);
 }
+
+/**
+ * kgsl_register_shmem_callback - Register vendor hook callback with SHMEM
+ * driver
+ */
+void kgsl_register_shmem_callback(void);
 #endif /* __KGSL_SHAREDMEM_H */

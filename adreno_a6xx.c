@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -275,7 +275,7 @@ __get_rbbm_clock_cntl_on(struct adreno_device *adreno_dev)
 {
 	if (adreno_is_a630(adreno_dev))
 		return 0x8AA8AA02;
-	else if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev))
+	else if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev))
 		return 0xAAA8AA82;
 	else if (adreno_is_a702(adreno_dev))
 		return 0xAAAAAA82;
@@ -378,7 +378,7 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	 */
 
 	if (gmu_core_isenabled(device) && !adreno_is_a612(adreno_dev) &&
-		!adreno_is_a610(adreno_dev) && !adreno_is_a702(adreno_dev))
+		!adreno_is_a610_family(adreno_dev) && !adreno_is_a702(adreno_dev))
 		gmu_core_regrmw(device,
 			A6XX_GPU_GMU_GX_SPTPRAC_CLOCK_CONTROL, 1, 0);
 	else if (adreno_is_a619_holi(adreno_dev))
@@ -398,7 +398,7 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	 * Hence skip GMU_GX registers for A612.
 	 */
 	if (gmu_core_isenabled(device) && !adreno_is_a612(adreno_dev) &&
-		!adreno_is_a610(adreno_dev) && !adreno_is_a702(adreno_dev))
+		!adreno_is_a610_family(adreno_dev) && !adreno_is_a702(adreno_dev))
 		gmu_core_regrmw(device,
 			A6XX_GPU_GMU_GX_SPTPRAC_CLOCK_CONTROL, 0, 1);
 	else if (adreno_is_a619_holi(adreno_dev))
@@ -415,7 +415,7 @@ struct a6xx_reglist_list {
 };
 
 #define REGLIST(_a) \
-	 (struct a6xx_reglist_list) { .regs = _a, .count = ARRAY_SIZE(_a), }
+	 ((struct a6xx_reglist_list) { .regs = _a, .count = ARRAY_SIZE(_a), })
 
 static void a6xx_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 {
@@ -561,6 +561,7 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	unsigned int uavflagprd_inv;
 	unsigned int amsbc = 0;
 	unsigned int rgb565_predicator = 0;
+	unsigned int level2_swizzling_dis = 0;
 
 	/* Enable 64 bit addressing */
 	kgsl_regwrite(device, A6XX_CP_ADDR_MODE_CNTL, 0x1);
@@ -620,8 +621,8 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		       !adreno_is_a702(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x02000140);
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x8040362C);
-	} else if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev) ||
-			adreno_is_a702(adreno_dev)) {
+	} else if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev) ||
+		adreno_is_a702(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x00800060);
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x40201b16);
 	} else {
@@ -632,7 +633,13 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	if (adreno_is_a660(adreno_dev))
 		kgsl_regwrite(device, A6XX_CP_LPAC_PROG_FIFO_SIZE, 0x00000020);
 
-	if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev)) {
+	if (adreno_is_a663(adreno_dev)) {
+		kgsl_regwrite(device, A6XX_RBBM_GBIF_CLIENT_QOS_CNTL, 0x0);
+		kgsl_regwrite(device, A6XX_RBBM_LPAC_GBIF_CLIENT_QOS_CNTL, 0x0);
+		kgsl_regwrite(device, A6XX_CP_LPAC_PROG_FIFO_SIZE, 0x00000020);
+	}
+
+	if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev)) {
 		/* For A612 and A610 Mem pool size is reduced to 48 */
 		kgsl_regwrite(device, A6XX_CP_MEM_POOL_SIZE, 48);
 		kgsl_regwrite(device, A6XX_CP_MEM_POOL_DBG_ADDR, 47);
@@ -688,6 +695,8 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		mode = 0;
 		rgb565_predicator = 1;
 		amsbc = 1;
+		if (adreno_is_a663(adreno_dev))
+			level2_swizzling_dis = 1;
 		break;
 	default:
 		break;
@@ -696,7 +705,8 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	/* macrotilingmode 0: 4 channels (default)
 	 * overwrite to 1: 8 channels for A680
 	 */
-	if (adreno_is_a680(adreno_dev))
+	if (adreno_is_a680(adreno_dev) ||
+			adreno_is_a663(adreno_dev))
 		kgsl_regwrite(device, A6XX_RBBM_NC_MODE_CNTL, 1);
 
 	if (!WARN_ON(!adreno_dev->highest_bank_bit)) {
@@ -708,14 +718,17 @@ void a6xx_start(struct adreno_device *adreno_dev)
 
 	uavflagprd_inv = (adreno_is_a650_family(adreno_dev)) ? 2 : 0;
 
-	kgsl_regwrite(device, A6XX_RB_NC_MODE_CNTL, (rgb565_predicator << 11)|
+	kgsl_regwrite(device, A6XX_RB_NC_MODE_CNTL,
+				(level2_swizzling_dis << 12) | (rgb565_predicator << 11)|
 				(hbb_hi << 10) | (amsbc << 4) | (mal << 3) |
 				(hbb_lo << 1) | mode);
 
-	kgsl_regwrite(device, A6XX_TPL1_NC_MODE_CNTL, (hbb_hi << 4) |
+	kgsl_regwrite(device, A6XX_TPL1_NC_MODE_CNTL,
+				(level2_swizzling_dis << 6) | (hbb_hi << 4) |
 				(mal << 3) | (hbb_lo << 1) | mode);
 
-	kgsl_regwrite(device, A6XX_SP_NC_MODE_CNTL, (hbb_hi << 10) |
+	kgsl_regwrite(device, A6XX_SP_NC_MODE_CNTL,
+				(level2_swizzling_dis << 12) | (hbb_hi << 10) |
 				(mal << 3) | (uavflagprd_inv << 4) |
 				(hbb_lo << 1) | mode);
 
@@ -1217,6 +1230,24 @@ static void a6xx_sptprac_disable(struct adreno_device *adreno_dev)
 }
 
 /*
+ * a6xx_prepare_for_regulator_disable() - Prepare for regulator disable
+ * @adreno_dev: Pointer to Adreno device
+ */
+static void a6xx_prepare_for_regulator_disable(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (!adreno_is_a611(adreno_dev))
+		return;
+
+	/* This sequence is only required for A611 */
+	kgsl_regwrite(device, A6XX_RBBM_SW_RESET_CMD, 0x1);
+	/* Make sure software reset is triggered and completed */
+	wmb();
+	udelay(100);
+}
+
+/*
  * a6xx_gpu_keepalive() - GMU reg write to request GPU stays on
  * @adreno_dev: Pointer to the adreno device that has the GMU
  * @state: State to set: true is ON, false is OFF
@@ -1566,7 +1597,8 @@ static void a6xx_llc_configure_gpu_scid(struct adreno_device *adreno_dev)
 	 * GFO ENABLE BIT(8) : LLC uses a 64 byte cache line size enabling
 	 * GFO allows it allocate partial cache lines
 	 */
-	if (adreno_is_a660(adreno_dev))
+	if (adreno_is_a660(adreno_dev) ||
+			adreno_is_a663(adreno_dev))
 		kgsl_regrmw(device, A6XX_GBIF_SCACHE_CNTL0, (0x1f << 10) |
 				BIT(8), (gpu_scid << 10) | BIT(8));
 }
@@ -1874,6 +1906,7 @@ int a6xx_probe_common(struct platform_device *pdev,
 	struct	adreno_device *adreno_dev, u32 chipid,
 	const struct adreno_gpu_core *gpucore)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gpudev *gpudev = gpucore->gpudev;
 	int ret;
 
@@ -1881,6 +1914,11 @@ int a6xx_probe_common(struct platform_device *pdev,
 	adreno_dev->chipid = chipid;
 
 	adreno_reg_offset_init(gpudev->reg_offsets);
+
+	if (gmu_core_isenabled(device) && (gpudev != &adreno_a6xx_rgmu_gpudev))
+		device->pwrctrl.cx_cfg_gdsc_offset = (adreno_is_a662(adreno_dev) ||
+			adreno_is_a621(adreno_dev)) ? A662_GPU_CC_CX_CFG_GDSCR :
+			A6XX_GPU_CC_CX_CFG_GDSCR;
 
 	adreno_dev->hwcg_enabled = true;
 	adreno_dev->uche_client_pf = 1;
@@ -1910,6 +1948,8 @@ static int a6xx_probe(struct platform_device *pdev,
 
 	memset(adreno_dev, 0, sizeof(*adreno_dev));
 
+	adreno_dev->irq_mask = A6XX_INT_MASK;
+
 	ret = a6xx_probe_common(pdev, adreno_dev, chipid, gpucore);
 	if (ret)
 		return ret;
@@ -1923,8 +1963,6 @@ static int a6xx_probe(struct platform_device *pdev,
 	timer_setup(&device->idle_timer, kgsl_timer, 0);
 
 	INIT_WORK(&device->idle_check_ws, kgsl_idle_check);
-
-	adreno_dev->irq_mask = A6XX_INT_MASK;
 
 	return 0;
 }
@@ -1991,6 +2029,19 @@ int a6xx_perfcounter_update(struct adreno_device *adreno_dev,
 	struct cpu_gpu_lock *lock = ptr;
 	u32 *data = ptr + sizeof(*lock);
 	int i, offset = 0;
+	bool select_reg_present = false;
+
+	for (i = 0; i < lock->list_length >> 1; i++) {
+		if (data[offset] == reg->select) {
+			select_reg_present = true;
+			break;
+		}
+
+		if (data[offset] == A6XX_RBBM_PERFCTR_CNTL)
+			break;
+
+		offset += 2;
+	}
 
 	if (kgsl_hwlock(lock)) {
 		kgsl_hwunlock(lock);
@@ -2002,16 +2053,9 @@ int a6xx_perfcounter_update(struct adreno_device *adreno_dev,
 	 * update it, otherwise append the <select register, value> pair to
 	 * the end of the list.
 	 */
-	for (i = 0; i < lock->list_length >> 1; i++) {
-		if (data[offset] == reg->select) {
-			data[offset + 1] = reg->countable;
-			goto update;
-		}
-
-		if (data[offset] == A6XX_RBBM_PERFCTR_CNTL)
-			break;
-
-		offset += 2;
+	if (select_reg_present) {
+		data[offset + 1] = reg->countable;
+		goto update;
 	}
 
 	/*
@@ -2019,10 +2063,9 @@ int a6xx_perfcounter_update(struct adreno_device *adreno_dev,
 	 * so overwrite the existing A6XX_RBBM_PERFCNTL_CTRL and add it back to
 	 * the end.
 	 */
-
 	data[offset] = reg->select;
 	data[offset + 1] = reg->countable;
-	data[offset + 2] = A6XX_RBBM_PERFCTR_CNTL,
+	data[offset + 2] = A6XX_RBBM_PERFCTR_CNTL;
 	data[offset + 3] = 1;
 
 	lock->list_length += 2;
@@ -2035,31 +2078,6 @@ update:
 	kgsl_hwunlock(lock);
 	return 0;
 }
-
-#if IS_ENABLED(CONFIG_COMMON_CLK_QCOM)
-static void a6xx_clk_set_options(struct adreno_device *adreno_dev,
-	const char *name, struct clk *clk, bool on)
-{
-	if (!clk)
-		return;
-
-	/* Handle clock settings for GFX PSCBCs */
-	if (on) {
-		if (!strcmp(name, "mem_iface_clk")) {
-			qcom_clk_set_flags(clk, CLKFLAG_NORETAIN_PERIPH);
-			qcom_clk_set_flags(clk, CLKFLAG_NORETAIN_MEM);
-		} else if (!strcmp(name, "core_clk")) {
-			qcom_clk_set_flags(clk, CLKFLAG_RETAIN_PERIPH);
-			qcom_clk_set_flags(clk, CLKFLAG_RETAIN_MEM);
-		}
-	} else {
-		if (!strcmp(name, "core_clk")) {
-			qcom_clk_set_flags(clk, CLKFLAG_NORETAIN_PERIPH);
-			qcom_clk_set_flags(clk, CLKFLAG_NORETAIN_MEM);
-		}
-	}
-}
-#endif
 
 u64 a6xx_read_alwayson(struct adreno_device *adreno_dev)
 {
@@ -2089,7 +2107,7 @@ u64 a6xx_read_alwayson(struct adreno_device *adreno_dev)
 
 static void a6xx_remove(struct adreno_device *adreno_dev)
 {
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION))
+	if (adreno_preemption_feature_set(adreno_dev))
 		del_timer(&adreno_dev->preempt.timer);
 }
 
@@ -2311,17 +2329,13 @@ const struct adreno_gpudev adreno_a6xx_gpudev = {
 	.init = a6xx_nogmu_init,
 	.irq_handler = a6xx_irq_handler,
 	.rb_start = a6xx_rb_start,
-	.regulator_enable = a6xx_sptprac_enable,
-	.regulator_disable = a6xx_sptprac_disable,
+	.regulator_disable = a6xx_prepare_for_regulator_disable,
 	.gpu_keepalive = a6xx_gpu_keepalive,
 	.hw_isidle = a6xx_hw_isidle,
 	.iommu_fault_block = a6xx_iommu_fault_block,
 	.reset = a6xx_reset,
 	.preemption_schedule = a6xx_preemption_schedule,
 	.preemption_context_init = a6xx_preemption_context_init,
-#if IS_ENABLED(CONFIG_COMMON_CLK_QCOM)
-	.clk_set_options = a6xx_clk_set_options,
-#endif
 	.read_alwayson = a6xx_read_alwayson,
 	.power_ops = &adreno_power_operations,
 	.clear_pending_transactions = a6xx_clear_pending_transactions,
@@ -2345,7 +2359,7 @@ const struct a6xx_gpudev adreno_a6xx_hwsched_gpudev = {
 		.preemption_context_init = a6xx_preemption_context_init,
 		.context_detach = a6xx_hwsched_context_detach,
 		.read_alwayson = a6xx_read_alwayson,
-		.reset = a6xx_hwsched_reset,
+		.reset = a6xx_hwsched_reset_replay,
 		.power_ops = &a6xx_hwsched_power_ops,
 		.power_stats = a6xx_power_stats,
 		.setproperty = a6xx_setproperty,
@@ -2430,9 +2444,6 @@ const struct adreno_gpudev adreno_a619_holi_gpudev = {
 	.reset = a6xx_reset,
 	.preemption_schedule = a6xx_preemption_schedule,
 	.preemption_context_init = a6xx_preemption_context_init,
-#if IS_ENABLED(CONFIG_COMMON_CLK_QCOM)
-	.clk_set_options = a6xx_clk_set_options,
-#endif
 	.read_alwayson = a6xx_read_alwayson,
 	.power_ops = &adreno_power_operations,
 	.clear_pending_transactions = a6xx_clear_pending_transactions,

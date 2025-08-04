@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "a6xx_reg.h"
@@ -74,6 +75,17 @@ static const unsigned int a662_gmu_gpucc_registers[] = {
 	0x26540, 0x26570, 0x26600, 0x26616, 0x26620, 0x2662d,
 };
 
+static const unsigned int a663_gmu_gpucc_registers[] = {
+	/* GPU CC */
+	0x24000, 0x2400e, 0x24400, 0x2440e, 0x25800, 0x25804, 0x25c00, 0x25c04,
+	0x26000, 0x26004, 0x26400, 0x26405, 0x26414, 0x2641d, 0x2642a, 0x26430,
+	0x26432, 0x26432, 0x26441, 0x26455, 0x26466, 0x26468, 0x26478, 0x2647a,
+	0x26489, 0x2648a, 0x2649c, 0x2649e, 0x264a0, 0x264a3, 0x264b3, 0x264b5,
+	0x264c5, 0x264c7, 0x264d6, 0x264d8, 0x264e8, 0x264e9, 0x264f9, 0x264fc,
+	0x2650b, 0x2650c, 0x2651c, 0x2651e, 0x26540, 0x26570, 0x26600, 0x26616,
+	0x26620, 0x2662d,
+};
+
 static const unsigned int a630_rscc_snapshot_registers[] = {
 	0x23400, 0x23434, 0x23436, 0x23436, 0x23480, 0x23484, 0x23489, 0x2348C,
 	0x23491, 0x23494, 0x23499, 0x2349C, 0x234A1, 0x234A4, 0x234A9, 0x234AC,
@@ -140,11 +152,6 @@ static const unsigned int a650_rscc_registers[] = {
 	0x390B3, 0x390B3, 0x39138, 0x39138, 0x3913D, 0x3913D, 0x39142, 0x39142,
 	0x39147, 0x39147, 0x3914C, 0x3914C, 0x39151, 0x39151, 0x39156, 0x39156,
 	0x3915B, 0x3915B,
-};
-
-struct gmu_mem_type_desc {
-	struct kgsl_memdesc *memdesc;
-	uint32_t type;
 };
 
 static size_t a6xx_snapshot_gmu_mem(struct kgsl_device *device,
@@ -252,6 +259,10 @@ static void a6xx_gmu_snapshot_memories(struct kgsl_device *device,
 			desc.type = SNAPSHOT_GMU_MEM_LOG;
 		else if (md == gmu->dump_mem)
 			desc.type = SNAPSHOT_GMU_MEM_DEBUG;
+		else if (md == gmu->vrb)
+			desc.type = SNAPSHOT_GMU_MEM_VRB;
+		else if (md == gmu->trace.md)
+			desc.type = SNAPSHOT_GMU_MEM_TRACE;
 		else
 			desc.type = SNAPSHOT_GMU_MEM_BIN_BLOCK;
 
@@ -417,6 +428,10 @@ void a6xx_gmu_device_snapshot(struct kgsl_device *device,
 		adreno_snapshot_registers(device, snapshot,
 			a662_gmu_gpucc_registers,
 			ARRAY_SIZE(a662_gmu_gpucc_registers) / 2);
+	else if (adreno_is_a663(adreno_dev))
+		adreno_snapshot_registers(device, snapshot,
+			a663_gmu_gpucc_registers,
+			ARRAY_SIZE(a663_gmu_gpucc_registers) / 2);
 	else
 		adreno_snapshot_registers(device, snapshot,
 			a6xx_gmu_gpucc_registers,
@@ -442,7 +457,7 @@ void a6xx_gmu_device_snapshot(struct kgsl_device *device,
 			ARRAY_SIZE(a6xx_gmu_gx_registers) / 2);
 
 	/* A stalled SMMU can lead to NoC timeouts when host accesses DTCM */
-	if (a6xx_is_smmu_stalled(device)) {
+	if (adreno_smmu_is_stalled(adreno_dev)) {
 		dev_err(&gmu->pdev->dev,
 			"Not dumping dtcm because SMMU is stalled\n");
 		return;

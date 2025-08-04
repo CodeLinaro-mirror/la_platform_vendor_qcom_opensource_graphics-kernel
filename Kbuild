@@ -6,9 +6,11 @@ ifeq ($(KGSL_PATH),)
 KGSL_PATH=$(src)
 endif
 
-# If we're not in an Android tree, select KGSL config
-ifeq ($(ANDROID_BUILD_TOP),)
-CONFIG_QCOM_KGSL = m
+# If we're not GVM and not in an Android tree, select KGSL config
+ifeq ($(CONFIG_QTI_QUIN_GVM),)
+	ifeq ($(ANDROID_BUILD_TOP),)
+		CONFIG_QCOM_KGSL = m
+	endif
 endif
 
 ifeq ($(CONFIG_ARCH_WAIPIO), y)
@@ -16,6 +18,15 @@ ifeq ($(CONFIG_ARCH_WAIPIO), y)
 endif
 ifeq ($(CONFIG_ARCH_KALAMA), y)
 	include $(KGSL_PATH)/config/gki_kalama.conf
+endif
+ifeq ($(CONFIG_ARCH_PINEAPPLE), y)
+	include $(KGSL_PATH)/config/gki_pineapple.conf
+endif
+ifeq ($(CONFIG_ARCH_BLAIR), y)
+	include $(KGSL_PATH)/config/gki_blair.conf
+endif
+ifeq ($(CONFIG_ARCH_PITTI), y)
+	include $(KGSL_PATH)/config/gki_pitti.conf
 endif
 ifeq ($(CONFIG_ARCH_SA8155), y)
 	include $(KGSL_PATH)/config/gki_sa8155.conf
@@ -26,23 +37,29 @@ endif
 ifeq ($(CONFIG_ARCH_SA8195), y)
 	include $(KGSL_PATH)/config/gki_sa8155.conf
 endif
+ifeq ($(CONFIG_ARCH_SA6155), y)
+	include $(KGSL_PATH)/config/gki_sa8155.conf
+endif
 ifeq ($(CONFIG_ARCH_MONACO), y)
 	include $(KGSL_PATH)/config/gki_monaco.conf
+endif
+ifeq ($(CONFIG_ARCH_LEMANS), y)
+	include $(KGSL_PATH)/config/gki_lemans.conf
 endif
 ifeq ($(CONFIG_ARCH_KONA), y)
         include $(KGSL_PATH)/config/gki_kona.conf
 endif
-ifeq ($(CONFIG_ARCH_SDM670), y)
-	include $(KGSL_PATH)/config/gki_qcs605.conf
+ifeq ($(CONFIG_ARCH_TRINKET), y)
+	include $(KGSL_PATH)/config/gki_trinket.conf
 endif
-ifeq ($(CONFIG_ARCH_BENGAL), y)
-        include $(KGSL_PATH)/config/gki_bengal.conf
+ifeq ($(CONFIG_ARCH_QCS405), y)
+	include $(KGSL_PATH)/config/gki_qcs405.conf
 endif
-ifeq ($(CONFIG_ARCH_SCUBA), y)
-	include $(KGSL_PATH)/config/gki_scuba.conf
+ifeq ($(CONFIG_ARCH_HOLI), y)
+	include $(KGSL_PATH)/config/gki_blair.conf
 endif
 
-ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq -I$(KERNEL_SRC)/drivers/iommu
+ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq
 
 obj-$(CONFIG_QCOM_KGSL) += msm_kgsl.o
 
@@ -112,6 +129,17 @@ msm_kgsl-y += \
 	adreno_gen7_ringbuffer.o \
 	adreno_gen7_rpmh.o \
 	adreno_gen7_snapshot.o \
+	adreno_gen8.o \
+	adreno_gen8_gmu.o \
+	adreno_gen8_gmu_snapshot.o \
+	adreno_gen8_hfi.o \
+	adreno_gen8_hwsched.o \
+	adreno_gen8_hwsched_hfi.o \
+	adreno_gen8_perfcounter.o \
+	adreno_gen8_preempt.o \
+	adreno_gen8_ringbuffer.o \
+	adreno_gen8_rpmh.o \
+	adreno_gen8_snapshot.o \
 	adreno_hwsched.o \
 	adreno_ioctl.o \
 	adreno_perfcounter.o \

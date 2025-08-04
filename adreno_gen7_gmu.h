@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023,2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_GEN7_GMU_H
 #define __ADRENO_GEN7_GMU_H
@@ -10,6 +10,13 @@
 
 #include "adreno_gen7_hfi.h"
 #include "kgsl_gmu_core.h"
+
+struct gen7_dcvs_table {
+	u32 gpu_level_num;
+	u32 gmu_level_num;
+	struct opp_gx_desc gx_votes[MAX_GX_LEVELS];
+	struct opp_desc cx_votes[MAX_CX_LEVELS];
+};
 
 /**
  * struct gen7_gmu_device - GMU device structure
@@ -24,9 +31,6 @@
  * @num_bwlevel: number of GPU BW levels
  * @num_cnocbwlevel: number CNOC BW levels
  * @rpmh_votes: RPMh TCS command set for GPU, GMU voltage and bw scaling
- * @cx_gdsc: CX headswitch that controls power of GMU and
- *  subsystem peripherals
- * @gx_gdsc: GX headswitch that controls power of GPU subsystem
  * @clks: GPU subsystem clocks required for GMU functionality
  * @wakeup_pwrlevel: GPU wake up power/DCVS level in case different
  *  than default power level
@@ -48,10 +52,15 @@ struct gen7_gmu_device {
 	const struct firmware *fw_image;
 	struct kgsl_memdesc *dump_mem;
 	struct kgsl_memdesc *gmu_log;
+	/** @gmu_init_scratch: Memory to store the initial HFI messages */
+	struct kgsl_memdesc *gmu_init_scratch;
+	/** @gpu_boot_scratch: Memory to store the bootup HFI messages */
+	struct kgsl_memdesc *gpu_boot_scratch;
+	/** @vrb: GMU virtual register bank memory */
+	struct kgsl_memdesc *vrb;
+	/** @trace: gmu trace container */
+	struct kgsl_gmu_trace trace;
 	struct gen7_hfi hfi;
-	/** @pwrlevels: Array of GMU power levels */
-	struct regulator *cx_gdsc;
-	struct regulator *gx_gdsc;
 	struct clk_bulk_data *clks;
 	/** @num_clks: Number of entries in the @clks array */
 	int num_clks;
@@ -100,17 +109,20 @@ struct gen7_gmu_device {
 	u32 num_oob_perfcntr;
 	/** @acd_debug_val: DVM value to calibrate ACD for a level */
 	u32 acd_debug_val;
-	/** @gdsc_nb: Notifier block for cx gdsc regulator */
-	struct notifier_block gdsc_nb;
-	/** @gdsc_gate: Completion to signal cx gdsc collapse status */
-	struct completion gdsc_gate;
-};
-
-struct gmu_mem_type_desc {
-	/** @memdesc: Pointer to the memory descriptor */
-	struct kgsl_memdesc *memdesc;
-	/** @type: Type of the memory descriptor */
-	u32 type;
+	/** @stats_enable: GMU stats feature enable */
+	bool stats_enable;
+	/** @stats_mask: GMU performance countables to enable */
+	u32 stats_mask;
+	/** @stats_interval: GMU performance counters sampling interval */
+	u32 stats_interval;
+	/** @stats_kobj: kernel object for GMU stats directory in sysfs */
+	struct kobject stats_kobj;
+	/** @cp_init_hdr: raw command header for cp_init */
+	u32 cp_init_hdr;
+	/** @switch_to_unsec_hdr: raw command header for switch to unsecure packet */
+	u32 switch_to_unsec_hdr;
+	/** @dcvs_table: Table for gpu dcvs levels */
+	struct gen7_dcvs_table dcvs_table;
 };
 
 /* Helper function to get to gen7 gmu device from adreno device */
@@ -125,7 +137,7 @@ struct adreno_device *gen7_gmu_to_adreno(struct gen7_gmu_device *gmu);
  * @addr: Desired gmu virtual address
  * @size: Size of the buffer in bytes
  * @vma_id: Target gmu vma where this buffer should be mapped
- * @va_align: Alignment as a power of two(2^n) bytes for the GMU VA
+ * @align: Alignment for the GMU VA and GMU mapping size
  *
  * This function allocates a global gmu buffer and maps it in
  * the desired gmu vma
@@ -133,7 +145,7 @@ struct adreno_device *gen7_gmu_to_adreno(struct gen7_gmu_device *gmu);
  * Return: Pointer to the memory descriptor or error pointer on failure
  */
 struct kgsl_memdesc *gen7_reserve_gmu_kernel_block(struct gen7_gmu_device *gmu,
-		u32 addr, u32 size, u32 vma_id, u32 va_align);
+		u32 addr, u32 size, u32 vma_id, u32 align);
 
 /**
  * gen7_reserve_gmu_kernel_block_fixed() - Maps phyical resource address to gmu
@@ -143,14 +155,14 @@ struct kgsl_memdesc *gen7_reserve_gmu_kernel_block(struct gen7_gmu_device *gmu,
  * @vma_id: Target gmu vma where this buffer should be mapped
  * @resource: Name of the resource to get the size and address to allocate
  * @attrs: Attributes for the mapping
- * @va_align: Alignment as a power of two(2^n) bytes for the GMU VA
+ * @align: Alignment for the GMU VA and GMU mapping size
  *
  * This function maps the physcial resource address to desired gmu vma
  *
  * Return: Pointer to the memory descriptor or error pointer on failure
  */
 struct kgsl_memdesc *gen7_reserve_gmu_kernel_block_fixed(struct gen7_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 va_align);
+	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 align);
 
 /**
  * gen7_alloc_gmu_kernel_block() - Allocate a gmu buffer
@@ -172,15 +184,15 @@ int gen7_alloc_gmu_kernel_block(struct gen7_gmu_device *gmu,
  * @gmu: Pointer to the gen7 gmu device
  * @vma_id: Target gmu vma where this buffer should be mapped
  * @md: Pointer to the memdesc to be mapped
- * @size: Size of the buffer in bytes
  * @attrs: Attributes for the mapping
+ * @align: Alignment for the GMU VA and GMU mapping size
  *
  * This function imports and maps a buffer to a gmu vma
  *
  * Return: 0 on success or error code on failure
  */
 int gen7_gmu_import_buffer(struct gen7_gmu_device *gmu, u32 vma_id,
-			struct kgsl_memdesc *md, u32 size, u32 attrs);
+			struct kgsl_memdesc *md, u32 attrs, u32 align);
 
 /**
  * gen7_free_gmu_block() - Free a gmu buffer
@@ -290,14 +302,6 @@ int gen7_gmu_memory_init(struct adreno_device *adreno_dev);
  * This function enables or disables gpu acd feature using mailbox
  */
 void gen7_gmu_aop_send_acd_state(struct gen7_gmu_device *gmu, bool flag);
-
-/**
- * gen7_gmu_enable_clocks - Enable gmu clocks
- * @adreno_dev: Pointer to the adreno device
- *
- * Return: 0 on success or negative error on failure
- */
-int gen7_gmu_enable_gdsc(struct adreno_device *adreno_dev);
 
 /**
  * gen7_gmu_load_fw - Load gmu firmware
@@ -466,20 +470,6 @@ void gen7_gmu_remove(struct kgsl_device *device);
 int gen7_gmu_enable_clks(struct adreno_device *adreno_dev, u32 level);
 
 /**
- * gen7_gmu_enable_gdsc - Enable gmu gdsc
- * @adreno_dev: Pointer to the adreno device
- *
- * Return: 0 on success or negative error on failure
- */
-int gen7_gmu_enable_gdsc(struct adreno_device *adreno_dev);
-
-/**
- * gen7_gmu_disable_gdsc - Disable gmu gdsc
- * @adreno_dev: Pointer to the adreno device
- */
-void gen7_gmu_disable_gdsc(struct adreno_device *adreno_dev);
-
-/**
  * gen7_gmu_handle_watchdog - Handle watchdog interrupt
  * @adreno_dev: Pointer to the adreno device
  */
@@ -509,5 +499,14 @@ int gen7_gmu_add_to_minidump(struct adreno_device *adreno_dev);
  */
 size_t gen7_snapshot_gmu_mem(struct kgsl_device *device,
 	u8 *buf, size_t remain, void *priv);
+
+/**
+ * gen7_bus_ab_quantize - Calculate the AB vote that needs to be sent to GMU
+ * @adreno_dev: Handle to the adreno device
+ * @ab: ab request that needs to be scaled in MBps
+ *
+ * Returns the AB value that needs to be prefixed to bandwidth vote in kbps
+ */
+u32 gen7_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
 
 #endif

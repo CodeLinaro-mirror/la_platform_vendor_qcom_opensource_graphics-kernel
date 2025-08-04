@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
@@ -10,6 +10,7 @@
 #include <linux/mempool.h>
 #include <linux/of.h>
 #include <linux/scatterlist.h>
+#include <linux/version.h>
 
 #include "kgsl_debugfs.h"
 #include "kgsl_device.h"
@@ -88,7 +89,13 @@ __kgsl_pool_add_page(struct kgsl_page_pool *pool, struct page *p)
 
 	rb_link_node(&new_page->node, parent, node);
 	rb_insert_color(&new_page->node, &pool->pool_rbtree);
-	pool->page_count++;
+
+	/*
+	 * page_count may be read without the list_lock held. Use WRITE_ONCE
+	 * to avoid compiler optimizations that may break consistency.
+	 */
+	ASSERT_EXCLUSIVE_WRITER(pool->page_count);
+	WRITE_ONCE(pool->page_count, pool->page_count + 1);
 	spin_unlock(&pool->list_lock);
 
 	return 0;
@@ -112,7 +119,13 @@ __kgsl_pool_get_page(struct kgsl_page_pool *pool)
 		mempool_free(entry, pool->mempool);
 	else
 		kmem_cache_free(addr_page_cache, entry);
-	pool->page_count--;
+
+	/*
+	 * page_count may be read without the list_lock held. Use WRITE_ONCE
+	 * to avoid compiler optimizations that may break consistency.
+	 */
+	ASSERT_EXCLUSIVE_WRITER(pool->page_count);
+	WRITE_ONCE(pool->page_count, pool->page_count - 1);
 	return p;
 }
 
@@ -162,7 +175,13 @@ __kgsl_pool_add_page(struct kgsl_page_pool *pool, struct page *p)
 {
 	spin_lock(&pool->list_lock);
 	list_add_tail(&p->lru, &pool->page_list);
-	pool->page_count++;
+
+	/*
+	 * page_count may be read without the list_lock held. Use WRITE_ONCE
+	 * to avoid compiler optimizations that may break consistency.
+	 */
+	ASSERT_EXCLUSIVE_WRITER(pool->page_count);
+	WRITE_ONCE(pool->page_count, pool->page_count + 1);
 	spin_unlock(&pool->list_lock);
 
 	return 0;
@@ -175,7 +194,13 @@ __kgsl_pool_get_page(struct kgsl_page_pool *pool)
 
 	p = list_first_entry_or_null(&pool->page_list, struct page, lru);
 	if (p) {
-		pool->page_count--;
+		/*
+		 * page_count may be read without the list_lock held. Use
+		 * WRITE_ONCE to avoid compiler optimizations that may break
+		 * consistency.
+		 */
+		ASSERT_EXCLUSIVE_WRITER(pool->page_count);
+		WRITE_ONCE(pool->page_count, pool->page_count - 1);
 		list_del(&p->lru);
 	}
 
@@ -248,7 +273,8 @@ _kgsl_pool_add_page(struct kgsl_page_pool *pool, struct page *p)
 		return;
 	}
 
-	trace_kgsl_pool_add_page(pool->pool_order, pool->page_count);
+	/* Use READ_ONCE to read page_count without holding list_lock */
+	trace_kgsl_pool_add_page(pool->pool_order, READ_ONCE(pool->page_count));
 	mod_node_page_state(page_pgdat(p),  NR_KERNEL_MISC_RECLAIMABLE,
 				(1 << pool->pool_order));
 }
@@ -263,7 +289,9 @@ _kgsl_pool_get_page(struct kgsl_page_pool *pool)
 	p = __kgsl_pool_get_page(pool);
 	spin_unlock(&pool->list_lock);
 	if (p != NULL) {
-		trace_kgsl_pool_get_page(pool->pool_order, pool->page_count);
+		/* Use READ_ONCE to read page_count without holding list_lock */
+		trace_kgsl_pool_get_page(pool->pool_order,
+				READ_ONCE(pool->page_count));
 		mod_node_page_state(page_pgdat(p), NR_KERNEL_MISC_RECLAIMABLE,
 				-(1 << pool->pool_order));
 	}
@@ -324,7 +352,9 @@ _kgsl_pool_get_nonreserved_page(struct kgsl_page_pool *pool)
 	p = __kgsl_pool_get_page(pool);
 	spin_unlock(&pool->list_lock);
 	if (p != NULL) {
-		trace_kgsl_pool_get_page(pool->pool_order, pool->page_count);
+		/* Use READ_ONCE to read page_count without holding list_lock */
+		trace_kgsl_pool_get_page(pool->pool_order,
+					READ_ONCE(pool->page_count));
 		mod_node_page_state(page_pgdat(p), NR_KERNEL_MISC_RECLAIMABLE,
 				-(1 << pool->pool_order));
 	}
@@ -436,11 +466,14 @@ static bool kgsl_pool_available(unsigned int page_size)
 	return (kgsl_get_pool_index(order) >= 0);
 }
 
-int kgsl_get_page_size(size_t size, unsigned int align)
+u32 kgsl_get_page_size(size_t size, unsigned int align)
 {
-	size_t pool;
+	u32 pool;
 
-	for (pool = SZ_1M; pool > PAGE_SIZE; pool >>= 1)
+	if (!size)
+		return 0;
+
+	for (pool = rounddown_pow_of_two(size); pool > PAGE_SIZE; pool >>= 1)
 		if ((align >= ilog2(pool)) && (size >= pool) &&
 			kgsl_pool_available(pool))
 			return pool;
@@ -555,7 +588,8 @@ void kgsl_pool_free_page(struct page *page)
 	if (!kgsl_pool_max_pages ||
 			(kgsl_pool_size_total() < kgsl_pool_max_pages)) {
 		pool = _kgsl_get_pool_from_order(page_order);
-		if (pool != NULL  && (pool->page_count < pool->max_pages)) {
+		/* Use READ_ONCE to read page_count without holding list_lock */
+		if (pool && (READ_ONCE(pool->page_count) < pool->max_pages)) {
 			_kgsl_pool_add_page(pool, page);
 			return;
 		}
@@ -610,7 +644,8 @@ int kgsl_pool_page_count_get(void *data, u64 *val)
 {
 	struct kgsl_page_pool *pool = data;
 
-	*val = (u64) pool->page_count;
+	/* Use READ_ONCE to read page_count without holding list_lock */
+	*val = (u64) READ_ONCE(pool->page_count);
 	return 0;
 }
 
@@ -707,7 +742,11 @@ void kgsl_probe_page_pools(void)
 	of_node_put(node);
 
 	/* Initialize shrinker */
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	register_shrinker(&kgsl_pool_shrinker, "kgsl_pool_shrinker");
+#else
 	register_shrinker(&kgsl_pool_shrinker);
+#endif
 }
 
 void kgsl_exit_page_pools(void)

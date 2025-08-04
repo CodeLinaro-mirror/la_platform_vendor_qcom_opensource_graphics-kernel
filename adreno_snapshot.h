@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2015,2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_SNAPSHOT_H
 #define __ADRENO_SNAPSHOT_H
@@ -22,6 +22,23 @@
 		(unsigned int *) _r, ARRAY_SIZE(_r) /  2)
 
 #define REG_COUNT(_ptr) ((_ptr[1] - _ptr[0]) + 1)
+
+struct snapshot_ib_meta {
+	struct kgsl_snapshot *snapshot;
+	struct kgsl_snapshot_object *obj;
+	u64 ib1base;
+	u64 ib1size;
+	u64 ib2base;
+	u64 ib2size;
+	u64 ib3base;
+	u64 ib3size;
+	u64 ib1base_lpac;
+	u64 ib1size_lpac;
+	u64 ib2base_lpac;
+	u64 ib2size_lpac;
+};
+
+extern struct snapshot_ib_meta metadata;
 
 void adreno_snapshot_registers(struct kgsl_device *device,
 		struct kgsl_snapshot *snapshot,
@@ -53,6 +70,22 @@ int adreno_snapshot_regs_count(const u32 *ptr);
  * in the array. This helps us save some memory in snapshot.
  */
 size_t adreno_snapshot_registers_v2(struct kgsl_device *device,
+		u8 *buf, size_t remain, void *priv);
+
+/**
+ * adreno_snapshot_registers_v2 - Dump a series of CX_MISC registers
+ * @device: Pointer to the kgsl device
+ * @buf: The snapshot buffer
+ * @remain: The size remaining in the snapshot buffer
+ * @priv: Pointer to the CX_MISC register array to be dumped
+ *
+ * Return: Number of bytes written to the snapshot
+ *
+ * This function dumps the CX_MISC registers in a way that we need to
+ * only dump the start address and count for each pair of register
+ * in the array. This helps us save some memory in snapshot.
+ */
+size_t adreno_snapshot_cx_misc_registers(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv);
 
 /**
@@ -102,4 +135,17 @@ void adreno_parse_ib_lpac(struct kgsl_device *device,
  */
 size_t adreno_snapshot_global(struct kgsl_device *device, u8 *buf,
 	size_t remain, void *priv);
+
+/**
+ * adreno_snapshot_dump_all_ibs - To dump all ibs from ringbuffer
+ * @device: Pointer to the kgsl device
+ * @rbptr: Ringbuffer host pointer
+ * @snapshot: Pointer to the snapshot structure
+ *
+ * Parse all IBs from the ringbuffer and add to IB dump list.
+ */
+void adreno_snapshot_dump_all_ibs(struct kgsl_device *device,
+			unsigned int *rbptr,
+			struct kgsl_snapshot *snapshot);
+
 #endif /*__ADRENO_SNAPSHOT_H */

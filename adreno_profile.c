@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/ctype.h>
@@ -296,7 +297,7 @@ static bool _add_to_assignments_list(struct adreno_profile *profile,
 	entry->offset = offset;
 	entry->offset_hi = offset_hi;
 
-	strlcpy(entry->name, str, sizeof(entry->name));
+	strscpy(entry->name, str, sizeof(entry->name));
 
 	profile->assignment_count++;
 
@@ -308,10 +309,12 @@ static bool results_available(struct adreno_device *adreno_dev,
 {
 	unsigned int global_eop;
 	unsigned int off = profile->shared_tail;
-	unsigned int *shared_ptr = (unsigned int *)
-		profile->shared_buffer->hostptr;
+	unsigned int *shared_ptr;
 	unsigned int ts, cnt;
 	int ts_cmp;
+
+	if (IS_ERR(profile->shared_buffer))
+		return false;
 
 	/*
 	 * If shared_buffer empty or Memstore EOP timestamp is less than
@@ -320,6 +323,7 @@ static bool results_available(struct adreno_device *adreno_dev,
 	if (shared_buf_empty(profile))
 		return false;
 
+	shared_ptr = (unsigned int *)profile->shared_buffer->hostptr;
 	if (adreno_rb_readtimestamp(adreno_dev,
 			adreno_dev->cur_rb,
 			KGSL_TIMESTAMP_RETIRED, &global_eop))
@@ -692,10 +696,7 @@ static ssize_t profile_assignments_write(struct file *filep,
 	 * all it's work.  This helps to synchronize the work flow to the
 	 * GPU and avoid racey conditions.
 	 */
-	if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->idle)
-		ret = adreno_dev->dispatch_ops->idle(adreno_dev);
-	else
-		ret = adreno_idle(device);
+	ret = adreno_idle(device);
 	if (ret) {
 		size = -ETIMEDOUT;
 		goto error_put;
@@ -1003,6 +1004,9 @@ void adreno_profile_init(struct adreno_device *adreno_dev)
 
 	profile->enabled = false;
 
+	if (adreno_dev->hwsched_enabled)
+		return;
+
 	/* allocate shared_buffer, which includes pre_ib and post_ib */
 	profile->shared_size = ADRENO_PROFILE_SHARED_BUF_SIZE_DWORDS;
 	profile->shared_buffer =  kgsl_allocate_global(device,
@@ -1035,6 +1039,9 @@ void adreno_profile_close(struct adreno_device *adreno_dev)
 	struct adreno_profile *profile = &adreno_dev->profile;
 	struct adreno_profile_assigns_list *entry, *tmp;
 
+	if (adreno_dev->hwsched_enabled)
+		return;
+
 	profile->enabled = false;
 	vfree(profile->log_buffer);
 	profile->log_buffer = NULL;
@@ -1046,6 +1053,10 @@ void adreno_profile_close(struct adreno_device *adreno_dev)
 
 	profile->assignment_count = 0;
 
+	/* Return if list is not initialized */
+	if (!profile->assignments_list.next)
+		return;
+
 	list_for_each_entry_safe(entry, tmp, &profile->assignments_list, list) {
 		list_del(&entry->list);
 		kfree(entry);
@@ -1056,6 +1067,9 @@ int adreno_profile_process_results(struct adreno_device *adreno_dev)
 {
 	struct adreno_profile *profile = &adreno_dev->profile;
 	unsigned int shared_buf_tail = profile->shared_tail;
+
+	if (adreno_dev->hwsched_enabled)
+		return 0;
 
 	if (!results_available(adreno_dev, profile, &shared_buf_tail))
 		return 0;
@@ -1077,6 +1091,9 @@ u64 adreno_profile_preib_processing(struct adreno_device *adreno_dev,
 	unsigned int entry_head = profile->shared_head;
 	unsigned int *shared_ptr;
 	struct adreno_ringbuffer *rb = ADRENO_CURRENT_RINGBUFFER(adreno_dev);
+
+	if (adreno_dev->hwsched_enabled)
+		return 0;
 
 	if (!drawctxt || !adreno_profile_assignments_ready(profile))
 		return 0;
@@ -1121,6 +1138,9 @@ u64 adreno_profile_postib_processing(struct adreno_device *adreno_dev,
 	int count = profile->assignment_count;
 	unsigned int entry_head = profile->shared_head -
 		SIZE_SHARED_ENTRY(count);
+
+	if (adreno_dev->hwsched_enabled)
+		return 0;
 
 	if (!drawctxt || !adreno_profile_assignments_ready(profile))
 		return 0;

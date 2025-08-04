@@ -12,11 +12,6 @@
 #include "gen7_reg.h"
 #include "adreno_gen7_gmu.h"
 
-#define PIPE_NONE 0
-#define PIPE_BR 1
-#define PIPE_BV 2
-#define PIPE_LPAC 3
-
 /* Forward struct declaration */
 struct gen7_snapshot_block_list;
 
@@ -24,7 +19,7 @@ extern const struct adreno_power_ops gen7_gmu_power_ops;
 extern const struct adreno_power_ops gen7_hwsched_power_ops;
 extern const struct adreno_perfcounters adreno_gen7_perfcounters;
 extern const struct adreno_perfcounters adreno_gen7_hwsched_perfcounters;
-extern const struct adreno_perfcounters adreno_gen7_no_cb_perfcounters;
+extern const struct adreno_perfcounters adreno_gen7_9_0_hwsched_perfcounters;
 
 struct gen7_gpudev {
 	struct adreno_gpudev base;
@@ -35,6 +30,7 @@ struct gen7_gpudev {
 
 extern const struct gen7_gpudev adreno_gen7_gmu_gpudev;
 extern const struct gen7_gpudev adreno_gen7_hwsched_gpudev;
+extern const struct gen7_gpudev adreno_gen7_9_0_hwsched_gpudev;
 
 /**
  * struct gen7_device - Container for the gen7_device
@@ -76,6 +72,8 @@ struct adreno_gen7_core {
 	u32 gmu_fw_version;
 	/** @sqefw_name: Name of the SQE microcode file */
 	const char *sqefw_name;
+	/** @aqefw_name: Name of the AQE microcode file */
+	const char *aqefw_name;
 	/** @gmufw_name: Name of the GMU firmware file */
 	const char *gmufw_name;
 	/** @gmufw_name: Name of the backup GMU firmware file */
@@ -114,8 +112,21 @@ struct adreno_gen7_core {
 	u32 bcl_data;
 	/** @preempt_level: Preemption level valid ranges [0 to 2] */
 	u32 preempt_level;
+	/** @qos_value: GPU qos value to set for each RB. */
+	const u32 *qos_value;
+	/**
+	 * @acv_perfmode_ddr_freq: Vote perfmode when DDR frequency >= acv_perfmode_ddr_freq.
+	 * If not specified, vote perfmode for highest DDR level only.
+	 */
+	u32 acv_perfmode_ddr_freq;
+	/** @acv_perfmode_vote: ACV vote for GPU perfmode */
+	u32 acv_perfmode_vote;
+	/** @rt_bus_hint: IB level hint for real time clients i.e. RB-0 */
+	const u32 rt_bus_hint;
 	/** @fast_bus_hint: Whether or not to increase IB vote on high ddr stall */
 	bool fast_bus_hint;
+	/** @noc_timeout_us: GPU config NOC port timeout in usec */
+	u32 noc_timeout_us;
 };
 
 /**
@@ -176,7 +187,7 @@ struct gen7_cp_smmu_info {
 
 #define GEN7_CP_CTXRECORD_MAGIC_REF		0xae399d6eUL
 /* Size of each CP preemption record */
-#define GEN7_CP_CTXRECORD_SIZE_IN_BYTES		(2860 * 1024)
+#define GEN7_CP_CTXRECORD_SIZE_IN_BYTES		(4192 * 1024)
 /* Size of the user context record block (in bytes) */
 #define GEN7_CP_CTXRECORD_USER_RESTORE_SIZE	(192 * 1024)
 /* Size of the performance counter save/restore block (in bytes) */
@@ -188,9 +199,6 @@ struct gen7_cp_smmu_info {
 
 /* Size of the CP_INIT pm4 stream in dwords */
 #define GEN7_CP_INIT_DWORDS 10
-
-/* Size of the perf counter enable pm4 stream in dwords */
-#define GEN7_PERF_COUNTER_ENABLE_DWORDS 3
 
 #define GEN7_INT_MASK \
 	((1 << GEN7_INT_AHBERROR) |			\
@@ -205,7 +213,8 @@ struct gen7_cp_smmu_info {
 	 (1 << GEN7_INT_HANGDETECTINTERRUPT) |		\
 	 (1 << GEN7_INT_OUTOFBOUNDACCESS) |		\
 	 (1 << GEN7_INT_UCHETRAPINTERRUPT) |		\
-	 (1 << GEN7_INT_TSBWRITEERROR))
+	 (1 << GEN7_INT_TSBWRITEERROR) |		\
+	 (1 << GEN7_INT_SWFUSEVIOLATION))
 
 #define GEN7_HWSCHED_INT_MASK \
 	((1 << GEN7_INT_AHBERROR) |			\
@@ -229,21 +238,6 @@ to_gen7_core(struct adreno_device *adreno_dev)
 	return container_of(core, struct adreno_gen7_core, base);
 }
 
-/**
- * gen7_is_smmu_stalled() - Check whether smmu is stalled or not
- * @device: Pointer to KGSL device
- *
- * Return - True if smmu is stalled or false otherwise
- */
-static inline bool gen7_is_smmu_stalled(struct kgsl_device *device)
-{
-	u32 val;
-
-	kgsl_regread(device, GEN7_RBBM_STATUS3, &val);
-
-	return val & BIT(24);
-}
-
 /* Preemption functions */
 void gen7_preemption_trigger(struct adreno_device *adreno_dev, bool atomic);
 void gen7_preemption_schedule(struct adreno_device *adreno_dev);
@@ -265,6 +259,8 @@ int gen7_preemption_context_init(struct kgsl_context *context);
 
 void gen7_preemption_context_destroy(struct kgsl_context *context);
 
+void gen7_preemption_prepare_postamble(struct adreno_device *adreno_dev);
+
 void gen7_snapshot(struct adreno_device *adreno_dev,
 		struct kgsl_snapshot *snapshot);
 void gen7_crashdump_init(struct adreno_device *adreno_dev);
@@ -278,14 +274,6 @@ void gen7_crashdump_init(struct adreno_device *adreno_dev);
  */
 void gen7_snapshot_external_core_regs(struct kgsl_device *device,
 		struct kgsl_snapshot *snapshot);
-
-/**
- * gen7_read_alwayson - Read the current always on clock value
- * @adreno_dev: An Adreno GPU handle
- *
- * Return: The current value of the GMU always on counter
- */
-u64 gen7_read_alwayson(struct adreno_device *adreno_dev);
 
 /**
  * gen7_start - Program gen7 registers
@@ -309,6 +297,22 @@ int gen7_start(struct adreno_device *adreno_dev);
  * Return: Zero on success and negative error on failure
  */
 int gen7_init(struct adreno_device *adreno_dev);
+
+/**
+ * gen7_cx_timer_init - Initialize the CX timer on Gen7 devices
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Synchronize the GPU CX timer (if we have one) with the CPU timer
+ */
+void gen7_cx_timer_init(struct adreno_device *adreno_dev);
+
+/**
+ * gen7_get_gpu_feature_info - Get hardware supported feature info
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Get HW supported feature info and update sofware feature configuration
+ */
+void gen7_get_gpu_feature_info(struct adreno_device *adreno_dev);
 
 /**
  * gen7_rb_start - Gen7 specific ringbuffer setup
@@ -357,6 +361,7 @@ bool gen7_hw_isidle(struct adreno_device *adreno_dev);
 /**
  * gen7_spin_idle_debug - Debug logging used when gpu fails to idle
  * @adreno_dev: An Adreno GPU handle
+ * @str: String describing the failure
  *
  * This function logs interesting registers and triggers a snapshot
  */
@@ -369,11 +374,13 @@ void gen7_spin_idle_debug(struct adreno_device *adreno_dev,
  * @reg: Perfcounter reg struct to add/remove to the list
  * @update_reg: true if the perfcounter needs to be programmed by the CPU
  * @pipe: pipe id for CP aperture control
+ * @flags: Flags set for requested perfcounter group
  *
  * Return: 0 on success or -EBUSY if the lock couldn't be taken
  */
 int gen7_perfcounter_update(struct adreno_device *adreno_dev,
-	struct adreno_perfcount_register *reg, bool update_reg, u32 pipe);
+	struct adreno_perfcount_register *reg, bool update_reg, u32 pipe,
+	unsigned long flags);
 
 /*
  * gen7_ringbuffer_init - Initialize the ringbuffers
@@ -467,6 +474,14 @@ to_gen7_gpudev(const struct adreno_gpudev *gpudev)
 void gen7_reset_preempt_records(struct adreno_device *adreno_dev);
 
 /**
+ * gen7_enable_ahb_timeout_detection - Program AHB control registers
+ * @adreno_dev: An Adreno GPU handle
+ *
+ * Program AHB control registers to enable AHB timeout detection.
+ */
+void gen7_enable_ahb_timeout_detection(struct adreno_device *adreno_dev);
+
+/**
  * gen7_rdpm_mx_freq_update - Update the mx frequency
  * @gmu: An Adreno GMU handle
  * @freq: Frequency in KHz
@@ -483,6 +498,17 @@ void gen7_rdpm_mx_freq_update(struct gen7_gmu_device *gmu, u32 freq);
  * This function communicates GPU cx frequency(in Mhz) changes to rdpm.
  */
 void gen7_rdpm_cx_freq_update(struct gen7_gmu_device *gmu, u32 freq);
+
+/**
+ * gen7_scm_gpu_init_cx_regs - Program gpu regs for feature support
+ * @adreno_dev: Handle to the adreno device
+ *
+ * Program gpu regs for feature support. Scm call for the same
+ * is added from kernel version 6.0 onwards.
+ *
+ * Return: 0 on success or negative on failure
+ */
+int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev);
 
 #ifdef CONFIG_QCOM_KGSL_CORESIGHT
 void gen7_coresight_init(struct adreno_device *device);

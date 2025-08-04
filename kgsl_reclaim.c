@@ -6,7 +6,10 @@
 
 #include <linux/kthread.h>
 #include <linux/notifier.h>
+#include <linux/pagevec.h>
 #include <linux/shmem_fs.h>
+#include <linux/swap.h>
+#include <linux/version.h>
 
 #include "kgsl_reclaim.h"
 #include "kgsl_sharedmem.h"
@@ -44,7 +47,7 @@ static int kgsl_memdesc_get_reclaimed_pages(struct kgsl_mem_entry *entry)
 		if (IS_ERR(page))
 			return PTR_ERR(page);
 
-		kgsl_page_sync_for_device(memdesc->dev, page, PAGE_SIZE);
+		kgsl_page_sync(memdesc->dev, page, PAGE_SIZE, DMA_BIDIRECTIONAL);
 
 		/*
 		 * Update the pages array only if vmfault has not
@@ -208,6 +211,12 @@ ssize_t kgsl_nr_to_scan_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%d\n", kgsl_nr_to_scan);
 }
 
+static void kgsl_release_page_vec(struct pagevec *pvec)
+{
+	check_move_unevictable_pages(pvec);
+	__pagevec_release(pvec);
+}
+
 static u32 kgsl_reclaim_process(struct kgsl_process_private *process,
 		u32 pages_to_reclaim)
 {
@@ -280,18 +289,36 @@ static u32 kgsl_reclaim_process(struct kgsl_process_private *process,
 
 		if (!kgsl_mmu_unmap(memdesc->pagetable, memdesc)) {
 			int i;
+			struct pagevec pvec;
 
+			/*
+			 * Pages that are first allocated are by default added to
+			 * unevictable list. To reclaim them, we first clear the
+			 * AS_UNEVICTABLE flag of the shmem file address space thus
+			 * check_move_unevictable_pages() places them on the
+			 * evictable list.
+			 *
+			 * Once reclaim is done, hint that further shmem allocations
+			 * will have to be on the unevictable list.
+			 */
+			mapping_clear_unevictable(memdesc->shmem_filp->f_mapping);
+			pagevec_init(&pvec);
 			for (i = 0; i < memdesc->page_count; i++) {
 				set_page_dirty_lock(memdesc->pages[i]);
 				spin_lock(&memdesc->lock);
-				put_page(memdesc->pages[i]);
+				pagevec_add(&pvec, memdesc->pages[i]);
 				memdesc->pages[i] = NULL;
 				atomic_inc(&process->unpinned_page_count);
 				spin_unlock(&memdesc->lock);
+				if (pagevec_count(&pvec) == PAGEVEC_SIZE)
+					kgsl_release_page_vec(&pvec);
 				remaining--;
 			}
+			if (pagevec_count(&pvec))
+				kgsl_release_page_vec(&pvec);
 
 			reclaim_shmem_address_space(memdesc->shmem_filp->f_mapping);
+			mapping_set_unevictable(memdesc->shmem_filp->f_mapping);
 			memdesc->priv |= KGSL_MEMDESC_RECLAIMED;
 			trace_kgsl_reclaim_memdesc(entry, true);
 		}
@@ -397,22 +424,38 @@ void kgsl_reclaim_proc_private_init(struct kgsl_process_private *process)
 	atomic_set(&process->unpinned_page_count, 0);
 }
 
-int kgsl_reclaim_init(void)
+int kgsl_reclaim_start(void)
 {
 	int ret;
 
 	/* Initialize shrinker */
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	ret = register_shrinker(&kgsl_reclaim_shrinker, "kgsl_reclaim_shrinker");
+#else
 	ret = register_shrinker(&kgsl_reclaim_shrinker);
+#endif
 	if (ret)
 		pr_err("kgsl: reclaim: Failed to register shrinker\n");
-	else
-		INIT_WORK(&reclaim_work, kgsl_reclaim_background_work);
 
 	return ret;
+}
+
+int kgsl_reclaim_init(void)
+{
+	int ret = kgsl_reclaim_start();
+
+	if (ret)
+		return ret;
+
+	INIT_WORK(&reclaim_work, kgsl_reclaim_background_work);
+
+	return 0;
 }
 
 void kgsl_reclaim_close(void)
 {
 	/* Unregister shrinker */
 	unregister_shrinker(&kgsl_reclaim_shrinker);
+
+	cancel_work_sync(&reclaim_work);
 }

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_GEN7_HFI_H
 #define __ADRENO_GEN7_HFI_H
@@ -23,8 +24,13 @@ struct gen7_hfi {
 	struct hfi_bwtable_cmd bw_table;
 	/** @acd_table: HFI table for ACD data */
 	struct hfi_acd_table_cmd acd_table;
-	/** @dcvs_table: HFI table for gpu dcvs levels */
-	struct hfi_dcvstable_cmd dcvs_table;
+	/** @cmdq_lock: Spinlock for accessing the cmdq */
+	spinlock_t cmdq_lock;
+	/**
+	 * @wb_set_record_bitmask: Bitmask to enable or disable the recording
+	 * of messages in the GMU scratch.
+	 */
+	unsigned long wb_set_record_bitmask[BITS_TO_LONGS(HFI_MAX_ID)];
 };
 
 struct gen7_gmu_device;
@@ -67,11 +73,12 @@ struct gen7_hfi *to_gen7_hfi(struct adreno_device *adreno_dev);
  * @adreno_dev: Pointer to the adreno device
  * @queue_idx: destination queue id
  * @msg: Data to be written to the queue
+ * @size_bytes: Size of the command in bytes
  *
  * Return: 0 on success or negative error on failure
  */
 int gen7_hfi_queue_write(struct adreno_device *adreno_dev, u32 queue_idx,
-		u32 *msg);
+		u32 *msg, u32 size_bytes);
 
 /**
  * gen7_hfi_queue_read - Read data from hfi queue
@@ -109,6 +116,16 @@ int gen7_hfi_send_feature_ctrl(struct adreno_device *adreno_dev,
 		u32 feature, u32 enable, u32 data);
 
 /**
+ * gen7_hfi_send_get_value - Send gmu get_values via hfi
+ * @adreno_dev: Pointer to the adreno device
+ * @type: GMU get_value type
+ * @subtype: GMU get_value subtype
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int gen7_hfi_send_get_value(struct adreno_device *adreno_dev, u32 type, u32 subtype);
+
+/**
  * gen7_hfi_send_set_value - Send gmu set_values via hfi
  * @adreno_dev: Pointer to the adreno device
  * @type: GMU set_value type
@@ -140,10 +157,23 @@ int gen7_hfi_send_acd_feature_ctrl(struct adreno_device *adreno_dev);
  * gen7_hfi_send_generic_req - Send a generic hfi packet
  * @adreno_dev: Pointer to the adreno device
  * @cmd: Pointer to the hfi packet header and data
+ * @size_bytes: Size of the packet in bytes
  *
  * Return: 0 on success or negative error on failure
  */
-int gen7_hfi_send_generic_req(struct adreno_device *adreno_dev, void *cmd);
+int gen7_hfi_send_generic_req(struct adreno_device *adreno_dev, void *cmd, u32 size_bytes);
+
+/**
+ * gen7_hfi_send_generic_req_v5 - Send a generic hfi packet with additional error handling
+ * @adreno_dev: Pointer to the adreno device
+ * @cmd: Pointer to the hfi packet header and data
+ * @ret_cmd: Ack for the command we just sent
+ * @size_bytes: Size of the packet in bytes
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int gen7_hfi_send_generic_req_v5(struct adreno_device *adreno_dev, void *cmd,
+		struct pending_cmd *ret_cmd, u32 size_bytes);
 
 /**
  * gen7_hfi_send_bcl_feature_ctrl - Send the bcl feature hfi packet
@@ -154,12 +184,28 @@ int gen7_hfi_send_generic_req(struct adreno_device *adreno_dev, void *cmd);
 int gen7_hfi_send_bcl_feature_ctrl(struct adreno_device *adreno_dev);
 
 /**
+ * gen7_hfi_send_clx_feature_ctrl - Send the clx feature hfi packet
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int gen7_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev);
+
+/**
  * gen7_hfi_send_ifpc_feature_ctrl - Send the ipfc feature hfi packet
  * @adreno_dev: Pointer to the adreno device
  *
  * Return: 0 on success or negative error on failure
  */
 int gen7_hfi_send_ifpc_feature_ctrl(struct adreno_device *adreno_dev);
+
+/**
+ * gen7_hfi_send_gpu_perf_table - Send the gpu perf table hfi packet
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int gen7_hfi_send_gpu_perf_table(struct adreno_device *adreno_dev);
 
 /*
  * gen7_hfi_process_queue - Check hfi queue for messages from gmu
@@ -176,10 +222,13 @@ int gen7_hfi_process_queue(struct gen7_gmu_device *gmu,
  * gen7_hfi_cmdq_write - Write a command to command queue
  * @adreno_dev: Pointer to the adreno device
  * @msg: Data to be written to the queue
+ * @size_bytes: Size of the command in bytes
  *
+ * This function takes the cmdq lock before writing data to the queue
+
  * Return: 0 on success or negative error on failure
  */
-int gen7_hfi_cmdq_write(struct adreno_device *adreno_dev, u32 *msg);
+int gen7_hfi_cmdq_write(struct adreno_device *adreno_dev, u32 *msg, u32 size_bytes);
 void adreno_gen7_receive_err_req(struct gen7_gmu_device *gmu, void *rcvd);
 void adreno_gen7_receive_debug_req(struct gen7_gmu_device *gmu, void *rcvd);
 #endif

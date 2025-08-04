@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _UAPI_MSM_KGSL_H
@@ -152,12 +152,13 @@
 #define KGSL_CACHEMODE_WRITETHROUGH 2
 #define KGSL_CACHEMODE_WRITEBACK 3
 
-#define KGSL_MEMFLAGS_USE_CPU_MAP (1ULL << 28)
-#define KGSL_MEMFLAGS_SPARSE_PHYS (1ULL << 29)
-#define KGSL_MEMFLAGS_SPARSE_VIRT (1ULL << 30)
-#define KGSL_MEMFLAGS_IOCOHERENT  (1ULL << 31)
-#define KGSL_MEMFLAGS_GUARD_PAGE  (1ULL << 33)
-#define KGSL_MEMFLAGS_VBO         (1ULL << 34)
+#define KGSL_MEMFLAGS_USE_CPU_MAP     (1ULL << 28)
+#define KGSL_MEMFLAGS_SPARSE_PHYS     (1ULL << 29)
+#define KGSL_MEMFLAGS_SPARSE_VIRT     (1ULL << 30)
+#define KGSL_MEMFLAGS_IOCOHERENT      (1ULL << 31)
+#define KGSL_MEMFLAGS_GUARD_PAGE      (1ULL << 33)
+#define KGSL_MEMFLAGS_VBO             (1ULL << 34)
+#define KGSL_MEMFLAGS_VBO_NO_MAP_ZERO (1ULL << 35)
 
 /* Memory types for which allocations are made */
 #define KGSL_MEMTYPE_MASK		0x0000FF00
@@ -246,6 +247,7 @@ enum kgsl_user_mem_type {
 #define KGSL_UBWC_2_0	2
 #define KGSL_UBWC_3_0	3
 #define KGSL_UBWC_4_0	4
+#define KGSL_UBWC_5_0	5
 
 /*
  * Reset status values for context
@@ -352,6 +354,12 @@ enum kgsl_timestamp_type {
 #define KGSL_PROP_VK_DEVICE_ID		0x2A
 #define KGSL_PROP_IS_LPAC_ENABLED	0x2B
 #define KGSL_PROP_GPU_VA64_SIZE		0x2C
+#define KGSL_PROP_IS_RAYTRACING_ENABLED	0x2D
+#define KGSL_PROP_IS_FASTBLEND_ENABLED		0x2E
+#define KGSL_PROP_UCHE_TRAP_BASE	0x2F
+#define KGSL_PROP_IS_AQE_ENABLED	0x30
+#define KGSL_PROP_GPU_SECURE_VA_SIZE	0x31
+#define KGSL_PROP_GPU_SECURE_VA_INUSE	0x32
 
 /*
  * kgsl_capabilities_properties returns a list of supported properties.
@@ -1385,7 +1393,7 @@ struct kgsl_gpu_event_timestamp {
 };
 
 /**
- * struct kgsl_gpu_event_fence - Specifies a fence ID to to free a GPU object on
+ * struct kgsl_gpu_event_fence - Specifies a fence ID to free a GPU object on
  * @fd: File descriptor for the fence
  */
 struct kgsl_gpu_event_fence {
@@ -2119,5 +2127,34 @@ struct kgsl_recurring_command {
 
 #define IOCTL_KGSL_RECURRING_COMMAND \
 	_IOWR(KGSL_IOC_TYPE, 0x5F, struct kgsl_recurring_command)
+
+enum kgsl_calibrated_time_domain {
+	KGSL_CALIBRATED_TIME_DOMAIN_DEVICE = 0,
+	KGSL_CALIBRATED_TIME_DOMAIN_MONOTONIC = 1,
+	KGSL_CALIBRATED_TIME_DOMAIN_MONOTONIC_RAW = 2,
+	KGSL_CALIBRATED_TIME_DOMAIN_MAX,
+};
+
+/**
+ * struct kgsl_read_calibrated_timestamps - Argument for IOCTL_KGSL_READ_CALIBRATED_TIMESTAMPS
+ * @sources: List of time domains of type enum kgsl_calibrated_time_domain
+ * @ts: List of calibrated timestamps
+ * @deviation: Deviation between timestamp samples in nsecs
+ * @count: Number of timestamps to read
+ *
+ * Returns a list of calibrated timestamps corresponding to an input list of time domains to
+ * query.
+ */
+struct kgsl_read_calibrated_timestamps {
+	__u64 __user sources;
+	__u64 __user ts;
+	__u64 deviation;
+	__u32 count;
+	/* private: Padding for 64 bit compatibility */
+	__u32 padding;
+};
+
+#define IOCTL_KGSL_READ_CALIBRATED_TIMESTAMPS \
+	_IOWR(KGSL_IOC_TYPE, 0x60, struct kgsl_read_calibrated_timestamps)
 
 #endif /* _UAPI_MSM_KGSL_H */

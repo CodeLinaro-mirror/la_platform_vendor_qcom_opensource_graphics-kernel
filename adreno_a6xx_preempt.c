@@ -73,14 +73,16 @@ static void _power_collapse_set(struct adreno_device *adreno_dev, bool val)
 		return;
 
 	if (val) {
-		if (adreno_is_a660(adreno_dev))
+		if (adreno_is_a660(adreno_dev) ||
+				adreno_is_a663(adreno_dev))
 			gmu_core_regwrite(device,
 				 A6XX_GMU_PWR_COL_PREEMPT_KEEPALIVE, 0x1);
 		else
 			gmu_core_regrmw(device,
 				 A6XX_GMU_AO_SPARE_CNTL, 0x0, 0x2);
 	} else {
-		if (adreno_is_a660(adreno_dev))
+		if (adreno_is_a660(adreno_dev) ||
+				adreno_is_a663(adreno_dev))
 			gmu_core_regwrite(device,
 				 A6XX_GMU_PWR_COL_PREEMPT_KEEPALIVE, 0x0);
 		else
@@ -137,8 +139,8 @@ static void _a6xx_preemption_done(struct adreno_device *adreno_dev)
 
 	kgsl_regread(device,  A6XX_CP_CONTEXT_SWITCH_LEVEL_STATUS, &status);
 
-	trace_adreno_preempt_done(adreno_dev->cur_rb, adreno_dev->next_rb,
-		status);
+	trace_adreno_preempt_done(adreno_dev->cur_rb->id, adreno_dev->next_rb->id,
+		status, 0);
 
 	/* Clean up all the bits */
 	adreno_dev->prev_rb = adreno_dev->cur_rb;
@@ -383,8 +385,8 @@ void a6xx_preemption_trigger(struct adreno_device *adreno_dev, bool atomic)
 	if (preempt->usesgmem)
 		cntl |= (1 << 8);
 
-	trace_adreno_preempt_trigger(adreno_dev->cur_rb, adreno_dev->next_rb,
-		cntl);
+	trace_adreno_preempt_trigger(adreno_dev->cur_rb->id, adreno_dev->next_rb->id,
+		cntl, 0);
 
 	adreno_set_preempt_state(adreno_dev, ADRENO_PREEMPT_TRIGGERED);
 
@@ -451,8 +453,8 @@ void a6xx_preemption_callback(struct adreno_device *adreno_dev, int bit)
 
 	kgsl_regread(device, A6XX_CP_CONTEXT_SWITCH_LEVEL_STATUS, &status);
 
-	trace_adreno_preempt_done(adreno_dev->cur_rb, adreno_dev->next_rb,
-		status);
+	trace_adreno_preempt_done(adreno_dev->cur_rb->id, adreno_dev->next_rb->id,
+		status, 0);
 
 	adreno_dev->prev_rb = adreno_dev->cur_rb;
 	adreno_dev->cur_rb = adreno_dev->next_rb;
@@ -765,7 +767,7 @@ int a6xx_preemption_context_init(struct kgsl_context *context)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	uint64_t flags = 0;
 
-	if (!ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION))
+	if (!adreno_preemption_feature_set(adreno_dev))
 		return 0;
 
 	if (context->flags & KGSL_CONTEXT_SECURE)

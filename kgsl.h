@@ -13,11 +13,19 @@
 #include <linux/mm.h>
 #include <uapi/linux/msm_kgsl.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 
 #include "kgsl_gmu_core.h"
 #include "kgsl_pwrscale.h"
 
 #define KGSL_L3_DEVICE "kgsl-l3"
+
+#if (KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE)
+#include <soc/qcom/boot_stats.h>
+#define KGSL_BOOT_MARKER(str)          place_marker("M - DRIVER " str)
+#else
+#define KGSL_BOOT_MARKER(str)          pr_info("boot_kpi: M - DRIVER " str)
+#endif
 
 /*
  * --- kgsl drawobj flags ---
@@ -61,6 +69,10 @@
 #define MEMSTORE_RB_GPU_ADDR(dev, rb, field)	\
 	((dev)->memstore->gpuaddr + \
 	 KGSL_MEMSTORE_OFFSET(((rb)->id + KGSL_MEMSTORE_MAX), field))
+
+#define KGSL_CONTEXT_PRIORITY_HIGH 0
+/* Last context id is reserved for global context */
+#define KGSL_GLOBAL_CTXT_ID (KGSL_MEMSTORE_MAX - 1)
 
 /*
  * SCRATCH MEMORY: The scratch memory is one page worth of data that
@@ -237,10 +249,8 @@ struct kgsl_memdesc_ops {
 #define KGSL_MEMDESC_RECLAIMED BIT(11)
 /* Skip reclaim of the memdesc pages */
 #define KGSL_MEMDESC_SKIP_RECLAIM BIT(12)
-/* The memdesc is mapped as iomem */
-#define KGSL_MEMDESC_IOMEM BIT(13)
 /* The memdesc is hypassigned to HLOS*/
-#define KGSL_MEMDESC_HYPASSIGNED_HLOS BIT(14)
+#define KGSL_MEMDESC_HYPASSIGNED_HLOS BIT(13)
 
 /**
  * struct kgsl_memdesc - GPU memory object descriptor
@@ -287,6 +297,8 @@ struct kgsl_memdesc {
 	struct mutex ranges_lock;
 	/** @gmuaddr: GMU VA if this is mapped in GMU */
 	u32 gmuaddr;
+	/*@shmem_page_list: shmem pages list */
+	struct list_head shmem_page_list;
 };
 
 /**
@@ -363,7 +375,7 @@ typedef void (*kgsl_event_func)(struct kgsl_device *, struct kgsl_event_group *,
  * @device: Pointer to the KGSL device that owns the event
  * @context: Pointer to the context that owns the event
  * @timestamp: Timestamp for the event to expire
- * @func: Callback function for for the event when it expires
+ * @func: Callback function for the event when it expires
  * @priv: Private data passed to the callback function
  * @node: List node for the kgsl_event_group list
  * @created: Jiffies when the event was created
@@ -548,13 +560,12 @@ struct kgsl_mem_entry *gpumem_alloc_entry(struct kgsl_device_private *dev_priv,
 long gpumem_free_entry(struct kgsl_mem_entry *entry);
 
 enum kgsl_mmutype kgsl_mmu_get_mmutype(struct kgsl_device *device);
-void kgsl_mmu_add_global(struct kgsl_device *device,
-	struct kgsl_memdesc *memdesc, const char *name);
-void kgsl_mmu_remove_global(struct kgsl_device *device,
-		struct kgsl_memdesc *memdesc);
 
 /* Helper functions */
 int kgsl_request_irq(struct platform_device *pdev, const  char *name,
+		irq_handler_t handler, void *data);
+
+int kgsl_request_irq_optional(struct platform_device *pdev, const  char *name,
 		irq_handler_t handler, void *data);
 
 int __init kgsl_core_init(void);

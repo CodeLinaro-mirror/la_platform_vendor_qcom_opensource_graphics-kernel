@@ -121,8 +121,9 @@ static void kgsl_memdesc_remove_range(struct kgsl_mem_entry *target,
 				range->range.start, range->entry,
 				bind_range_len(range));
 
-			kgsl_mmu_map_zero_page_to_range(memdesc->pagetable,
-				memdesc, range->range.start, bind_range_len(range));
+			if (!(memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO))
+				kgsl_mmu_map_zero_page_to_range(memdesc->pagetable,
+					memdesc, range->range.start, bind_range_len(range));
 
 			bind_range_destroy(range);
 		}
@@ -146,14 +147,16 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 	mutex_lock(&memdesc->ranges_lock);
 
 	/*
-	 * Unmap the range first. This increases the potential for a page fault
-	 * but is safer in case something goes bad while updating the interval
-	 * tree
+	 * If the VBO maps the zero page, then we can unmap the requested range
+	 * in one call. Otherwise we have to figure out what ranges to unmap
+	 * while walking the interval tree.
 	 */
-	ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc, start,
-		last - start + 1);
-	if (ret)
-		goto error;
+	if (!(memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO)) {
+		ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc, start,
+			last - start + 1);
+		if (ret)
+			goto error;
+	}
 
 	next = interval_tree_iter_first(&memdesc->ranges, start, last);
 
@@ -171,9 +174,32 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 
 		if (start <= cur->range.start) {
 			if (last >= cur->range.last) {
+				/* Unmap the entire cur range */
+				if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO) {
+					ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+						cur->range.start,
+						cur->range.last - cur->range.start + 1);
+					if (ret) {
+						interval_tree_insert(node, &memdesc->ranges);
+						goto error;
+					}
+				}
+
 				bind_range_destroy(cur);
 				continue;
 			}
+
+			/* Unmap the range overlapping cur */
+			if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO) {
+				ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+					cur->range.start,
+					last - cur->range.start + 1);
+				if (ret) {
+					interval_tree_insert(node, &memdesc->ranges);
+					goto error;
+				}
+			}
+
 			/* Adjust the start of the mapping */
 			cur->range.start = last + 1;
 			/* And put it back into the tree */
@@ -200,6 +226,17 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 				trace_kgsl_mem_add_bind_range(target,
 					temp->range.start,
 					temp->entry, bind_range_len(temp));
+			}
+
+			/* Unmap the range overlapping cur */
+			if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO) {
+				ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+					start,
+					min_t(u64, cur->range.last, last) - start + 1);
+				if (ret) {
+					interval_tree_insert(node, &memdesc->ranges);
+					goto error;
+				}
 			}
 
 			cur->range.last = start - 1;
@@ -235,10 +272,17 @@ static void kgsl_sharedmem_vbo_put_gpuaddr(struct kgsl_memdesc *memdesc)
 	struct interval_tree_node *node, *next;
 	struct kgsl_memdesc_bind_range *range;
 	int ret = 0;
+	bool unmap_fail;
 
-	/* Unmap the entire pagetable region */
-	ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
-		0, memdesc->size);
+	/*
+	 * If the VBO maps the zero range then we can unmap the entire
+	 * pagetable region in one call.
+	 */
+	if (!(memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO))
+		ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+			0, memdesc->size);
+
+	unmap_fail = ret;
 
 	/*
 	 * FIXME: do we have a use after free potential here?  We might need to
@@ -255,14 +299,22 @@ static void kgsl_sharedmem_vbo_put_gpuaddr(struct kgsl_memdesc *memdesc)
 
 		interval_tree_remove(node, &memdesc->ranges);
 
+		/* Unmap this range */
+		if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO)
+			ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+				range->range.start,
+				range->range.last - range->range.start + 1);
+
 		/* Put the child's refcount if unmap succeeds */
 		if (!ret)
 			bind_range_destroy(range);
 		else
 			kfree(range);
+
+		unmap_fail = unmap_fail || ret;
 	}
 
-	if (ret)
+	if (unmap_fail)
 		return;
 
 	/* Put back the GPU address */

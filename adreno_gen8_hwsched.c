@@ -1945,14 +1945,42 @@ static ssize_t dcvs_tunables_cur_show(struct kobject *kobj, struct kobj_attribut
 	return len;
 }
 
+static ssize_t gpu_load_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 busy_perc = 0;
+
+	spin_lock(&pwr->stats_lock);
+
+	/*
+	 * Average out the samples taken since last read.  This will keep the average value in
+	 * sync with the client sampling duration.
+	 */
+	if (pwr->accum_total_time)
+		busy_perc = (u32)((pwr->accum_busy_stats * 100) / pwr->accum_total_time);
+
+	/* Reset the parameters */
+	pwr->accum_total_time = 0;
+	pwr->accum_busy_stats = 0;
+	spin_unlock(&pwr->stats_lock);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", busy_perc);
+}
+
 DCVS_SYSFS_RO(aggregated_max_gpuclk);
 DCVS_SYSFS_RO(dcvs_tunables_default);
 DCVS_SYSFS_RO(dcvs_tunables_cur);
+DCVS_SYSFS_RO(gpu_load);
 
 static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_aggregated_max_gpuclk.attr,
 	&dcvs_attr_dcvs_tunables_default.attr,
 	&dcvs_attr_dcvs_tunables_cur.attr,
+	&dcvs_attr_gpu_load.attr,
 	NULL,
 };
 

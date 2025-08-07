@@ -1,4 +1,4 @@
-load("//build/kernel/kleaf:kernel.bzl", "ddk_module")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_module", "ddk_headers")
 load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
 load(":build/target_variants.bzl", "get_all_la_variants")
 
@@ -180,8 +180,8 @@ def define_target_variant_module(target, variant):
                 "adreno_a6xx_coresight.c",
                 "adreno_gen7_coresight.c",
                 "adreno_gen8_coresight.c"] },
+            "CONFIG_QCOM_KGSL_POOL": { True: [ "kgsl_pool.c" ] },
             "CONFIG_QCOM_KGSL_PROCESS_RECLAIM": { True: [ "kgsl_reclaim.c" ] },
-            "CONFIG_QCOM_KGSL_USE_SHMEM": { False: [ "kgsl_pool.c" ] },
             "CONFIG_SYNC_FILE": { True: [ "kgsl_sync.c" ] },
             "CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ": { False: [ "governor_msm_adreno_tz.c" ] },
             "CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON": { False: [ "governor_gpubw_mon.c" ] }
@@ -204,5 +204,11 @@ def define_target_variant_module(target, variant):
     )
 
 def define_target_modules():
+        ddk_headers(
+            name = "kgsl_uapi_headers",
+            hdrs = native.glob(["include/uapi/linux/*.h"]),
+            visibility = ["//visibility:public"]
+        )
+
         for target, variant in get_all_la_variants():
                 define_target_variant_module(target, variant)

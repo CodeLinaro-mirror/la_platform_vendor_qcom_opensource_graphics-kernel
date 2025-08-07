@@ -252,6 +252,11 @@ static u32 kgsl_shmem_mem_entry_migrate(struct task_struct *task, struct kgsl_me
 	struct vm_area_struct *vma;
 	int page_size = PAGE_SIZE;
 	struct page **old_pages;
+	struct mm_struct *mm;
+
+	mm = get_task_mm(task);
+	if (!mm)
+		return 0;
 
 	/* Skip mem entries that are mapped into a VBO */
 	if (atomic_read(&entry->vbo_count))
@@ -291,7 +296,7 @@ static u32 kgsl_shmem_mem_entry_migrate(struct task_struct *task, struct kgsl_me
 	}
 
 	/* Take the mmap lock to prevent concurrent entry mmaps */
-	mmap_read_lock(task->mm);
+	mmap_read_lock(mm);
 
 	/* Take the memdesc lock to prevent concurrent vm_faults */
 	down_write(&memdesc->lock);
@@ -331,7 +336,7 @@ static u32 kgsl_shmem_mem_entry_migrate(struct task_struct *task, struct kgsl_me
 	SET_FLAG(KGSL_MEMDESC_MIGRATED, &memdesc->priv);
 
 	up_write(&memdesc->lock);
-	mmap_read_unlock(task->mm);
+	mmap_read_unlock(mm);
 
 	/* Free the old pages back into the pool */
 	kgsl_pool_free_pages(old_pages, memdesc->page_count);
@@ -347,6 +352,7 @@ static u32 kgsl_shmem_mem_entry_migrate(struct task_struct *task, struct kgsl_me
 
 	atomic_add(memdesc->page_count, &entry->priv->migrated_page_count);
 	trace_kgsl_migrate_memdesc(entry);
+	mmput(mm);
 
 	return page_count;
 
@@ -360,6 +366,7 @@ cleanup_shmem:
 
 cleanup_pages:
 	kvfree(pages);
+	mmput(mm);
 
 	return 0;
 }

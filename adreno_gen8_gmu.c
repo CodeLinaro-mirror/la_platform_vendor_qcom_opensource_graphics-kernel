@@ -293,7 +293,8 @@ int gen8_gmu_device_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	gmu_core_reset_trace_header(&device->gmu_core.trace);
+	gmu_core_reset_trace_header(&device->gmu_core.trace,
+			TRACE_LOGTYPE_HWSCHED, TRACE_MODE_DROP);
 
 	gmu_ao_sync_event(adreno_dev);
 

@@ -635,7 +635,8 @@ int a6xx_gmu_device_start(struct adreno_device *adreno_dev)
 	u32 val = 0x00000100;
 	u32 mask = 0x000001FF;
 
-	gmu_core_reset_trace_header(&device->gmu_core.trace);
+	gmu_core_reset_trace_header(&device->gmu_core.trace,
+		TRACE_LOGTYPE_HWSCHED, TRACE_MODE_DROP);
 	gmu_ao_sync_event(adreno_dev);
 
 	/* Check for 0xBABEFACE on legacy targets */

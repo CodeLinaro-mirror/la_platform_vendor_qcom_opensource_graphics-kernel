@@ -538,7 +538,7 @@ static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 			((struct kgsl_mem_entry *)vma->vm_private_data)->priv;
 
 		/* We are here because page was reclaimed */
-		memdesc->priv |= KGSL_MEMDESC_SKIP_RECLAIM;
+		SET_FLAG(KGSL_MEMDESC_SKIP_RECLAIM, &memdesc->priv);
 		spin_unlock(&memdesc->lock);
 
 		page = shmem_read_mapping_page_gfp(
@@ -817,10 +817,10 @@ void kgsl_memdesc_init(struct kgsl_device *device,
 
 	if (kgsl_mmu_has_feature(device, KGSL_MMU_NEED_GUARD_PAGE) ||
 		(flags & KGSL_MEMFLAGS_GUARD_PAGE))
-		memdesc->priv |= KGSL_MEMDESC_GUARD_PAGE;
+		SET_FLAG(KGSL_MEMDESC_GUARD_PAGE, &memdesc->priv);
 
 	if (flags & KGSL_MEMFLAGS_SECURE)
-		memdesc->priv |= KGSL_MEMDESC_SECURE;
+		SET_FLAG(KGSL_MEMDESC_SECURE, &memdesc->priv);
 
 	memdesc->flags = flags;
 
@@ -1009,7 +1009,7 @@ static void kgsl_contiguous_free(struct kgsl_memdesc *memdesc)
 	if (!memdesc->hostptr)
 		return;
 
-	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+	if (TEST_FLAG(KGSL_MEMDESC_MAPPED, &memdesc->priv))
 		return;
 
 	atomic_long_sub(memdesc->size, &kgsl_driver.stats.coherent);
@@ -1446,7 +1446,7 @@ static void kgsl_free_pages(struct kgsl_memdesc *memdesc)
 	kgsl_paged_unmap_kernel(memdesc);
 	WARN_ON(memdesc->hostptr);
 
-	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+	if (TEST_FLAG(KGSL_MEMDESC_MAPPED, &memdesc->priv))
 		return;
 
 	atomic_long_sub(memdesc->size, &kgsl_driver.stats.page_alloc);
@@ -1462,7 +1462,7 @@ static void kgsl_free_system_pages(struct kgsl_memdesc *memdesc)
 	kgsl_paged_unmap_kernel(memdesc);
 	WARN_ON(memdesc->hostptr);
 
-	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+	if (TEST_FLAG(KGSL_MEMDESC_MAPPED, &memdesc->priv))
 		return;
 
 	atomic_long_sub(memdesc->size, &kgsl_driver.stats.page_alloc);
@@ -1546,7 +1546,7 @@ static void kgsl_free_secure_system_pages(struct kgsl_memdesc *memdesc)
 	struct scatterlist *sg;
 	int ret;
 
-	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+	if (TEST_FLAG(KGSL_MEMDESC_MAPPED, &memdesc->priv))
 		return;
 
 	ret = kgsl_unlock_sgt(memdesc->sgt);
@@ -1581,7 +1581,7 @@ static void kgsl_free_secure_pages(struct kgsl_memdesc *memdesc)
 {
 	int ret;
 
-	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+	if (TEST_FLAG(KGSL_MEMDESC_MAPPED, &memdesc->priv))
 		return;
 
 	ret = kgsl_unlock_sgt(memdesc->sgt);
@@ -1740,7 +1740,7 @@ static int kgsl_alloc_secure_pages(struct kgsl_device *device,
 		return -EINVAL;
 
 	kgsl_memdesc_init(device, memdesc, flags);
-	memdesc->priv |= priv;
+	atomic_or(priv, &memdesc->priv);
 	memdesc->size = size;
 
 	if (priv & KGSL_MEMDESC_SYSMEM) {
@@ -1815,7 +1815,7 @@ static int kgsl_alloc_pages(struct kgsl_device *device,
 		return -EINVAL;
 
 	kgsl_memdesc_init(device, memdesc, flags);
-	memdesc->priv |= priv;
+	atomic_or(priv, &memdesc->priv);
 	memdesc->size = size;
 
 	if (priv & KGSL_MEMDESC_SYSMEM) {
@@ -1874,7 +1874,7 @@ static int kgsl_alloc_contiguous(struct kgsl_device *device,
 		return -EINVAL;
 
 	kgsl_memdesc_init(device, memdesc, flags);
-	memdesc->priv |= priv;
+	atomic_or(priv, &memdesc->priv);
 
 	memdesc->ops = &kgsl_contiguous_ops;
 	ret = _kgsl_alloc_contiguous(&device->pdev->dev, memdesc, size, 0);
@@ -1951,7 +1951,7 @@ struct kgsl_memdesc *kgsl_allocate_global_fixed(struct kgsl_device *device,
 		return ERR_PTR(ret);
 	}
 
-	gmd->memdesc.priv = KGSL_MEMDESC_GLOBAL;
+	atomic_set(&gmd->memdesc.priv, KGSL_MEMDESC_GLOBAL);
 	gmd->name = name;
 
 	/*

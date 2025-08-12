@@ -164,7 +164,7 @@ def define_target_variant_module(target, variant):
                   "//soc-repo:{}/drivers/soc/qcom/secure_buffer".format(tv),
                   "//soc-repo:{}/drivers/soc/qcom/socinfo".format(tv),
                   "//soc-repo:{}/kernel/msm_sysstats".format(tv),
-                  "//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
+                  #"//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
                 ],
                 "//build/qcom_build_extensions:qtisocrepo_false": [ "//msm-kernel:all_headers" ],
         })

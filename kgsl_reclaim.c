@@ -240,6 +240,33 @@ static void _copy_page(struct kgsl_memdesc *memdesc, struct page *dest, struct p
 	kgsl_page_sync(memdesc->dev, dest, PAGE_SIZE, DMA_BIDIRECTIONAL);
 }
 
+#if (KERNEL_VERSION(6, 13, 0) > LINUX_VERSION_CODE)
+static void kgsl_zap_memdesc_pages(struct kgsl_memdesc *memdesc)
+{
+	int vidx;
+	struct vm_area_struct *vma;
+
+	idr_for_each_entry(&memdesc->vma_idr, vma, vidx) {
+		zap_page_range_single(vma, vma->vm_start,
+			vma->vm_end - vma->vm_start, NULL);
+	}
+}
+#else
+static void kgsl_zap_memdesc_pages(struct kgsl_memdesc *memdesc)
+{
+	int vidx;
+	struct vm_area_struct *vma;
+
+	idr_for_each_entry(&memdesc->vma_idr, vma, vidx) {
+		struct file *vm_file = vma->vm_file;
+		struct address_space *mapping = vm_file ? vm_file->f_mapping : NULL;
+
+		if (mapping)
+			unmap_mapping_pages(mapping, vma->vm_pgoff, vma_pages(vma), true);
+	}
+}
+#endif
+
 static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_entry *entry)
 {
 	struct kgsl_memdesc *memdesc = &entry->memdesc;
@@ -248,8 +275,6 @@ static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_en
 	struct file *shmem_filp = NULL;
 	int i = 0;
 	int ret = 1;
-	int vidx;
-	struct vm_area_struct *vma;
 	int page_size = PAGE_SIZE;
 	struct page **old_pages;
 
@@ -297,10 +322,7 @@ static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_en
 	 * Zap ptes to force a vm_fault on the next userspace access.
 	 * vma_idr is protected by the mmap lock
 	 */
-	idr_for_each_entry(&memdesc->vma_idr, vma, vidx) {
-		zap_page_range_single(vma, vma->vm_start,
-			vma->vm_end - vma->vm_start, NULL);
-	}
+	kgsl_zap_memdesc_pages(memdesc);
 
 	for (i = 0; i < memdesc->page_count; ) {
 		struct page *p;

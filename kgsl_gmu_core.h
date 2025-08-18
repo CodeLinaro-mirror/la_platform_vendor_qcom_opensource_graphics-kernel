@@ -585,6 +585,10 @@ struct gmu_core_device {
 	u32 freqs[MAX_CX_LEVELS];
 	/** @num_freqs: Number of entries in the @freqs array */
 	int num_freqs;
+	/** @boot_freq: Frequency at which to boot the GMU */
+	u32 boot_freq;
+	/** @boot_hub_freq: Frequency at which to boot the GMU */
+	u32 boot_hub_freq;
 	/** @vlvls: Array of GMU voltage levels */
 	u32 vlvls[MAX_CX_LEVELS];
 	/*

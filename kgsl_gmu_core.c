@@ -1159,6 +1159,9 @@ int gmu_core_clk_probe(struct kgsl_device *device)
 
 	gmu->num_clks = ret;
 
+	of_property_read_u32(gmu_pdev->dev.of_node, "qcom,gmu-boot-freq", &gmu->boot_freq);
+	of_property_read_u32(gmu_pdev->dev.of_node, "qcom,gmu-boot-hub-freq", &gmu->boot_hub_freq);
+
 	if (of_get_property(gmu_pdev->dev.of_node,
 		"qcom,gmu-perf-ddr-bw", &tbl_size) == NULL)
 		goto read_gmu_freq;
@@ -1215,38 +1218,49 @@ default_gmu_freq:
 	return 0;
 }
 
-static int scale_hub_clock(struct kgsl_device *device, u32 cx_voltage)
+static int scale_hub_clock(struct kgsl_device *device, u32 cx_voltage, bool boot)
 {
 	struct gmu_core_device *gmu = &device->gmu_core;
 	int ret, i;
+	u32 hub_freq;
 
-	for (i = 0; i < gmu->num_hub_freqs; i++) {
-		if (gmu->hub_vlvls[i] <= cx_voltage)
-			break;
+	if (!(boot && gmu->boot_hub_freq)) {
+		for (i = 0; i < gmu->num_hub_freqs; i++) {
+			if (gmu->hub_vlvls[i] <= cx_voltage)
+				break;
+		}
+
+		/* Default to minimum hub frequency if no match found */
+		if (i == gmu->num_hub_freqs)
+			i = gmu->num_hub_freqs - 1;
+
+		if (i == gmu->cur_hub_level)
+			return 0;
+
+		hub_freq = gmu->hub_freqs[i];
+	} else {
+		hub_freq = gmu->boot_hub_freq;
 	}
 
-	/* Default to minimum hub frequency if no match found */
-	if (i == gmu->num_hub_freqs)
-		i = gmu->num_hub_freqs - 1;
-
-	if (i == gmu->cur_hub_level)
-		return 0;
-
-	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "hub_clk", gmu->hub_freqs[i]);
+	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "hub_clk", hub_freq);
 	if (ret && ret != -ENODEV) {
 		dev_err(GMU_PDEV_DEV(device), "Unable to set the HUB clock ret %d\n", ret);
 		return ret;
 	}
 
-	gmu->cur_hub_level = i;
+	if (!boot)
+		gmu->cur_hub_level = i;
 	return 0;
 }
 
-int gmu_core_clock_set_rate(struct kgsl_device *device, u32 gmu_level)
+static int _gmu_core_clock_set_rate(struct kgsl_device *device, u32 gmu_level, bool boot)
 {
 	struct gmu_core_device *gmu_core = &device->gmu_core;
 	int ret;
 	u32 req_freq = gmu_core->freqs[gmu_level];
+
+	if (boot && gmu_core->boot_freq)
+		req_freq = gmu_core->boot_freq;
 
 	gmu_core_rdpm_cx_freq_update(device, req_freq / 1000);
 
@@ -1256,11 +1270,17 @@ int gmu_core_clock_set_rate(struct kgsl_device *device, u32 gmu_level)
 		return ret;
 	}
 
+	/* The boot frequency is not tracked, so the trace may be inaccurate at GMU boot */
 	trace_kgsl_gmu_pwrlevel(req_freq, gmu_core->freqs[gmu_core->cur_level]);
 
 	gmu_core->cur_level = gmu_level;
 
-	return scale_hub_clock(device, gmu_core->vlvls[gmu_level]);
+	return scale_hub_clock(device, gmu_core->vlvls[gmu_level], boot);
+}
+
+int gmu_core_clock_set_rate(struct kgsl_device *device, u32 gmu_level)
+{
+	return _gmu_core_clock_set_rate(device, gmu_level, false);
 }
 
 int gmu_core_enable_clks(struct kgsl_device *device, u32 level)
@@ -1271,7 +1291,7 @@ int gmu_core_enable_clks(struct kgsl_device *device, u32 level)
 	/* Reset hub clock level */
 	gmu->cur_hub_level = gmu->num_hub_freqs;
 
-	ret = gmu_core_clock_set_rate(device, level);
+	ret = _gmu_core_clock_set_rate(device, level, true);
 	if (ret)
 		return ret;
 

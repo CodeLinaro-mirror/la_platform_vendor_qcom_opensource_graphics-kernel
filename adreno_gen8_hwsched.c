@@ -2169,11 +2169,61 @@ static ssize_t gpu_maxclk_constraints_show(struct kobject *kobj, struct kobj_att
 			pwr->pwrlevels[thermal_max_pwrlevel].gpu_freq);
 }
 
+static void set_thermal(struct adreno_device *adreno_dev, void *priv)
+{
+	bool val = *((bool *)priv);
+
+	if (val)
+		set_bit(GMU_THERMAL_MITIGATION, &KGSL_DEVICE(adreno_dev)->gmu_core.flags);
+	else
+		clear_bit(GMU_THERMAL_MITIGATION, &KGSL_DEVICE(adreno_dev)->gmu_core.flags);
+}
+
+static ssize_t thermal_mitigation_show(struct device *dev, struct device_attribute *attr,
+		char *buf)
+{
+	struct gmu_core_device *gmu_core = dev_get_drvdata(dev);
+	struct kgsl_device *device = container_of(gmu_core, struct kgsl_device, gmu_core);
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	u32 val = 0;
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_THERMAL_MITIGATION) &&
+			test_bit(GMU_THERMAL_MITIGATION, &gmu_core->flags))
+		val = 1;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", val);
+}
+
+static ssize_t thermal_mitigation_store(struct device *dev, struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct gmu_core_device *gmu_core = dev_get_drvdata(dev);
+	struct kgsl_device *device = container_of(gmu_core, struct kgsl_device, gmu_core);
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	bool val;
+	int ret;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_THERMAL_MITIGATION))
+		return count;
+
+	ret = kstrtobool(buf, &val);
+	if (ret)
+		return ret;
+
+	/* Power cycle the GPU for changes to take effect */
+	if (val != test_bit(GMU_THERMAL_MITIGATION, &gmu_core->flags))
+		adreno_power_cycle(adreno_dev, set_thermal, &val);
+
+	return count;
+}
+
 DCVS_SYSFS_RO(aggregated_max_gpuclk);
 DCVS_SYSFS_RO(gpu_maxclk_constraints);
 DCVS_SYSFS_RO(dcvs_tunables_default);
 DCVS_SYSFS_RO(dcvs_tunables_cur);
 DCVS_SYSFS_RO(gpu_load);
+
+DEVICE_ATTR_RW(thermal_mitigation);
 
 static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_aggregated_max_gpuclk.attr,
@@ -2329,6 +2379,8 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 	WARN_ON(kobject_init_and_add(&adreno_dev->hwsched.dcvs_kobj, &ktype_dcvs,
 				&gmu_dev->kobj, "dcvs"));
 
+	WARN_ON(sysfs_create_file(&gmu_dev->kobj, &dev_attr_thermal_mitigation.attr));
+
 	return ret;
 }
 
@@ -2337,6 +2389,9 @@ void gen8_hwsched_remove(struct adreno_device *adreno_dev)
 	struct gen8_device *gen8_dev = container_of(adreno_dev,
 					struct gen8_device, adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct device *gmu_dev = GMU_PDEV_DEV(device);
+
+	sysfs_remove_file(&gmu_dev->kobj, &dev_attr_thermal_mitigation.attr);
 
 	if (gen8_dev->tsense_wq) {
 		flush_workqueue(gen8_dev->tsense_wq);

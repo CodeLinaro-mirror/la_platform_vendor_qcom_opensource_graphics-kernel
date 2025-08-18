@@ -2186,6 +2186,7 @@ int gen8_gmu_probe(struct kgsl_device *device,
 	adreno_dev->gmu_hub_clk_freq = freq ? freq : 150000000;
 
 	gmu_core->pdev = pdev;
+	dev_set_drvdata(&pdev->dev, gmu_core);
 	memset(&gmu_core->common_caps, 0, sizeof(struct firmware_capabilities));
 	memset(&gmu_core->platform_caps, 0, sizeof(struct firmware_capabilities));
 	memset(&gmu_core->ver, 0, sizeof(gmu_core->ver));

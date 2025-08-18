@@ -466,6 +466,17 @@ struct adreno_gpu_core {
 	 * using standard devicetree bindings.
 	 */
 	u32 chipid;
+	/**
+	 * @speedbins: Optional table of fuse to speedbin mappings
+	 *
+	 * Consists of pairs of fuse, index mappings, terminated with
+	 * {SHRT_MAX, 0} sentinel.
+	 */
+	struct kgsl_speedbin *speedbins;
+	/** @ubwc_mode: Supported UBWC mode */
+	u32 ubwc_mode;
+	/** @mal: Minimum access length */
+	u32 mal;
 };
 
 /**
@@ -637,6 +648,10 @@ struct adreno_device {
 	uint32_t ifpc_count;
 
 	unsigned int highest_bank_bit;
+	/** @ubwc_mode: Supported UBWC mode */
+	u32 ubwc_mode;
+	/** @mal: Minimum access length */
+	u32 mal;
 	unsigned int quirks;
 
 #ifdef CONFIG_QCOM_KGSL_CORESIGHT

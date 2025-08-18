@@ -398,8 +398,14 @@ int a6xx_load_pdc_ucode(struct adreno_device *adreno_dev)
 	/* Get pointers to each of the possible PDC resources */
 	res_pdc = platform_get_resource_byname(gmu->pdev, IORESOURCE_MEM,
 			"kgsl_gmu_pdc_reg");
-	res_cfg = platform_get_resource_byname(gmu->pdev, IORESOURCE_MEM,
-			"kgsl_gmu_pdc_cfg");
+	/*
+	 * Try to get the "gmu_pdc" resource, fallback to legacy "kgsl_gmu_pdc_cfg"
+	 * if not found
+	 */
+	res_cfg = platform_get_resource_byname(gmu->pdev, IORESOURCE_MEM, "gmu_pdc");
+	if (!res_cfg)
+		res_cfg = platform_get_resource_byname(gmu->pdev, IORESOURCE_MEM,
+				"kgsl_gmu_pdc_cfg");
 
 	/*
 	 * Map the starting address for pdc_cfg programming. If the pdc_cfg
@@ -430,8 +436,15 @@ int a6xx_load_pdc_ucode(struct adreno_device *adreno_dev)
 	 * resource is not available use an offset from the base PDC resource.
 	 */
 	if (gmu->pdc_seq_base == NULL) {
+		/*
+		 * Try to get the "gmu_pdc_seq" resource, fallback to legacy
+		 * "kgsl_gmu_pdc_seq" if not found.
+		 */
 		res_seq = platform_get_resource_byname(gmu->pdev, IORESOURCE_MEM,
-				"kgsl_gmu_pdc_seq");
+				"gmu_pdc_seq");
+		if (!res_seq)
+			res_seq = platform_get_resource_byname(gmu->pdev,
+					IORESOURCE_MEM, "kgsl_gmu_pdc_seq");
 
 		if (res_seq)
 			gmu->pdc_seq_base = devm_ioremap(&gmu->pdev->dev,
@@ -2727,8 +2740,13 @@ static int a6xx_gmu_reg_probe(struct adreno_device *adreno_dev)
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	int ret;
 
+	/* Try to get the "gmu" resource, fallback to legacy "kgsl_gmu_reg" if not found */
 	ret = kgsl_regmap_add_region(&device->regmap, gmu->pdev,
-		"kgsl_gmu_reg", NULL, NULL);
+		"gmu", NULL, NULL);
+	if (ret)
+		ret = kgsl_regmap_add_region(&device->regmap, gmu->pdev,
+			"kgsl_gmu_reg", NULL, NULL);
+
 	if (ret)
 		dev_err(&gmu->pdev->dev, "Unable to map the GMU registers\n");
 
@@ -2911,12 +2929,22 @@ int a6xx_gmu_probe(struct kgsl_device *device,
 	gmu->pdev->dev.dma_mask = &gmu->pdev->dev.coherent_dma_mask;
 	set_dma_ops(&gmu->pdev->dev, NULL);
 
-	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM,
-						"rscc");
-	if (res) {
+	if (adreno_is_a650_family(adreno_dev)) {
+		/* In standard device tree bindings, rscc range is part of GMU pdev */
+		res = platform_get_resource_byname(gmu->pdev, IORESOURCE_MEM,
+			"rscc");
+		if (!res)
+			res = platform_get_resource_byname(device->pdev,
+				IORESOURCE_MEM, "rscc");
+
+		if (!res) {
+			dev_err(&gmu->pdev->dev, "Failed to get rscc resource\n");
+			return -ENODEV;
+		}
+
 		gmu->rscc_virt = devm_ioremap(&device->pdev->dev, res->start,
 						resource_size(res));
-		if (gmu->rscc_virt == NULL) {
+		if (!gmu->rscc_virt) {
 			dev_err(&gmu->pdev->dev, "rscc ioremap failed\n");
 			return -ENOMEM;
 		}
@@ -2992,7 +3020,8 @@ int a6xx_gmu_probe(struct kgsl_device *device,
 	of_property_read_u32(gmu->pdev->dev.of_node, "qcom,gmu-perf-ddr-bw",
 		&gmu->perf_ddr_bw);
 
-	gmu->irq = kgsl_request_irq(gmu->pdev, "kgsl_gmu_irq",
+	/* Try with "gmu" irq first. Use Fallback legacy name "kgsl_gmu_irq" if not found. */
+	gmu->irq = kgsl_request_irq(gmu->pdev, "gmu", "kgsl_gmu_irq", -EINVAL,
 		a6xx_gmu_irq_handler, device);
 
 	if (gmu->irq >= 0)
@@ -3747,7 +3776,8 @@ int a6xx_gmu_hfi_probe(struct adreno_device *adreno_dev)
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct a6xx_hfi *hfi = &gmu->hfi;
 
-	hfi->irq = kgsl_request_irq(gmu->pdev, "kgsl_hfi_irq",
+	/* Try with "hfi" irq first. Use Fallback legacy name "kgsl_hfi_irq" if not found. */
+	hfi->irq = kgsl_request_irq(gmu->pdev, "hfi", "kgsl_hfi_irq", -EINVAL,
 		a6xx_hfi_irq_handler, KGSL_DEVICE(adreno_dev));
 
 	return hfi->irq < 0 ? hfi->irq : 0;
@@ -3844,6 +3874,7 @@ static int a6xx_gmu_remove_dev(struct platform_device *pdev)
 
 static const struct of_device_id a6xx_gmu_match_table[] = {
 	{ .compatible = "qcom,gpu-gmu" },
+	{ .compatible = "qcom,adreno-gmu" },
 	{ },
 };
 

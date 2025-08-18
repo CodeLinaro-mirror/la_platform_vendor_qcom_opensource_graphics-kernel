@@ -1429,7 +1429,8 @@ static int kgsl_release(struct inode *inodep, struct file *filep)
 	device->ftbl->device_private_destroy(dev_priv);
 
 	result = kgsl_close_device(device);
-	pm_runtime_put(&device->pdev->dev);
+	if (!of_device_is_compatible(device->pdev->dev.of_node, "qcom,adreno"))
+		pm_runtime_put(&device->pdev->dev);
 
 	return result;
 }
@@ -1463,12 +1464,15 @@ static int kgsl_open(struct inode *inodep, struct file *filep)
 		return -ENODEV;
 	}
 
-	result = pm_runtime_get_sync(&device->pdev->dev);
-	if (result < 0) {
-		dev_err(device->dev,
+	if (!of_device_is_compatible(device->pdev->dev.of_node, "qcom,adreno")) {
+		result = pm_runtime_get_sync(&device->pdev->dev);
+		if (result < 0) {
+			dev_err(device->dev,
 			     "Runtime PM: Unable to wake up the device, rc = %d\n",
 			     result);
-		return result;
+
+			return result;
+		}
 	}
 	result = 0;
 
@@ -5076,20 +5080,43 @@ static int _register_device(struct kgsl_device *device)
 	return 0;
 }
 
-int kgsl_request_irq(struct platform_device *pdev, const  char *name,
-		irq_handler_t handler, void *data)
+int kgsl_request_irq(struct platform_device *pdev, const char *name,
+		const char *alt_name, int index, irq_handler_t handler, void *data)
 {
-	int ret, num = platform_get_irq_byname(pdev, name);
+	int ret, num = -EINVAL;
+	const char *irq_name = name;
+	char index_name[32];
 
-	if (num < 0)
+	/*
+	 * Get IRQ by name if available, else try alt_name if previous failed,
+	 * otherwise fall back to index-based retrieval.
+	 */
+	if (name) {
+		num = platform_get_irq_byname_optional(pdev, name);
+		if (num < 0 && alt_name) {
+			num = platform_get_irq_byname_optional(pdev, alt_name);
+			irq_name = alt_name;
+		}
+	}
+
+	if (index != -EINVAL && num < 0) {
+		num = platform_get_irq(pdev, index);
+		snprintf(index_name, sizeof(index_name), "irq-index-%d", index);
+		irq_name = index_name;
+	}
+
+	if (num < 0) {
+		dev_err(&pdev->dev, "Unable to retrieve IRQ '%s' (alt: '%s', index: %d): error %d\n",
+			name ? name : "N/A", alt_name ? alt_name : "N/A", index, num);
 		return num;
+	}
 
 	ret = devm_request_irq(&pdev->dev, num, handler, IRQF_TRIGGER_HIGH,
-		name, data);
+		irq_name, data);
 
 	if (ret) {
 		dev_err(&pdev->dev, "Unable to get interrupt %s: %d\n",
-			name, ret);
+			irq_name, ret);
 		return ret;
 	}
 
@@ -5123,6 +5150,8 @@ int kgsl_of_property_read_ddrtype(struct device_node *node, const char *base,
 	return of_property_read_u32(node, base, ptr);
 }
 
+int kgsl_iommu_probe_standard(struct kgsl_device *device, struct platform_device *pdev);
+
 int kgsl_device_platform_probe(struct kgsl_device *device)
 {
 	struct platform_device *pdev = device->pdev;
@@ -5131,6 +5160,10 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 	status = _register_device(device);
 	if (status)
 		return status;
+
+	/* Probe standard kgsl smmu dt bindings */
+	if (of_device_is_compatible(pdev->dev.of_node, "qcom,adreno"))
+		kgsl_iommu_probe_standard(device, pdev);
 
 	/* Can return -EPROBE_DEFER */
 	status = kgsl_pwrctrl_init(device);

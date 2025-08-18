@@ -2532,15 +2532,22 @@ int gen7_gmu_probe(struct kgsl_device *device,
 	gmu->pdev->dev.dma_mask = &gmu->pdev->dev.coherent_dma_mask;
 	set_dma_ops(&gmu->pdev->dev, NULL);
 
-	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM,
-						"rscc");
-	if (res) {
-		gmu->rscc_virt = devm_ioremap(&device->pdev->dev, res->start,
-						resource_size(res));
-		if (!gmu->rscc_virt) {
-			dev_err(&gmu->pdev->dev, "rscc ioremap failed\n");
-			return -ENOMEM;
-		}
+	/* In standard device tree bindings, rscc range is part of GMU pdev */
+	res = platform_get_resource_byname(gmu->pdev, IORESOURCE_MEM, "rscc");
+	if (!res)
+		res = platform_get_resource_byname(device->pdev,
+			IORESOURCE_MEM, "rscc");
+
+	if (!res) {
+		dev_err(&gmu->pdev->dev, "Failed to get rscc resource\n");
+		return -ENODEV;
+	}
+
+	gmu->rscc_virt = devm_ioremap(&device->pdev->dev, res->start,
+					resource_size(res));
+	if (!gmu->rscc_virt) {
+		dev_err(&gmu->pdev->dev, "rscc ioremap failed\n");
+		return -ENOMEM;
 	}
 
 	/* Setup any rdpm register ranges */
@@ -2618,7 +2625,7 @@ int gen7_gmu_probe(struct kgsl_device *device,
 
 	spin_lock_init(&gmu->hfi.cmdq_lock);
 
-	gmu->irq = kgsl_request_irq(gmu->pdev, "gmu",
+	gmu->irq = kgsl_request_irq(gmu->pdev, "gmu", NULL, -EINVAL,
 		gen7_gmu_irq_handler, device);
 
 	if (gmu->irq >= 0)
@@ -3317,7 +3324,7 @@ int gen7_gmu_hfi_probe(struct adreno_device *adreno_dev)
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct gen7_hfi *hfi = &gmu->hfi;
 
-	hfi->irq = kgsl_request_irq(gmu->pdev, "hfi",
+	hfi->irq = kgsl_request_irq(gmu->pdev, "hfi", NULL, -EINVAL,
 		gen7_hfi_irq_handler, KGSL_DEVICE(adreno_dev));
 
 	return hfi->irq < 0 ? hfi->irq : 0;
@@ -3408,6 +3415,7 @@ static int gen7_gmu_remove_dev(struct platform_device *pdev)
 
 static const struct of_device_id gen7_gmu_match_table[] = {
 	{ .compatible = "qcom,gen7-gmu" },
+	{ .compatible = "qcom,adreno-gmu" },
 	{ },
 };
 

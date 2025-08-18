@@ -1212,15 +1212,19 @@ static int a6xx_rgmu_irq_probe(struct kgsl_device *device)
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(ADRENO_DEVICE(device));
 	int ret;
 
-	ret = kgsl_request_irq(rgmu->pdev, "kgsl_oob",
+	/* Try with "hfi" irq first. Use Fallback legacy name "kgsl_oob" if not found. */
+	ret = kgsl_request_irq(rgmu->pdev, "hfi", "kgsl_oob", -EINVAL,
 			a6xx_oob_irq_handler, device);
+
 	if (ret < 0)
 		return ret;
 
 	rgmu->oob_interrupt_num  = ret;
 
-	ret = kgsl_request_irq(rgmu->pdev,
-		"kgsl_rgmu", a6xx_rgmu_irq_handler, device);
+	/* Try with "gmu" irq first. Use Fallback legacy name "kgsl_rgmu" if not found. */
+	ret = kgsl_request_irq(rgmu->pdev, "gmu", "kgsl_rgmu", -EINVAL,
+			a6xx_rgmu_irq_handler, device);
+
 	if (ret < 0)
 		return ret;
 
@@ -1414,6 +1418,7 @@ static int a6xx_rgmu_remove_dev(struct platform_device *pdev)
 
 static const struct of_device_id a6xx_rgmu_match_table[] = {
 	{ .compatible = "qcom,gpu-rgmu" },
+	{ .compatible = "qcom,adrneo-rgmu" },
 	{ },
 };
 

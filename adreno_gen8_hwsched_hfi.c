@@ -2777,8 +2777,10 @@ int gen8_hwsched_cp_init(struct adreno_device *adreno_dev)
 		return ret;
 
 	ret = adreno_zap_shader_load(adreno_dev, gen8_core->zap_name);
-	if (ret)
+	if (ret) {
+		BUG_ON(1);
 		return ret;
+	}
 
 	if (!adreno_dev->zap_loaded)
 		kgsl_regwrite(KGSL_DEVICE(adreno_dev),

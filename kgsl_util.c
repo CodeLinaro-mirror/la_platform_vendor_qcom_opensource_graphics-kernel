@@ -126,8 +126,10 @@ int kgsl_zap_shader_load(struct device *dev, const char *name)
 
 	ret = of_address_to_resource(mem_np, 0, &res);
 	of_node_put(mem_np);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "Couldn't find the zap-shader at the parsed address\n");
 		return ret;
+	}
 
 	ret = request_firmware(&fw, name, dev);
 	if (ret) {
@@ -137,11 +139,13 @@ int kgsl_zap_shader_load(struct device *dev, const char *name)
 
 	mem_size = qcom_mdt_get_size(fw);
 	if (mem_size < 0) {
+		dev_err(dev, "Couldn't load the firmware size error %zx\n", mem_size);
 		ret = mem_size;
 		goto out;
 	}
 
 	if (mem_size > resource_size(&res)) {
+		dev_err(dev, "Couldn't load the firmware size mismatch %zx\n", mem_size);
 		ret = -E2BIG;
 		goto out;
 	}
@@ -150,6 +154,7 @@ int kgsl_zap_shader_load(struct device *dev, const char *name)
 
 	mem_region = memremap(mem_phys, mem_size, MEMREMAP_WC);
 	if (!mem_region) {
+		dev_err(dev, "Error mapping firmware, no memory \n");
 		ret = -ENOMEM;
 		goto out;
 	}
@@ -162,6 +167,8 @@ int kgsl_zap_shader_load(struct device *dev, const char *name)
 	}
 
 	ret = qcom_scm_pas_auth_and_reset(GPU_PASID);
+	if (ret)
+		dev_err(dev, "Error %d while authenticating the MDT\n", ret);
 
 out:
 	if (mem_region)

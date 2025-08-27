@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/interconnect.h>
@@ -15,6 +15,7 @@
 
 #include "kgsl_device.h"
 #include "kgsl_bus.h"
+#include "kgsl_power_trace.h"
 #include "kgsl_pwrscale.h"
 #include "kgsl_sysfs.h"
 #include "kgsl_trace.h"
@@ -248,7 +249,7 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 			pwr->previous_pwrlevel,
 			pwr->pwrlevels[old_level].gpu_freq);
 
-	trace_gpu_frequency(pwrlevel->gpu_freq/1000, 0);
+	KGSL_TRACE_GPU_FREQ(pwrlevel->gpu_freq/1000, 0);
 
 	/*
 	 * Some targets do not support the bandwidth requirement of
@@ -1370,14 +1371,17 @@ static int kgsl_pwrctrl_pwrrail(struct kgsl_device *device, bool state)
 	if (!state) {
 		if (test_and_clear_bit(KGSL_PWRFLAGS_POWER_ON,
 			&pwr->power_flags)) {
+			kgsl_mmu_send_tlb_hint(&device->mmu, true);
 			trace_kgsl_rail(device, state);
 			if (!kgsl_regulator_disable_wait(pwr->gx_gdsc, 200))
 				dev_err(device->dev, "Regulator vdd is stuck on\n");
 			if (!kgsl_regulator_disable_wait(pwr->cx_gdsc, 200))
 				dev_err(device->dev, "Regulator vddcx is stuck on\n");
 		}
-	} else
+	} else {
 		status = enable_regulators(device);
+		kgsl_mmu_send_tlb_hint(&device->mmu, false);
+	}
 
 	return status;
 }
@@ -1863,7 +1867,7 @@ static int _wake(struct kgsl_device *device)
 		kgsl_pwrctrl_axi(device, true);
 		kgsl_pwrscale_wake(device);
 		kgsl_pwrctrl_irq(device, true);
-		trace_gpu_frequency(
+		KGSL_TRACE_GPU_FREQ(
 			pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq/1000, 0);
 		fallthrough;
 	case KGSL_STATE_MINBW:
@@ -2037,7 +2041,7 @@ _slumber(struct kgsl_device *device)
 		kgsl_pwrctrl_clk_set_options(device, false);
 		kgsl_pwrctrl_disable(device);
 		kgsl_pwrscale_sleep(device);
-		trace_gpu_frequency(0, 0);
+		KGSL_TRACE_GPU_FREQ(0, 0);
 		kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 		break;
 	case KGSL_STATE_SUSPEND:
@@ -2047,7 +2051,7 @@ _slumber(struct kgsl_device *device)
 		break;
 	case KGSL_STATE_AWARE:
 		kgsl_pwrctrl_disable(device);
-		trace_gpu_frequency(0, 0);
+		KGSL_TRACE_GPU_FREQ(0, 0);
 		kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 		break;
 	default:

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
@@ -22,6 +22,7 @@
 #include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/sysfs.h>
 #include <linux/mailbox/qmp.h>
+#include <linux/version.h>
 #include <soc/qcom/cmd-db.h>
 
 #include "adreno.h"
@@ -279,6 +280,7 @@ int gen7_gmu_enable_gdsc(struct adreno_device *adreno_dev)
 		dev_err(&gmu->pdev->dev,
 			"Failed to enable GMU CX gdsc, error %d\n", ret);
 
+	kgsl_mmu_send_tlb_hint(&device->mmu, false);
 	clear_bit(GMU_PRIV_CX_GDSC_WAIT, &gmu->flags);
 	return ret;
 }
@@ -286,7 +288,9 @@ int gen7_gmu_enable_gdsc(struct adreno_device *adreno_dev)
 void gen7_gmu_disable_gdsc(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
+	kgsl_mmu_send_tlb_hint(&device->mmu, true);
 	reinit_completion(&gmu->gdsc_gate);
 	set_bit(GMU_PRIV_CX_GDSC_WAIT, &gmu->flags);
 	regulator_disable(gmu->cx_gdsc);
@@ -1957,13 +1961,6 @@ static int gen7_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto gdsc_off;
 
-	/*
-	 * TLB operations are skipped during slumber. Incase CX doesn't
-	 * go down, it can result in incorrect translations due to stale
-	 * TLB entries. Flush TLB before boot up to ensure fresh start.
-	 */
-	kgsl_mmu_flush_tlb(&device->mmu);
-
 	ret = gen7_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;
@@ -2094,6 +2091,21 @@ static u64 gen7_bcl_sid_get(struct kgsl_device *device, u32 sid_id)
 	}
 }
 
+static void gen7_send_tlb_hint(struct kgsl_device *device, bool val)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+
+	if (!gmu->domain)
+		return;
+
+#if (KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE)
+	qcom_skip_tlb_management(&gmu->pdev->dev, val);
+#endif
+	if (!val)
+		iommu_flush_iotlb_all(gmu->domain);
+}
+
 static const struct gmu_dev_ops gen7_gmudev = {
 	.oob_set = gen7_gmu_oob_set,
 	.oob_clear = gen7_gmu_oob_clear,
@@ -2106,6 +2118,7 @@ static const struct gmu_dev_ops gen7_gmudev = {
 	.bcl_sid_set = gen7_bcl_sid_set,
 	.bcl_sid_get = gen7_bcl_sid_get,
 	.send_nmi = gen7_gmu_send_nmi,
+	.send_tlb_hint = gen7_send_tlb_hint,
 #if IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION)
 	.force_first_boot = gen7_gmu_force_first_boot,
 #endif

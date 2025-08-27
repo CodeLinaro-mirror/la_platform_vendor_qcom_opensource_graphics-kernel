@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
@@ -21,6 +21,7 @@
 #include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/sysfs.h>
 #include <linux/mailbox/qmp.h>
+#include <linux/version.h>
 #include <soc/qcom/cmd-db.h>
 #include <soc/qcom/boot_stats.h>
 
@@ -510,6 +511,7 @@ int a6xx_gmu_enable_gdsc(struct adreno_device *adreno_dev)
 		dev_err(&gmu->pdev->dev,
 			"Failed to enable GMU CX gdsc, error %d\n", ret);
 
+	kgsl_mmu_send_tlb_hint(&device->mmu, false);
 	clear_bit(GMU_PRIV_CX_GDSC_WAIT, &gmu->flags);
 	return ret;
 }
@@ -517,7 +519,9 @@ int a6xx_gmu_enable_gdsc(struct adreno_device *adreno_dev)
 void a6xx_gmu_disable_gdsc(struct adreno_device *adreno_dev)
 {
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
+	kgsl_mmu_send_tlb_hint(&device->mmu, true);
 	reinit_completion(&gmu->gdsc_gate);
 
 	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))
@@ -2411,13 +2415,6 @@ static int a6xx_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto gdsc_off;
 
-	/*
-	 * TLB operations are skipped during slumber. Incase CX doesn't
-	 * go down, it can result in incorrect translations due to stale
-	 * TLB entries. Flush TLB before boot up to ensure fresh start.
-	 */
-	kgsl_mmu_flush_tlb(&device->mmu);
-
 	ret = a6xx_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;
@@ -2508,6 +2505,21 @@ static int a6xx_gmu_acd_set(struct kgsl_device *device, bool val)
 	return adreno_power_cycle(adreno_dev, set_acd, &val);
 }
 
+static void a6xx_send_tlb_hint(struct kgsl_device *device, bool val)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+
+	if (!gmu->domain)
+		return;
+
+#if (KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE)
+	qcom_skip_tlb_management(&gmu->pdev->dev, val);
+#endif
+	if (!val)
+		iommu_flush_iotlb_all(gmu->domain);
+}
+
 static const struct gmu_dev_ops a6xx_gmudev = {
 	.oob_set = a6xx_gmu_oob_set,
 	.oob_clear = a6xx_gmu_oob_clear,
@@ -2519,6 +2531,7 @@ static const struct gmu_dev_ops a6xx_gmudev = {
 	.acd_set = a6xx_gmu_acd_set,
 	.send_nmi = a6xx_gmu_send_nmi,
 	.force_first_boot = a6xx_gmu_force_first_boot,
+	.send_tlb_hint = a6xx_send_tlb_hint,
 };
 
 static int a6xx_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,

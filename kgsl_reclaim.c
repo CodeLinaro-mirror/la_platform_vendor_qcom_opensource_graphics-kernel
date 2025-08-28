@@ -291,7 +291,7 @@ static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_en
 	}
 
 	/* Take the mmap lock to prevent concurrent entry mmaps */
-	mmap_read_lock(mm);
+	mmap_write_lock(mm);
 
 	/* Take the memdesc lock to prevent concurrent vm_faults */
 	down_write(&memdesc->lock);
@@ -300,9 +300,6 @@ static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_en
 	idr_for_each_entry(&memdesc->vma_idr, vma, vidx) {
 		zap_page_range_single(vma, vma->vm_start,
 			vma->vm_end - vma->vm_start, NULL);
-
-		fput(vma->vm_file);
-		vma->vm_file = get_file(shmem_filp);
 	}
 
 	for (i = 0; i < memdesc->page_count; ) {
@@ -331,7 +328,7 @@ static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_en
 	SET_FLAG(KGSL_MEMDESC_MIGRATED, &memdesc->priv);
 
 	up_write(&memdesc->lock);
-	mmap_read_unlock(mm);
+	mmap_write_unlock(mm);
 
 	/* Free the old pages back into the pool */
 	kgsl_pool_free_pages(old_pages, memdesc->page_count);

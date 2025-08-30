@@ -3982,7 +3982,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_9_0 = {
 			ADRENO_CONTENT_PROTECTION | ADRENO_GMU_BASED_DCVS |
 			ADRENO_DEFER_GMEM_ALLOC | ADRENO_PREEMPTION | ADRENO_GMU_AB |
 			ADRENO_GMU_THERMAL_MITIGATION | ADRENO_HW_FENCE |
-			ADRENO_DCVS_PROFILE,
+			ADRENO_DCVS_PROFILE | ADRENO_GMU_MINBW,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,

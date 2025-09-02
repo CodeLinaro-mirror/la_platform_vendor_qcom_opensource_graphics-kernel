@@ -2242,7 +2242,7 @@ static void gen7_free_gmu_globals(struct gen7_gmu_device *gmu)
 	}
 
 	if (gmu->domain) {
-		iommu_detach_device(gmu->domain, &gmu->pdev->dev);
+		kgsl_detach_iommu_group(gmu->domain, gmu->group);
 		iommu_domain_free(gmu->domain);
 		gmu->domain = NULL;
 	}
@@ -2491,7 +2491,7 @@ static int gen7_gmu_iommu_init(struct gen7_gmu_device *gmu)
 	 */
 	qcom_iommu_set_fault_model(gmu->domain, QCOM_IOMMU_FAULT_MODEL_NO_STALL);
 
-	ret = iommu_attach_device(gmu->domain, &gmu->pdev->dev);
+	ret = kgsl_attach_iommu_group(&gmu->pdev->dev, gmu->domain, &gmu->group);
 	if (!ret) {
 		iommu_set_fault_handler(gmu->domain,
 			gen7_gmu_iommu_fault_handler, gmu);
@@ -3397,6 +3397,16 @@ static const struct component_ops gen7_gmu_component_ops = {
 
 static int gen7_gmu_probe_dev(struct platform_device *pdev)
 {
+	/*
+	 * Let us say there are two devices. One with "qcom,adreno-gmu" compatible
+	 * and one with "qcom,gpu-gmu" compatible. In this case probe only the
+	 * device with legacy compatible string and return error for the device
+	 * with "qcom,adreno-gmu".
+	 */
+	if (of_device_is_compatible(pdev->dev.of_node, "qcom,adreno-gmu") &&
+		kgsl_is_compatible_node_available("qcom,gpu-gmu"))
+		return -ENODEV;
+
 	return component_add(&pdev->dev, &gen7_gmu_component_ops);
 }
 
@@ -3415,6 +3425,7 @@ static int gen7_gmu_remove_dev(struct platform_device *pdev)
 
 static const struct of_device_id gen7_gmu_match_table[] = {
 	{ .compatible = "qcom,gen7-gmu" },
+	{ .compatible = "qcom,adreno-gmu" },
 	{ },
 };
 

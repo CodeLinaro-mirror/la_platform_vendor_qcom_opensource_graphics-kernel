@@ -135,6 +135,8 @@ struct kgsl_iommu_context {
 	/** ratelimit: Ratelimit state for the context */
 	struct ratelimit_state ratelimit;
 	struct iommu_domain *domain;
+	/** @group: IOMMU group for the context */
+	struct iommu_group *group;
 	struct adreno_smmu_priv adreno_smmu;
 };
 

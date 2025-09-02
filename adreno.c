@@ -740,6 +740,7 @@ adreno_identify_gpu(struct platform_device *pdev, u32 *chipid)
 static const struct of_device_id adreno_match_table[] = {
 	{ .compatible = "qcom,kgsl-3d0", .data = &device_3d0 },
 	{ .compatible = "qcom,kgsl", .data = &device_3d0 },
+	{ .compatible = "qcom,adreno", .data = &device_3d0 },
 	{ },
 };
 
@@ -1528,10 +1529,15 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 }
 
 static const struct of_device_id adreno_component_match[] = {
+	{ .compatible = "qcom,adreno-gmu" },
+	{ .compatible = "qcom,adreno-rgmu" },
+	{},
+};
+
+static const struct of_device_id adreno_component_match_legacy[] = {
 	{ .compatible = "qcom,gen7-gmu" },
 	{ .compatible = "qcom,gpu-gmu" },
 	{ .compatible = "qcom,gpu-rgmu" },
-	/* Legacy components for kgsl-smmu */
 	{ .compatible = "qcom,kgsl-smmu-v2" },
 	{ .compatible = "qcom,smmu-kgsl-cb" },
 	{},
@@ -3823,7 +3829,7 @@ static void _release_of(struct device *dev, void *data)
 }
 
 static void adreno_add_components(struct device *dev,
-		struct component_match **match)
+		struct component_match **match, const struct of_device_id *matches)
 {
 	struct device_node *node;
 
@@ -3832,7 +3838,7 @@ static void adreno_add_components(struct device *dev,
 	 * Master bind (adreno_bind) will be called only once all added
 	 * components are available.
 	 */
-	for_each_matching_node(node, adreno_component_match) {
+	for_each_matching_node(node, matches) {
 		if (!of_device_is_available(node))
 			continue;
 
@@ -3843,8 +3849,23 @@ static void adreno_add_components(struct device *dev,
 static int adreno_probe(struct platform_device *pdev)
 {
 	struct component_match *match = NULL;
+	const struct of_device_id *matches = adreno_component_match_legacy;
 
-	adreno_add_components(&pdev->dev, &match);
+	/*
+	 * Let us say there are two devices. One with "qcom,adreno" compatible
+	 * and one with "qcom,kgsl-3d0" or "qcom,kgsl" compatible. In this case
+	 * probe only the device with legacy compatible strings and return
+	 * error for the device with "qcom,adreno". Also choose the match table
+	 * accordingly.
+	 */
+	if (of_device_is_compatible(pdev->dev.of_node, "qcom,adreno")) {
+		if (kgsl_is_compatible_node_available("qcom,kgsl") ||
+				kgsl_is_compatible_node_available("qcom,kgsl-3d0"))
+			return -ENODEV;
+		matches = adreno_component_match;
+	}
+
+	adreno_add_components(&pdev->dev, &match, matches);
 
 	if (!match)
 		return -ENODEV;

@@ -147,6 +147,43 @@ int kgsl_regulator_set_voltage(struct device *dev,
 int kgsl_clk_set_rate(struct clk_bulk_data *clks, int num_clks,
 		const char *id, unsigned long rate);
 
+
+/**
+ * kgsl_is_compatible_node_available() - Check if a device with matching
+ *					compatible is available
+ * @compat: The compatible string that the device must have
+ *
+ * Find a device with the compatible string that is passed and check if
+ * the device is available.
+ *
+ * Return: true if a suitable device is available, false otherwise
+ */
+bool kgsl_is_compatible_node_available(const char *compat);
+
+/**
+ * kgsl_attach_iommu_group() - Get iommu group and attach domain
+ *
+ * @dev: iommu group of this device is used
+ * @domain: iommu domain to attach
+ * @group: This is updated with iommu group on successful attach
+ *
+ * Get the iommu group of a device and attach iommu domain to the group.
+ *
+ * Return: 0 on success, negative error on failure
+ */
+int kgsl_attach_iommu_group(struct device *dev, struct iommu_domain *domain,
+		struct iommu_group **group);
+
+/**
+ * kgsl_detach_iommu_group() - Detach iommu domain from group
+ *
+ * @domain: iommu domain to detach
+ * @group: iommu group to be used for detach
+ *
+ * Detach iommu domain from iommu group
+ */
+void kgsl_detach_iommu_group(struct iommu_domain *domain, struct iommu_group *group);
+
 /**
  * kgsl_scm_gpu_init_regs - Load secure registers through tz
  * @dev: Pointer to the GPU platform device

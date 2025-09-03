@@ -200,4 +200,13 @@ struct kgsl_iommu_pt {
 int kgsl_set_smmu_aperture(struct kgsl_device *device,
 		struct kgsl_iommu_context *context);
 
+/**
+ * kgsl_iommu_probe_standard() - Probe and initialize IOMMU resources from adreno_smmu pdev
+ * @device: Pointer to the KGSL device
+ * @pdev: Pointer to the platform device
+ *
+ * Return: 0 on success or negative on failure.
+ */
+int kgsl_iommu_probe_standard(struct kgsl_device *device, struct platform_device *pdev);
+
 #endif

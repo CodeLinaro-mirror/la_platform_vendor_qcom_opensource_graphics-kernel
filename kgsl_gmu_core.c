@@ -841,6 +841,11 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 		pwr->thermal_time += data->gpu_time;
 
 	pwr->aggr_max_pwrlevel = data->aggr_max_pwrlevel;
+
+	spin_lock(&pwr->stats_lock);
+	pwr->accum_busy_stats += data->gpu_time;
+	pwr->accum_total_time += data->total_time;
+	spin_unlock(&pwr->stats_lock);
 }
 
 static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packet *pkt)

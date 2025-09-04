@@ -2612,8 +2612,13 @@ int gen7_gmu_probe(struct kgsl_device *device,
 	gmu->stats_interval = HFI_FEATURE_GMU_STATS_INTERVAL;
 
 	/* GMU sysfs nodes setup */
-	(void) kobject_init_and_add(&gmu->log_kobj, &log_kobj_type, &dev->kobj, "log");
-	(void) kobject_init_and_add(&gmu->stats_kobj, &stats_kobj_type, &dev->kobj, "stats");
+	ret = kobject_init_and_add(&gmu->log_kobj, &log_kobj_type, &dev->kobj, "log");
+	if (ret)
+		dev_err(dev, "Failed to add log_kobj: %d\n", ret);
+
+	ret = kobject_init_and_add(&gmu->stats_kobj, &stats_kobj_type, &dev->kobj, "stats");
+	if (ret)
+		dev_err(dev, "Failed to add stats_kobj: %d\n", ret);
 
 	of_property_read_u32(gmu->pdev->dev.of_node, "qcom,gmu-perf-ddr-bw",
 		&gmu->perf_ddr_bw);

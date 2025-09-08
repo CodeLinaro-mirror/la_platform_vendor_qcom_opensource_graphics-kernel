@@ -1622,7 +1622,6 @@ static int gen8_gmu_first_boot(struct adreno_device *adreno_dev)
 	}
 
 	icc_set_bw(pwr->icc_path, 0, 0);
-	gmu_core_clock_set_rate(device, device->gmu_core.cur_level);
 
 	device->gmu_fault = false;
 
@@ -1700,8 +1699,6 @@ static int gen8_gmu_boot(struct adreno_device *adreno_dev)
 	ret = gen8_hfi_start(adreno_dev);
 	if (ret)
 		goto err;
-
-	gmu_core_clock_set_rate(device, device->gmu_core.cur_level);
 
 	device->gmu_fault = false;
 

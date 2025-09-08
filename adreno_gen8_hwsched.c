@@ -220,7 +220,7 @@ static void gen8_hwsched_set_ctxt_record_vrb(struct adreno_device *adreno_dev)
 	gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_CTXRECORD_TOTAL_SZ,
 		adreno_dev->total_ctxt_record_sz >> 10);
 	gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_CTXRECORD_GMEM_SZ,
-		adreno_dev->gpucore->gmem_size >> 10);
+		adreno_gmem_size(adreno_dev) >> 10);
 
 	/* Populate size of AQE context record */
 	gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_CTXRECORD_AQE_SZ,

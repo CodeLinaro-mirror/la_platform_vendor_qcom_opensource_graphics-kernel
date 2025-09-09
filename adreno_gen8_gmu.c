@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <dt-bindings/power/qcom-rpmpd.h>
@@ -1893,11 +1893,14 @@ static int gen8_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	if (gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1 &&
+	if (adreno_dev->gmu_ab &&
+		gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1 &&
 		!WARN_ONCE(!adreno_dev->gpucore->num_ddr_channels,
 			"Number of DDR channel is not specified in gpu core")) {
-		adreno_dev->gmu_ab = true;
 		set_bit(ADRENO_DEVICE_GMU_AB, &adreno_dev->priv);
+	} else {
+		/* If gmu_ab feature flag is enabled but GMU doesn't support it, set it to false */
+		adreno_dev->gmu_ab = false;
 	}
 
 	icc_set_bw(pwr->icc_path, 0, 0);
@@ -2144,7 +2147,7 @@ static void gen8_free_gmu_globals(struct gen8_gmu_device *gmu)
 
 		iommu_unmap(device->gmu_core.domain, md->gmuaddr, md->size);
 
-		if (md->priv & KGSL_MEMDESC_SYSMEM)
+		if (TEST_FLAG(KGSL_MEMDESC_SYSMEM, &md->priv))
 			kgsl_sharedmem_free(md);
 
 		memset(md, 0, sizeof(*md));
@@ -2395,6 +2398,9 @@ int gen8_gmu_probe(struct kgsl_device *device,
 	ret = gen8_gmu_reg_probe(adreno_dev);
 	if (ret)
 		goto error;
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_AB))
+		adreno_dev->gmu_ab = true;
 
 	/* Populates RPMh configurations */
 	ret = gen8_build_rpmh_tables(adreno_dev);

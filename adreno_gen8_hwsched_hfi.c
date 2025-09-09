@@ -2260,13 +2260,32 @@ static void warmboot_init_message_record_bitmask(struct adreno_device *adreno_de
 static int gen8_hfi_send_thermal_feature_ctrl(struct adreno_device *adreno_dev)
 {
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
-	const struct hfi_therm_profile_ctrl *therm = gen8_core->therm_profile;
+	struct hfi_therm_profile_ctrl *therm;
+	const struct therm_tsens_en_cfg *tsens_en_cfg;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	static struct hfi_thermaltable_cmd cmd = {0};
+	u32 tsens_en_bits;
 	int ret;
 
-	if (!test_bit(GMU_THERMAL_MITIGATION, &device->gmu_core.flags) || !therm)
+	if (!test_bit(GMU_THERMAL_MITIGATION, &device->gmu_core.flags) ||
+	    !gen8_core->therm_cfg || !gen8_core->therm_cfg->therm ||
+	    !gen8_core->therm_cfg->tsens_en_cfg)
 		return 0;
+
+	therm = gen8_core->therm_cfg->therm;
+	tsens_en_cfg = gen8_core->therm_cfg->tsens_en_cfg;
+
+	tsens_en_bits = (tsens_en_cfg->tsens_sl_cnt *
+				gen8_get_num_slices(adreno_dev)) + tsens_en_cfg->tsens_us_cnt;
+
+	/* Maximum temperature sensors supported */
+	if (tsens_en_bits >= 32) {
+		dev_crit_ratelimited(device->dev,
+				"Invalid temperature sensor count %u\n", tsens_en_bits);
+		return -EINVAL;
+	}
+	/* Set a bit for each temperature sensor */
+	therm->tsens_en = BIT(tsens_en_bits) - 1;
 
 	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_THERMAL, 1, 0);
 	if (ret)

@@ -235,7 +235,7 @@ int gmu_core_find_vma_block(struct kgsl_device *device, u32 addr, u32 size)
 	struct gmu_core_device *gmu = &device->gmu_core;
 	int i;
 
-	for (i = 0; i < GMU_MEM_TYPE_MAX; i++) {
+	for (i = 0; i < gmu->num_vmas; i++) {
 		struct gmu_vma_entry *vma = &gmu->vma[i];
 
 		if ((addr >= vma->start) &&

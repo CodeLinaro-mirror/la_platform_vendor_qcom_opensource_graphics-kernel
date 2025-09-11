@@ -3459,6 +3459,25 @@ static const struct hfi_therm_profile_ctrl therm_profile_8_2_0 = {
 	.throttle_cfg.throttle_lvls[2] = 20,
 };
 
+static const struct hfi_therm_profile_ctrl therm_profile_8_9_0 = {
+	.feature_en = 1,
+	.feature_rev = 1,
+	.tsens_en = 0xFF,
+	.tj_limit = 900,
+	.tskin_addr = 0,
+	.tskin_limit = 0,
+	.tsens_cfg_cnt = 1,
+	.tsens_cfg.limit_u = 1130,
+	.tsens_cfg.limit_l = 10,
+	.tsens_cfg.margin_u = 30,
+	.tsens_cfg.margin_l = 20,
+	.throttle_cfg.throttle_hyst = 250,
+	.throttle_cfg.num_throttle_cnt = 3,
+	.throttle_cfg.throttle_lvls[0] = 50,
+	.throttle_cfg.throttle_lvls[1] = 37,
+	.throttle_cfg.throttle_lvls[2] = 20,
+};
+
 /* Set the BCL throttle levels to 62/75/83 percent */
 #define GEN8_2_X_BCL_DATA ((62 << 15) | (75 << 8) | (83 << 1) | 0x1)
 
@@ -3974,7 +3993,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_9_0 = {
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_LPAC |
 			ADRENO_GMU_WARMBOOT | ADRENO_AQE | ADRENO_IFPC |
 			ADRENO_CONTENT_PROTECTION | ADRENO_GMU_BASED_DCVS |
-			ADRENO_DEFER_GMEM_ALLOC | ADRENO_PREEMPTION | ADRENO_GMU_AB,
+			ADRENO_DEFER_GMEM_ALLOC | ADRENO_PREEMPTION | ADRENO_GMU_AB |
+			ADRENO_GMU_THERMAL_MITIGATION,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -4003,6 +4023,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_9_0 = {
 	.cl_no_ft_timeout_ms = 6500,
 	.ctxt_record_size = (3708 * SZ_1K),
 	.preempt_level = 1,
+	.therm_profile = &therm_profile_8_9_0,
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {

@@ -745,6 +745,32 @@ static const struct of_device_id adreno_match_table[] = {
 
 MODULE_DEVICE_TABLE(of, adreno_match_table);
 
+/* Read the fuse through the new and fancy nvmem method */
+static int adreno_read_speed_bin(struct platform_device *pdev, u32 *speedbin)
+{
+	struct nvmem_cell *cell = nvmem_cell_get(&pdev->dev, "speed_bin");
+	int ret = PTR_ERR_OR_ZERO(cell);
+	void *buf;
+	int val = 0;
+	size_t len;
+
+	if (ret)
+		return ret;
+
+	buf = nvmem_cell_read(cell, &len);
+	nvmem_cell_put(cell);
+
+	if (IS_ERR(buf))
+		return PTR_ERR(buf);
+
+	memcpy(&val, buf, min(len, sizeof(val)));
+	kfree(buf);
+
+	*speedbin = val;
+
+	return 0;
+}
+
 static u32 fuse_to_supp_hw(const struct adreno_gpu_core *gpucore, u32 fuse)
 {
 	int i;
@@ -759,28 +785,45 @@ static u32 fuse_to_supp_hw(const struct adreno_gpu_core *gpucore, u32 fuse)
 	return UINT_MAX;
 }
 
-static int adreno_set_support_hw(struct kgsl_device *device, int speedbin)
+static int adreno_setup_speedbin(struct kgsl_device *device)
 {
-	struct device *dev = &device->pdev->dev;
+	struct platform_device *pdev = device->pdev;
+	struct device_node *node;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	const struct adreno_gpu_core *gpucore = adreno_dev->gpucore;
-	u32 supp_hw;
+	u32 supp_hw, speedbin;
 	int ret;
 
-	supp_hw = fuse_to_supp_hw(gpucore, speedbin);
+	ret = adreno_read_speed_bin(pdev, &speedbin);
+	/*
+	 * -ENOENT means that the platform doesn't support speedbin which is
+	 * fine
+	 */
+	if (ret == -ENOENT) {
+		device->speed_bin = 0;
+		return 0;
+	} else if (ret)
+		return ret;
+
+	device->speed_bin = speedbin;
+
+	node = of_parse_phandle(pdev->dev.of_node, "operating-points-v2", 0);
+	if (!node)
+		return 0;
+
+	supp_hw = fuse_to_supp_hw(gpucore, device->speed_bin);
 
 	if (supp_hw == UINT_MAX) {
-		dev_err(dev,
+		dev_err(&pdev->dev,
 			"missing support for speed-bin: %u. Some OPPs may not be supported by hardware\n",
-			speedbin);
+			device->speed_bin);
 		supp_hw = BIT(0); /* Default */
 	}
 
-	ret = devm_pm_opp_set_supported_hw(dev, &supp_hw, 1);
-	if (ret)
-		return ret;
+	ret = devm_pm_opp_set_supported_hw(&pdev->dev, &supp_hw, 1);
+	of_node_put(node);
 
-	return 0;
+	return ret;
 }
 
 /* Dynamically build the OPP table for the GPU device */
@@ -1260,34 +1303,6 @@ static void adreno_isense_probe(struct kgsl_device *device)
 		dev_warn(device->dev, "isense ioremap failed\n");
 }
 
-/* Read the fuse through the new and fancy nvmem method */
-static int adreno_read_speed_bin(struct platform_device *pdev)
-{
-	struct nvmem_cell *cell = nvmem_cell_get(&pdev->dev, "speed_bin");
-	int ret = PTR_ERR_OR_ZERO(cell);
-	void *buf;
-	int val = 0;
-	size_t len;
-
-	if (ret) {
-		if (ret == -ENOENT)
-			return 0;
-
-		return ret;
-	}
-
-	buf = nvmem_cell_read(cell, &len);
-	nvmem_cell_put(cell);
-
-	if (IS_ERR(buf))
-		return PTR_ERR(buf);
-
-	memcpy(&val, buf, min(len, sizeof(val)));
-	kfree(buf);
-
-	return val;
-}
-
 static int adreno_read_gpu_model_fuse(struct platform_device *pdev)
 {
 	struct nvmem_cell *cell = nvmem_cell_get(&pdev->dev, "gpu_model");
@@ -1561,7 +1576,6 @@ int adreno_device_probe(struct platform_device *pdev,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct device *dev = &pdev->dev;
-	struct device_node *node;
 	unsigned int priv = 0;
 	int status;
 	u32 size;
@@ -1577,18 +1591,9 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	adreno_update_soc_hw_revision_quirks(adreno_dev, pdev);
 
-	status = adreno_read_speed_bin(pdev);
-	if (status < 0)
+	status = adreno_setup_speedbin(device);
+	if (status)
 		goto err;
-
-	device->speed_bin = status;
-
-	node = of_parse_phandle(pdev->dev.of_node, "operating-points-v2", 0);
-	if (node) {
-		status = adreno_set_support_hw(device, device->speed_bin);
-		if (status)
-			goto err;
-	}
 
 	status = kgsl_bus_init(device, pdev);
 	if (status)

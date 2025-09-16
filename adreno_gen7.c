@@ -420,7 +420,7 @@ static void gen7_hwcg_set(struct adreno_device *adreno_dev, bool on)
 
 static void gen7_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 {
-	struct adreno_reglist_list reglist[3];
+	struct adreno_reglist_list reglist[4];
 	void *ptr = adreno_dev->pwrup_reglist->hostptr;
 	struct cpu_gpu_lock *lock = ptr;
 	u32 i, j, items = 0;

@@ -13,7 +13,9 @@
 #include "kgsl_gmu_core.h"
 #include "kgsl_sync.h"
 
-static const struct dma_fence_ops kgsl_sync_fence_ops;
+const struct dma_fence_ops kgsl_sync_fence_ops;
+static const struct dma_fence_ops kgsl_syncsource_fence_ops;
+
 /* Only allow a single log in a second */
 static DEFINE_RATELIMIT_STATE(_rs, HZ, 1);
 
@@ -596,8 +598,7 @@ out:
 	return ret;
 }
 
-static void kgsl_sync_timeline_value_str(struct dma_fence *fence,
-					char *str, int size)
+void kgsl_sync_timeline_value_str(struct dma_fence *fence, char *str, int size)
 {
 	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
 	struct kgsl_sync_timeline *ktimeline = kfence->parent;
@@ -607,6 +608,9 @@ static void kgsl_sync_timeline_value_str(struct dma_fence *fence,
 
 	unsigned int timestamp_retired;
 	unsigned int timestamp_queued;
+
+	if (fence->ops != &kgsl_sync_fence_ops)
+		return;
 
 	if (!kref_get_unless_zero(&ktimeline->kref))
 		return;
@@ -749,7 +753,7 @@ void kgsl_sync_timeline_put(struct kgsl_sync_timeline *ktimeline)
 		kref_put(&ktimeline->kref, kgsl_sync_timeline_destroy);
 }
 
-static const struct dma_fence_ops kgsl_sync_fence_ops = {
+const struct dma_fence_ops kgsl_sync_fence_ops = {
 	.get_driver_name = kgsl_sync_fence_driver_name,
 	.get_timeline_name = kgsl_sync_timeline_name,
 	.enable_signaling = kgsl_enable_signaling,
@@ -757,8 +761,10 @@ static const struct dma_fence_ops kgsl_sync_fence_ops = {
 	.wait = dma_fence_default_wait,
 	.release = kgsl_sync_fence_release,
 
+#if (KERNEL_VERSION(6, 16, 0) > LINUX_VERSION_CODE)
 	.fence_value_str = kgsl_sync_fence_value_str,
 	.timeline_value_str = kgsl_sync_timeline_value_str,
+#endif
 };
 
 static void kgsl_sync_fence_callback(struct dma_fence *fence,
@@ -835,17 +841,61 @@ static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct d
 		set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
 }
 
+static void kgsl_syncsource_fence_value_str(struct dma_fence *fence, char *str, int size)
+{
+	/*
+	 * Each fence is independent of the others on the same timeline.
+	 * We use a different context for each of them.
+	 */
+	snprintf(str, size, "%llu", fence->context);
+}
+
+#if (KERNEL_VERSION(6, 16, 0) > LINUX_VERSION_CODE)
+static int kgsl_get_fence_value_str(struct dma_fence *fence, char *buf, size_t size)
+{
+	int len = 0;
+
+	if (!fence || !fence->ops || !buf)
+		return 0;
+
+	if (fence->ops->fence_value_str) {
+		len += scnprintf(buf + len, size - len, ": ");
+		fence->ops->fence_value_str(fence, buf + len, size - len);
+	}
+
+	return len;
+}
+#else
+static int kgsl_get_fence_value_str(struct dma_fence *fence, char *buf, size_t size)
+{
+	int len = 0;
+
+	if (!fence || !fence->ops || !buf)
+		return 0;
+
+	if (fence->ops == &kgsl_sync_fence_ops) {
+		len += scnprintf(buf + len, size - len, ": ");
+		kgsl_sync_fence_value_str(fence, buf + len, size - len);
+	}
+
+	if (fence->ops == &kgsl_syncsource_fence_ops) {
+		len += scnprintf(buf + len, size - len, ": ");
+		kgsl_syncsource_fence_value_str(fence, buf + len, size - len);
+	}
+
+	return len;
+}
+#endif
+
 void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size)
 {
 	int len = scnprintf(name, max_size, "%s %s", f->ops->get_driver_name(f),
 			f->ops->get_timeline_name(f));
 
-	if (f->ops->fence_value_str) {
-		len += scnprintf(name + len, max_size - len, ": ");
-		f->ops->fence_value_str(f, name + len, max_size - len);
-	}
+	len += kgsl_get_fence_value_str(f, name + len, max_size - len);
 
 }
+
 void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event)
 {
 	unsigned int num_fences;
@@ -953,8 +1003,6 @@ struct kgsl_syncsource_fence {
 	struct kgsl_syncsource *parent;
 	struct list_head child_list;
 };
-
-static const struct dma_fence_ops kgsl_syncsource_fence_ops;
 
 long kgsl_ioctl_syncsource_create(struct kgsl_device_private *dev_priv,
 					unsigned int cmd, void *data)
@@ -1274,16 +1322,6 @@ static const char *kgsl_syncsource_driver_name(struct dma_fence *fence)
 	return "kgsl-syncsource-timeline";
 }
 
-static void kgsl_syncsource_fence_value_str(struct dma_fence *fence,
-						char *str, int size)
-{
-	/*
-	 * Each fence is independent of the others on the same timeline.
-	 * We use a different context for each of them.
-	 */
-	snprintf(str, size, "%llu", fence->context);
-}
-
 static const struct dma_fence_ops kgsl_syncsource_fence_ops = {
 	.get_driver_name = kgsl_syncsource_driver_name,
 	.get_timeline_name = kgsl_syncsource_get_timeline_name,
@@ -1291,6 +1329,8 @@ static const struct dma_fence_ops kgsl_syncsource_fence_ops = {
 	.wait = dma_fence_default_wait,
 	.release = kgsl_syncsource_fence_release,
 
+#if (KERNEL_VERSION(6, 16, 0) > LINUX_VERSION_CODE)
 	.fence_value_str = kgsl_syncsource_fence_value_str,
+#endif
 };
 

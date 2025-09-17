@@ -2220,7 +2220,7 @@ done:
 
 void kgsl_timer(struct timer_list *t)
 {
-	struct kgsl_device *device = from_timer(device, t, idle_timer);
+	struct kgsl_device *device = kgsl_timer_container_of(device, t, idle_timer);
 
 	if (device->requested_state != KGSL_STATE_SUSPEND) {
 		kgsl_pwrctrl_request_state(device, KGSL_STATE_SLUMBER);

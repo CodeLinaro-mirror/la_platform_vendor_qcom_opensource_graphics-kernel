@@ -2881,7 +2881,7 @@ static void gen8_hwsched_hw_fence_timeout(struct work_struct *work)
 
 static void gen8_hwsched_hw_fence_timer(struct timer_list *t)
 {
-	struct gen8_hwsched_hfi *hfi = from_timer(hfi, t, hw_fence_timer);
+	struct gen8_hwsched_hfi *hfi = kgsl_timer_container_of(hfi, t, hw_fence_timer);
 
 	kgsl_schedule_work(&hfi->hw_fence_ws);
 }

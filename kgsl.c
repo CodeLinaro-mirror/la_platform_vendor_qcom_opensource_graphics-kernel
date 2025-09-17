@@ -5086,7 +5086,6 @@ int kgsl_request_irq(struct platform_device *pdev, const char *name,
 {
 	int ret, num = -EINVAL;
 	const char *irq_name = name;
-	char index_name[32];
 
 	/*
 	 * Get IRQ by name if available, else try alt_name if previous failed,
@@ -5102,8 +5101,12 @@ int kgsl_request_irq(struct platform_device *pdev, const char *name,
 
 	if (index != -EINVAL && num < 0) {
 		num = platform_get_irq(pdev, index);
-		snprintf(index_name, sizeof(index_name), "irq-index-%d", index);
-		irq_name = index_name;
+		irq_name = devm_kasprintf(&pdev->dev, GFP_KERNEL, "irq-index-%d", index);
+		if (!irq_name) {
+			dev_err(&pdev->dev, "Failed to allocate IRQ name string for index %d\n",
+				index);
+			return -ENOMEM;
+		}
 	}
 
 	if (num < 0) {

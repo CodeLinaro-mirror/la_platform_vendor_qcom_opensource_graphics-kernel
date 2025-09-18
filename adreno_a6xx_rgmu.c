@@ -1398,6 +1398,16 @@ static const struct component_ops a6xx_rgmu_component_ops = {
 
 static int a6xx_rgmu_probe_dev(struct platform_device *pdev)
 {
+	/*
+	 * Let us say there are two devices. One with "qcom,adreno-rgmu" compatible
+	 * and one with "qcom,gpu-rgmu" compatible. In this case probe only the
+	 * device with legacy compatible string and return error for the device
+	 * with "qcom,adreno-rgmu".
+	 */
+	if (of_device_is_compatible(pdev->dev.of_node, "qcom,adreno-rgmu") &&
+		kgsl_is_compatible_node_available("qcom,gpu-rgmu"))
+		return -ENODEV;
+
 	return component_add(&pdev->dev, &a6xx_rgmu_component_ops);
 }
 
@@ -1416,6 +1426,7 @@ static int a6xx_rgmu_remove_dev(struct platform_device *pdev)
 
 static const struct of_device_id a6xx_rgmu_match_table[] = {
 	{ .compatible = "qcom,gpu-rgmu" },
+	{ .compatible = "qcom,adreno-rgmu" },
 	{ },
 };
 

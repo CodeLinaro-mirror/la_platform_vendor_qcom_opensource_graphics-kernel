@@ -1608,7 +1608,7 @@ static void kgsl_iommu_detach_context(struct kgsl_iommu_context *context)
 	if (!context->domain)
 		return;
 
-	iommu_detach_device(context->domain, &context->pdev->dev);
+	kgsl_detach_iommu_group(context->domain, context->group);
 	iommu_domain_free(context->domain);
 
 	context->domain = NULL;
@@ -2405,7 +2405,8 @@ static int kgsl_iommu_setup_context_common(struct kgsl_mmu *mmu,
 
 	_enable_gpuhtw_llc(mmu, context->domain);
 
-	ret = iommu_attach_device(context->domain, &context->pdev->dev);
+	ret = kgsl_attach_iommu_group(&context->pdev->dev, context->domain,
+					&context->group);
 
 	if (restore_drvdata)
 		dev_set_drvdata(&pdev->dev, kgsl_drvdata);
@@ -2426,7 +2427,7 @@ static int kgsl_iommu_setup_context_common(struct kgsl_mmu *mmu,
 	dev_err(&device->pdev->dev, "Couldn't get the context bank for %s: %d\n",
 		context->name, context->cb_num);
 
-	iommu_detach_device(context->domain, &context->pdev->dev);
+	kgsl_detach_iommu_group(context->domain, context->group);
 	iommu_domain_free(context->domain);
 	context->domain = NULL;
 
@@ -2581,7 +2582,8 @@ static int iommu_probe_secure_context(struct kgsl_device *device,
 
 	_enable_gpuhtw_llc(mmu, context->domain);
 
-	ret = iommu_attach_device(context->domain, &context->pdev->dev);
+	ret = kgsl_attach_iommu_group(&context->pdev->dev, context->domain,
+					&context->group);
 	if (ret)
 		goto err_domain_free;
 
@@ -2592,7 +2594,7 @@ static int iommu_probe_secure_context(struct kgsl_device *device,
 
 	if (context->cb_num < 0) {
 		ret = context->cb_num;
-		goto err_detach_device;
+		goto err_detach_group;
 	}
 
 	mmu->securepagetable = kgsl_iommu_secure_pagetable(mmu);
@@ -2600,8 +2602,8 @@ static int iommu_probe_secure_context(struct kgsl_device *device,
 	if (!IS_ERR(mmu->securepagetable))
 		return 0;
 
-err_detach_device:
-	iommu_detach_device(context->domain, &context->pdev->dev);
+err_detach_group:
+	kgsl_detach_iommu_group(context->domain, context->group);
 err_domain_free:
 	iommu_domain_free(context->domain);
 	context->domain = NULL;

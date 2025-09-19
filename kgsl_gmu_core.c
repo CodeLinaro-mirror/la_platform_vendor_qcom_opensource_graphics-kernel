@@ -515,16 +515,26 @@ struct kgsl_memdesc *gmu_core_reserve_kernel_block(struct kgsl_device *device,
 	u32 addr, u32 size, u32 vma_id, u32 align)
 {
 	int ret;
+	u64 memflags = 0;
 	struct kgsl_memdesc *md;
 	struct gmu_core_device *gmu = &device->gmu_core;
 	int attrs = IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
 	if (gmu->global_entries == ARRAY_SIZE(gmu->gmu_globals))
 		return ERR_PTR(-ENOMEM);
 
 	md = &gmu->gmu_globals[gmu->global_entries];
 
-	ret = kgsl_allocate_kernel(device, md, size, 0, KGSL_MEMDESC_SYSMEM);
+	/*
+	 * Apply WB cache policy to fetch GMU FW successfully for A622.
+	 * A622 has specific cache coherency requirements that can lead to data
+	 * inconsistency if not using writeback cache policy.
+	 */
+	if (adreno_is_a622(adreno_dev))
+		memflags = FIELD_PREP(KGSL_CACHEMODE_MASK, KGSL_CACHEMODE_WRITEBACK);
+
+	ret = kgsl_allocate_kernel(device, md, size, memflags, KGSL_MEMDESC_SYSMEM);
 	if (ret) {
 		memset(md, 0x0, sizeof(*md));
 		return ERR_PTR(-ENOMEM);
@@ -831,6 +841,11 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 		pwr->thermal_time += data->gpu_time;
 
 	pwr->aggr_max_pwrlevel = data->aggr_max_pwrlevel;
+
+	spin_lock(&pwr->stats_lock);
+	pwr->accum_busy_stats += data->gpu_time;
+	pwr->accum_total_time += data->total_time;
+	spin_unlock(&pwr->stats_lock);
 }
 
 static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packet *pkt)
@@ -1126,6 +1141,8 @@ int gmu_core_clk_probe(struct kgsl_device *device)
 	struct gmu_core_device *gmu = &device->gmu_core;
 	int tbl_size, num_freqs, num_perf_ddr_bw, offset, ret, i;
 
+	build_hub_opp_table(device);
+
 	ret = devm_clk_bulk_get_all(GMU_PDEV_DEV(device), &gmu->clks);
 	if (ret < 0)
 		return ret;
@@ -1185,8 +1202,6 @@ read_gmu_freq:
 	}
 
 	gmu->num_freqs = num_freqs;
-
-	build_hub_opp_table(device);
 
 	return 0;
 

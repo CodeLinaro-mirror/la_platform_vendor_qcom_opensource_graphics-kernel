@@ -428,7 +428,7 @@ kgsl_sharedmem_create_bind_op(struct kgsl_process_private *private,
 	op->target = target;
 
 	/* Make sure process is pinned in memory before proceeding */
-	atomic_inc(&private->cmd_count);
+	kgsl_process_inc_cmd_count(private);
 	ret = kgsl_reclaim_to_pinned_state(private);
 	if (ret)
 		goto err;
@@ -533,14 +533,14 @@ kgsl_sharedmem_create_bind_op(struct kgsl_process_private *private,
 		ranges += ranges_size;
 	}
 
-	atomic_dec(&private->cmd_count);
+	kgsl_process_dec_cmd_count(private);
 	init_completion(&op->comp);
 	kref_init(&op->ref);
 
 	return op;
 
 err:
-	atomic_dec(&private->cmd_count);
+	kgsl_process_dec_cmd_count(private);
 	kgsl_sharedmem_free_bind_op(op);
 	return ERR_PTR(ret);
 }
@@ -560,17 +560,24 @@ static void kgsl_sharedmem_bind_worker(struct work_struct *work)
 	int i;
 
 	for (i = 0; i < op->nr_ops; i++) {
-		if (op->ops[i].op == KGSL_GPUMEM_RANGE_OP_BIND)
+		if (op->ops[i].op == KGSL_GPUMEM_RANGE_OP_BIND) {
+			spin_lock(&op->ops[i].entry->priv->mem_lock);
+			if (op->ops[i].entry->pending_free) {
+				spin_unlock(&op->ops[i].entry->priv->mem_lock);
+				continue;
+			}
+			spin_unlock(&op->ops[i].entry->priv->mem_lock);
 			kgsl_memdesc_add_range(op->target,
 				op->ops[i].start,
 				op->ops[i].last,
 				op->ops[i].entry,
 				op->ops[i].child_offset);
-		else
+		} else {
 			kgsl_memdesc_remove_range(op->target,
 				op->ops[i].start,
 				op->ops[i].last,
 				op->ops[i].entry);
+		}
 	}
 
 	/* Wake up any threads waiting for the bind operation */

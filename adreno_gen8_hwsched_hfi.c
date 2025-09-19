@@ -529,6 +529,9 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 	case GMU_CP_DDEBV_SW_FAULT_ERROR:
 		handle_sw_fault(adreno_dev, "DDE BV", KEY_CP_DDEBV_SW_FAULT);
 		break;
+	case GMU_DBGC_INTR_ERROR:
+		dev_crit_ratelimited(gmu_pdev_dev, "DBGC error interrupt\n");
+		break;
 	case GMU_CP_UNKNOWN_ERROR:
 		fallthrough;
 	default:

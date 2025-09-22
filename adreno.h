@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -177,8 +177,6 @@
 #define ADRENO_CLX BIT(20)
 /* Enable GMU support for GMU based thermal mitigation */
 #define ADRENO_GMU_THERMAL_MITIGATION BIT(21)
-/* Enable GMU Based AB voting */
-#define ADRENO_GMU_AB BIT(22)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds

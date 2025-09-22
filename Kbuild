@@ -81,10 +81,6 @@ ifeq ($(CONFIG_ARCH_SUN), y)
 	include $(KGSL_PATH)/config/gki_sun.conf
 	subdir-ccflags-y += $(LE_EXTRA_CFLAGS)
 endif
-ifeq ($(CONFIG_ARCH_KERA), y)
-	include $(KGSL_PATH)/config/gki_kera.conf
-	subdir-ccflags-y += $(LE_EXTRA_CFLAGS)
-endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq
 

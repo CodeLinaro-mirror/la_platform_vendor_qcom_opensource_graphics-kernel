@@ -235,7 +235,7 @@ int gmu_core_find_vma_block(struct kgsl_device *device, u32 addr, u32 size)
 	struct gmu_core_device *gmu = &device->gmu_core;
 	int i;
 
-	for (i = 0; i < GMU_MEM_TYPE_MAX; i++) {
+	for (i = 0; i < gmu->num_vmas; i++) {
 		struct gmu_vma_entry *vma = &gmu->vma[i];
 
 		if ((addr >= vma->start) &&
@@ -841,6 +841,11 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 		pwr->thermal_time += data->gpu_time;
 
 	pwr->aggr_max_pwrlevel = data->aggr_max_pwrlevel;
+
+	spin_lock(&pwr->stats_lock);
+	pwr->accum_busy_stats += data->gpu_time;
+	pwr->accum_total_time += data->total_time;
+	spin_unlock(&pwr->stats_lock);
 }
 
 static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packet *pkt)

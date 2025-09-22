@@ -2016,7 +2016,9 @@ int gen8_gmu_probe(struct kgsl_device *device,
 		goto error;
 
 	gmu_core->vma = gen8_gmu_vma;
-	for (i = 0; i < ARRAY_SIZE(gen8_gmu_vma); i++) {
+	gmu_core->num_vmas = ARRAY_SIZE(gen8_gmu_vma);
+
+	for (i = 0; i < gmu_core->num_vmas; i++) {
 		struct gmu_vma_entry *vma = &gen8_gmu_vma[i];
 
 		vma->vma_root = RB_ROOT;

@@ -3981,7 +3981,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_9_0 = {
 			ADRENO_CONTENT_PROTECTION | ADRENO_GMU_BASED_DCVS |
 			ADRENO_DEFER_GMEM_ALLOC | ADRENO_PREEMPTION | ADRENO_GMU_AB |
 			ADRENO_GMU_THERMAL_MITIGATION | ADRENO_HW_FENCE |
-			ADRENO_DCVS_PROFILE | ADRENO_GMU_MINBW | ADRENO_DEFER_GMEM_ALLOC,
+			ADRENO_DCVS_PROFILE | ADRENO_GMU_MINBW | ADRENO_DEFER_GMEM_ALLOC |
+			ADRENO_BCL | ADRENO_ACD,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -4011,6 +4012,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_9_0 = {
 	.ctxt_record_size = (3708 * SZ_1K),
 	.preempt_level = 1,
 	.therm_profile = &therm_profile_8_9_0,
+	.bcl_data = 1,
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {

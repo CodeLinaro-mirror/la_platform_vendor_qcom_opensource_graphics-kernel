@@ -219,6 +219,7 @@ def define_target_modules():
         ddk_headers(
             name = "kgsl_uapi_headers",
             hdrs = native.glob(["include/uapi/linux/*.h"]),
+            includes = ["include/uapi/linux"],
             visibility = ["//visibility:public"]
         )
 

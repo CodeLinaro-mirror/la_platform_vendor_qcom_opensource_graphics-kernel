@@ -3136,6 +3136,24 @@ static u32 get_irq_bit(struct adreno_device *adreno_dev, struct kgsl_context *co
 	return 0;
 }
 
+static bool _is_kgsl_hw_fence_signaled(struct kgsl_drawobj_sync_hw_fence *hw_fence)
+{
+	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)hw_fence->fence;
+	struct kgsl_sync_timeline *ktimeline = kfence->parent;
+
+	if (dma_fence_is_signaled_locked(&kfence->fence))
+		return true;
+
+	/*
+	 * If we fail to get the context refcount that means this context is detached.
+	 * In that case, treat all hardware fences from detached context as signaled.
+	 */
+	if ((!hw_fence->context) && (!_kgsl_context_get(ktimeline->context)))
+		return true;
+
+	return false;
+}
+
 static void populate_kgsl_fence(struct kgsl_drawobj_sync_hw_fence *hw_fence,
 	struct hfi_syncobj *obj)
 {
@@ -3147,7 +3165,7 @@ static void populate_kgsl_fence(struct kgsl_drawobj_sync_hw_fence *hw_fence,
 
 	spin_lock_irqsave(&ktimeline->lock, flags);
 
-	if (dma_fence_is_signaled_locked(&kfence->fence) || !_kgsl_context_get(ktimeline->context))
+	if (_is_kgsl_hw_fence_signaled(hw_fence))
 		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT);
 	else
 		hw_fence->context = ktimeline->context;

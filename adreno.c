@@ -1238,6 +1238,23 @@ static int adreno_probe_llcc(struct adreno_device *adreno_dev,
 		} else {
 			adreno_dev->gpumv_llc_slice_enable = true;
 		}
+	} else if (adreno_is_gen8_8_0(adreno_dev)) {
+#ifdef LLCC_GPU_LAYERS
+		adreno_dev->gpulayers_llc_slice = llcc_slice_getd(LLCC_GPU_LAYERS);
+		ret = PTR_ERR_OR_ZERO(adreno_dev->gpulayers_llc_slice);
+		if (ret) {
+			if (ret == -EPROBE_DEFER) {
+				llcc_slice_putd(adreno_dev->gpu_llc_slice);
+				llcc_slice_putd(adreno_dev->gpuhtw_llc_slice);
+				return ret;
+			}
+			if (ret != -ENOENT)
+				dev_warn(&pdev->dev,
+					"Unable to get GPU_LAYERS buffer slice: %d\n", ret);
+			} else {
+				adreno_dev->gpulayers_llc_slice_enable = true;
+			}
+#endif
 	}
 #endif
 
@@ -1769,6 +1786,9 @@ static void adreno_unbind(struct device *dev)
 
 	if (!IS_ERR_OR_NULL(adreno_dev->gpumv_llc_slice))
 		llcc_slice_putd(adreno_dev->gpumv_llc_slice);
+
+	if (!IS_ERR_OR_NULL(adreno_dev->gpulayers_llc_slice))
+		llcc_slice_putd(adreno_dev->gpulayers_llc_slice);
 
 	kgsl_pwrscale_close(device);
 

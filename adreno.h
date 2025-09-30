@@ -756,6 +756,8 @@ struct adreno_device {
 	bool gpuhtw_llc_slice_enable;
 	void *gpumv_llc_slice;
 	bool gpumv_llc_slice_enable;
+	void *gpulayers_llc_slice;
+	bool gpulayers_llc_slice_enable;
 	unsigned int zap_loaded;
 	/**
 	 * @critpkts: Memory descriptor for 5xx critical packets if applicable
@@ -2243,6 +2245,10 @@ static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev
 
 	if (adreno_dev->gpumv_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpumv_llc_slice))
 		llcc_slice_deactivate(adreno_dev->gpumv_llc_slice);
+
+	if (adreno_dev->gpulayers_llc_slice_enable &&
+		!IS_ERR_OR_NULL(adreno_dev->gpulayers_llc_slice))
+		llcc_slice_deactivate(adreno_dev->gpulayers_llc_slice);
 }
 
 /**

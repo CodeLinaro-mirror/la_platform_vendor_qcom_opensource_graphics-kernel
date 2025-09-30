@@ -4205,6 +4205,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_0 = {
 	.therm_profile = &therm_profile_8_2_0,
 	.limits_mit_cfg = &gen8_2_0_limits_mit_cfg,
 	.preempt_level = 0,
+	.gmu_mx_gdsc = true,
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {

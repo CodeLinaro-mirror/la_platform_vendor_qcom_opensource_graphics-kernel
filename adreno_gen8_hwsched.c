@@ -333,8 +333,10 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	device->gmu_fault = false;
 
 	memset(hwsched->default_dcvs_tunables, 0xFF, sizeof(hwsched->default_dcvs_tunables));
-	gen8_hwsched_hfi_get_dcvs_tuning_attrs(adreno_dev, HFI_DCVS_ATTRS_DEFAULT,
-		hwsched->default_dcvs_tunables);
+
+	if (!device->host_based_dcvs)
+		gen8_hwsched_hfi_get_dcvs_tuning_attrs(adreno_dev, HFI_DCVS_ATTRS_DEFAULT,
+			hwsched->default_dcvs_tunables);
 
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_AWARE);
 

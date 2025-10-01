@@ -203,6 +203,8 @@ struct adreno_gen8_core {
 	const struct hfi_clx_table_v2_cmd *clx_tbl;
 	/** @gmu_mx_gdsc: This target has separate MX GDSC for the GMU */
 	bool gmu_mx_gdsc;
+	/** @three_rail_memory: This target has BX rail in addition to GX and MX */
+	bool three_rail_memory;
 };
 
 /**

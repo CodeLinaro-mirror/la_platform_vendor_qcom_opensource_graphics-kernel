@@ -3401,6 +3401,8 @@ static const struct gen8_nonctxt_regs gen8_2_0_nonctxt_regs[] = {
 	{ GEN8_RB_CCU_CNTL, 0x00000068, BIT(PIPE_BR) },
 	/* Partially enable perf clear, Disable DINT to c/z be data forwarding */
 	{ GEN8_RB_CCU_DBG_ECO_CNTL, 0x00002200, BIT(PIPE_BR) },
+	/* Disable the early return of eoblk from RB to LRZ in consZ */
+	{ GEN8_RB_DBG_ECO_CNTL, BIT(17), BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_GC_GMEM_PROTECT, 0x12000000, BIT(PIPE_BR) },
 	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, 0x00000007, BIT(PIPE_BR) },
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, 0x00004000, BIT(PIPE_BR) },
@@ -3994,6 +3996,8 @@ static const struct gen8_nonctxt_regs gen8_9_0_nonctxt_regs[] = {
 	{ GEN8_GRAS_DBG_ECO_CNTL, 0x00000800, BIT(PIPE_BR) | BIT(PIPE_BV) },
 	{ GEN8_RB_CCU_CNTL, 0x00000068, BIT(PIPE_BR) },
 	{ GEN8_RB_CCU_DBG_ECO_CNTL, 0x00002200, BIT(PIPE_BR) },
+	/* Disable the early return of eoblk from RB to LRZ in consZ */
+	{ GEN8_RB_DBG_ECO_CNTL, BIT(17), BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_GC_GMEM_PROTECT, 0x02600000, BIT(PIPE_BR) },
 	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, 0x00000007, BIT(PIPE_BR) },
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, 0x00004000, BIT(PIPE_BR) },

@@ -322,4 +322,14 @@ int cmp_u32(const void *first, const void *second);
 #define timer_container_of from_timer
 #endif
 
+#if (KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE)
+/**
+ * When using kgsl_nth_page, user has to make sure the pages are contiguous.
+ * It can be checked with help of page_range_contiguous().
+ */
+#define kgsl_nth_page(page, n) ((page) + (n))
+#else
+#define kgsl_nth_page(page, n) nth_page((page), (n))
+#endif
+
 #endif

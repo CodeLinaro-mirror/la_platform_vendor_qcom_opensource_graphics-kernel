@@ -1,4 +1,4 @@
-load("//build/kernel/kleaf:kernel.bzl", "ddk_module", "ddk_headers")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_module", "ddk_headers", "kernel_module_group")
 load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
 load(":build/target_variants.bzl", "get_all_la_variants")
 
@@ -6,6 +6,11 @@ msm_kgsl_includes = [
     "include/linux/msm_kgsl.h",
     "include/uapi/linux/msm_kgsl.h",
 ]
+
+microxr_kernel_build = select({
+    "//build/kernel/kleaf:microxr_kernel_build_true": True,
+    "//build/kernel/kleaf:microxr_kernel_build_false": False,
+})
 
 def kgsl_get_srcs():
     srcs = [
@@ -191,6 +196,13 @@ def define_target_variant_module(target, variant):
         kernel_build = kernel_build,
         visibility = ["//visibility:private"]
     )
+
+    if microxr_kernel_build:
+        kernel_module_group(
+            name = "{}_modules".format(tv),
+            srcs = [rule_name],
+            visibility = ["//visibility:public"],
+        )
 
     copy_to_dist_dir(
         name = "{}_dist".format(rule_name),

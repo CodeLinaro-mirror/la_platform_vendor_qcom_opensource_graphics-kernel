@@ -132,19 +132,19 @@ def define_target_variant_module(target, variant):
     if target in [ "neo-la" ]:
         kernel_build = select({
             "//build/kernel/kleaf:microxr_kernel_build_true": "//:target_kernel_build",
-            "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_base_kernel".format(tv),
+            "//build/qcom_build_extensions:qtisocrepo_true": "//soc-repo:{}_base_kernel".format(tv),
             "//conditions:default": "//msm-kernel:{}".format(tv),
         })
     else:
         kernel_build = select({
-            "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_base_kernel".format(tv),
-            "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}".format(tv),
+            "//build/qcom_build_extensions:qtisocrepo_true": "//soc-repo:{}_base_kernel".format(tv),
+            "//build/qcom_build_extensions:qtisocrepo_false": "//msm-kernel:{}".format(tv),
         })
 
     ext_deps = external_deps(target, variant)
 
     ddk_deps = select({
-                "//build/kernel/kleaf:socrepo_true": [
+                "//build/qcom_build_extensions:qtisocrepo_true": [
                   "//soc-repo:all_headers",
                   "//soc-repo:{}/drivers/clk/qcom/clk-qcom".format(tv),
                   "//soc-repo:{}/drivers/devfreq/governor_msm_adreno_tz".format(tv),
@@ -166,7 +166,7 @@ def define_target_variant_module(target, variant):
                   "//soc-repo:{}/kernel/msm_sysstats".format(tv),
                   "//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
                 ],
-                "//build/kernel/kleaf:socrepo_false": [ "//msm-kernel:all_headers" ],
+                "//build/qcom_build_extensions:qtisocrepo_false": [ "//msm-kernel:all_headers" ],
         })
 
     ddk_module(

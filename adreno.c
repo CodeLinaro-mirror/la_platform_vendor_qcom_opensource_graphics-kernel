@@ -5,6 +5,7 @@
  */
 #include <linux/component.h>
 #include <linux/delay.h>
+#include <linux/devfreq.h>
 #include <linux/firmware.h>
 #include <linux/input.h>
 #include <linux/interconnect.h>
@@ -4043,6 +4044,14 @@ err:
 	return status;
 }
 
+static int adreno_tz_governor_reinit(struct devfreq *devfreq, const char *governor)
+{
+	if (governor && !strcmp(governor, "msm-adreno-tz"))
+		return msm_adreno_tz_reinit(devfreq);
+
+	return 0;
+}
+
 static int adreno_hibernation_resume(struct device *dev)
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
@@ -4072,7 +4081,7 @@ static int adreno_hibernation_resume(struct device *dev)
 
 	gmu_core_dev_force_first_boot(device);
 
-	msm_adreno_tz_reinit(pwrscale->devfreqptr);
+	adreno_tz_governor_reinit(pwrscale->devfreqptr, CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR);
 
 	ops->pm_resume(adreno_dev);
 

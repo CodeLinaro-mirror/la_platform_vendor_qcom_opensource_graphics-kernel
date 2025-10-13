@@ -1361,7 +1361,9 @@ done:
 	 * around until someone bothers to read the snapshot file.
 	 */
 	kgsl_process_private_put(snapshot->process);
+	kgsl_process_private_put(snapshot->process_lpac);
 	snapshot->process = NULL;
+	snapshot->process_lpac = NULL;
 
 	if (snapshot->ib1base && !snapshot->ib1dumped)
 		dev_err(snapshot->device->dev,

@@ -2675,6 +2675,7 @@ int a6xx_gmu_probe(struct kgsl_device *device,
 
 	adreno_dev->gmu_hub_clk_freq = freq ? freq : 150000000;
 
+	device->gmu_core.pdev = pdev;
 
 	dma_coerce_mask_and_coherent(&device->gmu_core.pdev->dev, DMA_BIT_MASK(64));
 	set_dma_ops(GMU_PDEV_DEV(device), NULL);

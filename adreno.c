@@ -1056,7 +1056,6 @@ static int adreno_parse_opp_node(struct kgsl_device *device,
 	int ret;
 
 	level->voltage_level = dev_pm_opp_get_level(opp);
-	dev_pm_opp_put(opp);
 
 	level->cx_level = 0xffffffff;
 	of_property_read_u32(dev_pm_opp_get_of_node(opp), "qcom,opp-acd-level", &level->acd_level);

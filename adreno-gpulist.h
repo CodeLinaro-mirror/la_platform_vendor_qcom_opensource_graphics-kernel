@@ -1816,6 +1816,13 @@ static const struct adreno_a6xx_core adreno_gpu_core_a643 = {
 		.bus_width = 32,
 		.snapshot_size = SZ_2M,
 		.chipid = 0x06030500,
+		.speedbins = KGSL_SPEEDBINS(
+			{ 0,   0 },
+			{ 117, 0 },
+			{ 129, 4 },
+			{ 172, 2 },
+			{ 190, 1 },
+		),
 		.ubwc_mode = 3,
 		.mal = 32,
 	},

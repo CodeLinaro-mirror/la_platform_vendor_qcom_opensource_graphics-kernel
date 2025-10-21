@@ -1985,7 +1985,26 @@ static ssize_t gpu_load_show(struct kobject *kobj, struct kobj_attribute *attr,
 	return scnprintf(buf, PAGE_SIZE, "%u\n", busy_perc);
 }
 
+static ssize_t gpu_maxclk_constraints_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 thermal_max_pwrlevel = max_t(u32, READ_ONCE(pwr->thermal_pwrlevel),
+							READ_ONCE(pwr->pmqos_max_pwrlevel));
+	u32 aggregated_max_pwrlevel = max_t(u32, thermal_max_pwrlevel, pwr->aggr_max_pwrlevel);
+
+	return scnprintf(buf, PAGE_SIZE,
+			"gpuclk: %lu\naggregated_max_gpuclk: %u\nthermal_gpuclk: %u\n",
+			kgsl_pwrctrl_active_freq(&device->pwrctrl),
+			pwr->pwrlevels[aggregated_max_pwrlevel].gpu_freq,
+			pwr->pwrlevels[thermal_max_pwrlevel].gpu_freq);
+}
+
 DCVS_SYSFS_RO(aggregated_max_gpuclk);
+DCVS_SYSFS_RO(gpu_maxclk_constraints);
 DCVS_SYSFS_RO(dcvs_tunables_default);
 DCVS_SYSFS_RO(dcvs_tunables_cur);
 DCVS_SYSFS_RO(gpu_load);
@@ -1995,6 +2014,7 @@ static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_dcvs_tunables_default.attr,
 	&dcvs_attr_dcvs_tunables_cur.attr,
 	&dcvs_attr_gpu_load.attr,
+	&dcvs_attr_gpu_maxclk_constraints.attr,
 	NULL,
 };
 

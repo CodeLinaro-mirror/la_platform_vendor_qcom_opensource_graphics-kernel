@@ -1220,7 +1220,8 @@ static int adreno_probe_llcc(struct adreno_device *adreno_dev,
 	} else
 		adreno_dev->gpuhtw_llc_slice_enable = true;
 
-#if (KERNEL_VERSION(6, 1, 0) == LINUX_VERSION_CODE)
+#if ((KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE) && \
+		(KERNEL_VERSION(6, 2, 0) > LINUX_VERSION_CODE))
 	if (adreno_is_a621(adreno_dev)) {
 		/* Get the system cache slice descriptor for GPU MV grid buffer */
 		adreno_dev->gpumv_llc_slice = llcc_slice_getd(LLCC_GPUMV);

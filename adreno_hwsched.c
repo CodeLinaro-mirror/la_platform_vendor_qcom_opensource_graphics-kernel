@@ -96,7 +96,8 @@ static int alloc_map_preempt_record(struct adreno_device *adreno_dev,
 	u64 flags, u32 priv)
 {
 	u64 ctxt_record_size = adreno_dev->total_ctxt_record_sz;
-	u32 md_size = ctxt_record_size - adreno_dev->gpucore->gmem_size;
+	u64 curr_gmem_size =  adreno_gmem_size(adreno_dev);
+	u64 md_size = ctxt_record_size - curr_gmem_size;
 	struct hfi_mem_alloc_desc *desc = &entry->desc;
 
 	if (*md)
@@ -133,12 +134,13 @@ static int alloc_map_non_gmem(struct adreno_device *adreno_dev,
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	u64 ctxt_record_sz = adreno_dev->total_ctxt_record_sz, offset = 0;
+	u64 curr_gmem_size = adreno_gmem_size(adreno_dev);
 	bool no_rb0_gmem = false;
 	int i;
 
 	/* Check whether GMU has removed GMEM size from RB0 context record */
 	if (entry->desc.size == ((ctxt_record_sz * KGSL_PRIORITY_MAX_RB_LEVELS) -
-		adreno_dev->gpucore->gmem_size))
+		curr_gmem_size))
 		no_rb0_gmem = true;
 
 	for (i = 0; i < KGSL_PRIORITY_MAX_RB_LEVELS; i++) {
@@ -151,7 +153,7 @@ static int alloc_map_non_gmem(struct adreno_device *adreno_dev,
 
 		offset += ctxt_record_sz;
 		if ((i == 0) && no_rb0_gmem)
-			offset -= adreno_dev->gpucore->gmem_size;
+			offset -= curr_gmem_size;
 	}
 
 	return 0;
@@ -374,6 +376,7 @@ static int adreno_hwsched_alloc_preempt_record_gmem(struct adreno_device *adreno
 	struct hfi_mem_alloc_entry *entry = NULL;
 	struct kgsl_memdesc *pr_md, **md = NULL;
 	u32 priv = 0, level = adreno_get_level(context);
+	u64 curr_gmem_size = adreno_gmem_size(adreno_dev);
 	u64 flags = 0;
 	int ret = 0;
 
@@ -412,7 +415,7 @@ static int adreno_hwsched_alloc_preempt_record_gmem(struct adreno_device *adreno
 	pr_md = context->flags & KGSL_CONTEXT_SECURE ?
 		hwsched->secure_preempt_rec[level] : hwsched->preempt_rec[level];
 
-	if ((pr_md->gpuaddr + pr_md->size + adreno_dev->gpucore->gmem_size) >
+	if ((pr_md->gpuaddr + pr_md->size + curr_gmem_size) >
 		(entry->md->gpuaddr + entry->md->size)) {
 		ret = -ENOSPC;
 		goto unlock;
@@ -422,7 +425,7 @@ static int adreno_hwsched_alloc_preempt_record_gmem(struct adreno_device *adreno
 
 	/* gmem section only needs to be mapped to gpu */
 	*md = kgsl_alloc_map_gpu_global(device, pr_md->gpuaddr + pr_md->size,
-			adreno_dev->gpucore->gmem_size, 0, flags, priv,
+			curr_gmem_size, 0, flags, priv,
 			(entry->desc.mem_kind == HFI_MEMKIND_CSW_PRIV_SECURE) ?
 			"sec_preempt_record_gmem" : "preempt_record_gmem");
 	if (!*md) {

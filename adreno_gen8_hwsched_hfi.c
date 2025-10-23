@@ -1118,7 +1118,7 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 				(struct hfi_gmu_cntr_release_cmd *) rcvd;
 
 			adreno_perfcounter_put(adreno_dev,
-				cmd->group_id, cmd->countable, PERFCOUNTER_FLAG_KERNEL);
+				cmd->group_id, cmd->countable, PERFCOUNTER_FLAG_GMU);
 
 			gmu_core_mark_for_coldboot(KGSL_DEVICE(adreno_dev));
 			}
@@ -1397,7 +1397,7 @@ static int gmu_cntr_register_reply(struct adreno_device *adreno_dev, void *rcvd)
 	 * indicates to GMU that counter allocation failed.
 	 */
 	adreno_perfcounter_get(adreno_dev,
-		in->group_id, in->countable, &lo, &hi, PERFCOUNTER_FLAG_KERNEL);
+		in->group_id, in->countable, &lo, &hi, PERFCOUNTER_FLAG_GMU);
 
 	out.hdr = ACK_MSG_HDR(F2H_MSG_GMU_CNTR_REGISTER);
 	seqnum = atomic_inc_return(&gmu->hfi.seqnum);

@@ -3352,10 +3352,14 @@ static int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 	u32 *data = ptr + sizeof(*lock), pipe = FIELD_PREP(GENMASK(13, 12), _get_pipeid(groupid));
 	u16 perfcntr_list_len = lock->dynamic_list_len - gen8_dev->ext_pwrup_list_len;
 
+	group = &(counters->groups[groupid]);
+
+	/* For non RBBM counters, no action is needed */
+	if (group->flags & ADRENO_PERFCOUNTER_GROUP_NON_RBBM)
+		return 0;
+
 	if (!perfcntr_list_len)
 		return -EINVAL;
-
-	group = &(counters->groups[groupid]);
 
 	if (!(group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE)) {
 		if (perfcntr_list_len != 2)
@@ -3431,6 +3435,10 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	int ret = 0;
 	u32 num_dependencies = 0;
 	u32 pending_triplets = 2;
+
+	/* For non RBBM counters, no action is needed */
+	if (flags & ADRENO_PERFCOUNTER_GROUP_NON_RBBM)
+		return 0;
 
 	if (!ADRENO_ACQUIRE_CP_SEMAPHORE(adreno_dev, irq_flags))
 		return -EBUSY;

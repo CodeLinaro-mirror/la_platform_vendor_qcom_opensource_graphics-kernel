@@ -261,7 +261,7 @@ static int timed_poll_check_rscc(struct kgsl_device *device,
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
-	u32 value;
+	u32 value = 0;
 
 	if (!adreno_is_a650_family(adreno_dev))
 		return gmu_core_timed_poll_check(device,

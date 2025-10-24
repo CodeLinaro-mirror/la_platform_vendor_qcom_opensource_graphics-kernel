@@ -2261,7 +2261,7 @@ static int a619_holi_sptprac_enable(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	void __iomem *addr = kgsl_regmap_virt(&device->regmap,
 		A6XX_GMU_SPTPRAC_PWR_CLK_STATUS);
-	u32 val;
+	u32 val = 0;
 
 	if (test_bit(ADRENO_DEVICE_GPU_REGULATOR_ENABLED, &adreno_dev->priv))
 		return 0;
@@ -2285,7 +2285,7 @@ static void a619_holi_sptprac_disable(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	void __iomem *addr = kgsl_regmap_virt(&device->regmap,
 		A6XX_GMU_SPTPRAC_PWR_CLK_STATUS);
-	u32 val;
+	u32 val = 0;
 
 	if (!test_and_clear_bit(ADRENO_DEVICE_GPU_REGULATOR_ENABLED,
 		&adreno_dev->priv))

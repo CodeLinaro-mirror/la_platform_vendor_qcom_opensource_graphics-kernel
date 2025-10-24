@@ -1138,7 +1138,7 @@ int a6xx_hwsched_counter_inline_enable(struct adreno_device *adreno_dev,
 	struct a6xx_hwsched_hfi *hfi = to_a6xx_hwsched_hfi(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_perfcount_register *reg = &group->regs[counter];
-	u32 val, *cmds, count = 0;
+	u32 val = 0, *cmds, count = 0;
 	int ret;
 
 	ret = register_global_ctxt(adreno_dev);

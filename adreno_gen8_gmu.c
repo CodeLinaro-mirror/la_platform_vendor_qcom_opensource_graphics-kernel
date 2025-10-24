@@ -1111,7 +1111,7 @@ static void _do_gbif_halt(struct kgsl_device *device, u32 reg, u32 ack_reg,
  */
 static inline void gen8_gbif_gx_reinit(struct kgsl_device *device)
 {
-	u32 ack;
+	u32 ack = 0;
 	int ret;
 
 	kgsl_regwrite(device, GEN8_GBIF_REINIT_ENABLE, 0x1);

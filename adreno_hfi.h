@@ -1425,6 +1425,12 @@ enum gpu_tuning_attr {
 #define HFI_DCVS_ATTRS_DEFAULT 0
 #define HFI_DCVS_ATTRS_AGGREGATED 1
 
+enum gpu_dcvs_profile_action {
+	GMU_DCVS_PROFILE_REGISTER = 1,
+	GMU_DCVS_PROFILE_ACTIVATE = 2,
+	GMU_DCVS_PROFILE_DEACTIVATE = 3,
+};
+
 /**
  * hfi_update_read_idx - Update the read index of an hfi queue
  * hdr: Pointer to the hfi queue header

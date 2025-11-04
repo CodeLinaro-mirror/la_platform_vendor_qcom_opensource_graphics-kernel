@@ -736,6 +736,14 @@ struct kgsl_snapshot {
 	struct kgsl_device *device;
 	struct kgsl_context *owner;
 	bool is_fault_snapshot;
+	/** @qecp_carveout_addr: Physical address of the encrypted debugbus buffer */
+	u64 qecp_carveout_addr;
+	/** @qecp_carveout_size: Size of the encrypted debugbus buffer to be shared with QECP */
+	u32 qecp_carveout_size;
+	/** qecp_gx_debugbus_captured: True if QECP captured GX debugbus */
+	bool qecp_gx_debugbus_captured;
+	/** qecp_cx_debugbus_captured: True if QECP captured CX debugbus */
+	bool qecp_cx_debugbus_captured;
 };
 
 /**

@@ -9,6 +9,7 @@
 #include "adreno.h"
 #include "adreno_cp_parser.h"
 #include "adreno_pm4types.h"
+#include "adreno_qmi.h"
 #include "adreno_snapshot.h"
 
 /* Maintain a list of the objects we see during parsing */
@@ -1172,6 +1173,8 @@ void adreno_snapshot(struct kgsl_device *device, struct kgsl_snapshot *snapshot,
 	snapshot->ptr += sizeof(*header);
 	snapshot->remain -= sizeof(*header);
 	snapshot->size += sizeof(*header);
+
+	adreno_qmi_qecp_carveout(adreno_dev, snapshot);
 
 	/* Write the OS section */
 	adreno_snapshot_os(device, snapshot, context, context_lpac);

@@ -1158,6 +1158,8 @@ static int gen8_hwsched_power_off(struct adreno_device *adreno_dev)
 
 	adreno_irqctrl(adreno_dev, 0);
 
+	gen8_try_setup_qecp_debugbus(adreno_dev);
+
 	gen8_gmu_oob_clear(device, oob_gpu);
 
 no_gx_power:

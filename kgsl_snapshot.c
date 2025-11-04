@@ -36,12 +36,6 @@ struct snapshot_obj_itr {
 	size_t write;   /* Bytes written so far */
 };
 
-static inline u64 snapshot_phy_addr(struct kgsl_device *device)
-{
-	return device->snapshot_memory.dma_handle ?
-		device->snapshot_memory.dma_handle : __pa(device->snapshot_memory.ptr);
-}
-
 static inline u64 atomic_snapshot_phy_addr(struct kgsl_device *device)
 {
 	if (device->snapshot_memory_atomic.ptr == device->snapshot_memory.ptr)

@@ -62,7 +62,7 @@ struct kgsl_snapshot_section_header {
 #define KGSL_SNAPSHOT_SECTION_TRACE_BUFFER 0x1901
 #define KGSL_SNAPSHOT_SECTION_EVENTLOG     0x1A01
 #define KGSL_SNAPSHOT_SECTION_FAULTLOG     0x1B01
-
+#define KGSL_SNAPSHOT_SECTION_QECP         0xEC00
 #define KGSL_SNAPSHOT_SECTION_END          0xFFFF
 
 /* OS sub-section header */
@@ -252,6 +252,9 @@ enum kgsl_snapshot_error_code {
 	SNAPSHOT_ERROR_GMU_OTHER = 17,
 };
 
+/* QECP debugbus status */
+#define SNAPSHOT_DEBUG_QECP 160
+
 struct kgsl_snapshot_debug {
 	int type;    /* Type identifier for the attached tata */
 	int size;   /* Size of the section in dwords */
@@ -373,6 +376,13 @@ struct kgsl_process_private;
 void kgsl_snapshot_push_object(struct kgsl_device *device,
 		struct kgsl_process_private *process,
 		uint64_t gpuaddr, uint64_t dwords);
+
+static inline u64 snapshot_phy_addr(struct kgsl_device *device)
+{
+	return device->snapshot_memory.dma_handle ?
+		device->snapshot_memory.dma_handle : __pa(device->snapshot_memory.ptr);
+}
+
 void kgsl_free_snapshot(struct kgsl_snapshot *snapshot);
 void kgsl_free_context_snapshot(struct kgsl_device *device, struct kgsl_context *context);
 #endif

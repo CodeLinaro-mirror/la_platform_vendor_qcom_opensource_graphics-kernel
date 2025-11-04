@@ -310,6 +310,7 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN8_6_0 = ADRENO_GPUREV_VALUE(8, 6, 0),
 	ADRENO_REV_GEN8_8_0 = ADRENO_GPUREV_VALUE(8, 8, 0),
 	ADRENO_REV_GEN8_9_0 = ADRENO_GPUREV_VALUE(8, 9, 0),
+	ADRENO_REV_GEN8_11_0 = ADRENO_GPUREV_VALUE(8, 11, 0),
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -730,6 +731,12 @@ struct adreno_device {
 	struct adreno_coresight_device cx_coresight;
 	/** @funnel_gfx:  A coresight instance for gfx funnel */
 	struct adreno_funnel_device funnel_gfx;
+	/**
+	 * @coresight_en_cnt: Retain mask if either coresight-gfx
+	 * or coresight-gfx-cx is enabled; remove only when both
+	 * are disabled
+	 */
+	u32 coresight_en_cnt;
 #endif
 
 	uint32_t gpmu_throttle_counters[ADRENO_GPMU_THROTTLE_COUNTERS];
@@ -891,6 +898,8 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_CX_TIMER_INITIALIZED = 17,
 	/** @ADRENO_DEVICE_RESET_RECOVERY: Set if the ADRENO device under goes reset recovery */
 	ADRENO_DEVICE_RESET_RECOVERY = 18,
+	/** @ADRENO_DEVICE_FIRST_BOOT_DONE: Set if the ADRENO device first boot is done */
+	ADRENO_DEVICE_FIRST_BOOT_DONE = 19,
 };
 
 /**
@@ -1406,6 +1415,7 @@ ADRENO_TARGET(gen8_4_0, ADRENO_REV_GEN8_4_0)
 ADRENO_TARGET(gen8_6_0, ADRENO_REV_GEN8_6_0)
 ADRENO_TARGET(gen8_8_0, ADRENO_REV_GEN8_8_0)
 ADRENO_TARGET(gen8_9_0, ADRENO_REV_GEN8_9_0)
+ADRENO_TARGET(gen8_11_0, ADRENO_REV_GEN8_11_0)
 
 static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
 {

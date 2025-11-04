@@ -16,6 +16,7 @@
 #include "kgsl_eventlog.h"
 #include "kgsl_gmu_core.h"
 #include "kgsl_pwrctrl.h"
+#include "kgsl_timeline.h"
 #include "kgsl_util.h"
 
 #define HFI_QUEUE_MAX (HFI_QUEUE_DEFAULT_CNT)
@@ -529,6 +530,9 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 	case GMU_CP_DDEBV_SW_FAULT_ERROR:
 		handle_sw_fault(adreno_dev, "DDE BV", KEY_CP_DDEBV_SW_FAULT);
 		break;
+	case GMU_DBGC_INTR_ERROR:
+		dev_crit_ratelimited(gmu_pdev_dev, "DBGC error interrupt\n");
+		break;
 	case GMU_CP_UNKNOWN_ERROR:
 		fallthrough;
 	default:
@@ -613,8 +617,7 @@ static void set_fence_signal_bit(struct adreno_device *adreno_dev,
 	char name[KGSL_FENCE_NAME_LEN];
 	char value[32] = "unknown";
 
-	if (fence->ops->timeline_value_str)
-		fence->ops->timeline_value_str(fence, value, sizeof(value));
+	kgsl_fence_timeline_value_str(fence, value, sizeof(value));
 
 	if (test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags)) {
 		dev_err(GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev)),
@@ -2878,7 +2881,7 @@ static void gen8_hwsched_hw_fence_timeout(struct work_struct *work)
 
 static void gen8_hwsched_hw_fence_timer(struct timer_list *t)
 {
-	struct gen8_hwsched_hfi *hfi = from_timer(hfi, t, hw_fence_timer);
+	struct gen8_hwsched_hfi *hfi = kgsl_timer_container_of(hfi, t, hw_fence_timer);
 
 	kgsl_schedule_work(&hfi->hw_fence_ws);
 }
@@ -3148,7 +3151,7 @@ static void populate_kgsl_fence(struct kgsl_drawobj_sync_hw_fence *hw_fence,
 	spin_lock_irqsave(&ktimeline->lock, flags);
 
 	if (dma_fence_is_signaled_locked(&kfence->fence) || !_kgsl_context_get(ktimeline->context))
-		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT);
+		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT);
 	else
 		hw_fence->context = ktimeline->context;
 

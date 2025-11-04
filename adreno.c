@@ -1990,6 +1990,7 @@ static int adreno_open(struct adreno_device *adreno_dev)
 		goto err;
 
 	complete_all(&device->hwaccess_gate);
+	set_bit(ADRENO_DEVICE_FIRST_BOOT_DONE, &adreno_dev->priv);
 	kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
 	adreno_active_count_put(adreno_dev);
 
@@ -3971,6 +3972,13 @@ static bool adreno_is_reset_recovery(struct kgsl_device *device)
 	return test_bit(ADRENO_DEVICE_RESET_RECOVERY, &adreno_dev->priv);
 }
 
+static bool adreno_is_first_boot_done(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+
+	return test_bit(ADRENO_DEVICE_FIRST_BOOT_DONE, &adreno_dev->priv);
+}
+
 static const struct kgsl_functable adreno_functable = {
 	/* Mandatory functions */
 	.check_idle = adreno_check_idle,
@@ -4016,6 +4024,7 @@ static const struct kgsl_functable adreno_functable = {
 	.set_thermal_index = adreno_set_thermal_index,
 	.alloc_dcvs_profile_memory = adreno_alloc_dcvs_profile_memory,
 	.is_reset_recovery = adreno_is_reset_recovery,
+	.is_first_boot_done = adreno_is_first_boot_done,
 };
 
 static const struct component_master_ops adreno_ops = {

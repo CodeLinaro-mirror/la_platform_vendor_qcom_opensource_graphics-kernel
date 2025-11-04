@@ -16,6 +16,7 @@
 #include "kgsl_eventlog.h"
 #include "kgsl_gmu_core.h"
 #include "kgsl_pwrctrl.h"
+#include "kgsl_timeline.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
 
@@ -697,8 +698,7 @@ static void set_fence_signal_bit(struct adreno_device *adreno_dev,
 	char name[KGSL_FENCE_NAME_LEN];
 	char value[32] = "unknown";
 
-	if (fence->ops->timeline_value_str)
-		fence->ops->timeline_value_str(fence, value, sizeof(value));
+	kgsl_fence_timeline_value_str(fence, value, sizeof(value));
 
 	if (test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags)) {
 		dev_err(gmu_pdev_dev,
@@ -2456,7 +2456,7 @@ static void gen7_hwsched_hw_fence_timeout(struct work_struct *work)
 
 static void gen7_hwsched_hw_fence_timer(struct timer_list *t)
 {
-	struct gen7_hwsched_hfi *hfi = from_timer(hfi, t, hw_fence_timer);
+	struct gen7_hwsched_hfi *hfi = kgsl_timer_container_of(hfi, t, hw_fence_timer);
 
 	kgsl_schedule_work(&hfi->hw_fence_ws);
 }
@@ -2732,7 +2732,7 @@ static void populate_kgsl_fence(struct kgsl_drawobj_sync_hw_fence *hw_fence,
 	spin_lock_irqsave(&ktimeline->lock, flags);
 
 	if (dma_fence_is_signaled_locked(&kfence->fence) || !_kgsl_context_get(ktimeline->context))
-		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT);
+		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT);
 	else
 		hw_fence->context = ktimeline->context;
 
@@ -3799,7 +3799,7 @@ int gen7_hwsched_counter_inline_enable(struct adreno_device *adreno_dev,
 	struct gen7_hwsched_hfi *hfi = to_gen7_hwsched_hfi(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_perfcount_register *reg = &group->regs[counter];
-	u32 val, *cmds, count = 0;
+	u32 *cmds, count = 0;
 	int ret;
 
 	ret = register_global_ctxt(adreno_dev);
@@ -3821,13 +3821,17 @@ int gen7_hwsched_counter_inline_enable(struct adreno_device *adreno_dev,
 	cmds[count++] = cp_type4_packet(reg->select, 1);
 	cmds[count++] = countable;
 
-	ret = submit_global_ctxt_cmd(adreno_dev, hfi->perfctr_scratch->gpuaddr, count << 2);
-	if (ret)
-		goto err;
-
 	/* Wait till the register is programmed with the countable */
-	ret = kgsl_regmap_read_poll_timeout(&device->regmap, reg->select, val,
-				val == countable, 100, ADRENO_IDLE_TIMEOUT * USEC_PER_MSEC);
+	cmds[count++] = cp_type7_packet(CP_WAIT_REG_MEM, 6);
+	cmds[count++] = 3;
+	cmds[count++] = reg->select;
+	cmds[count++] = 0;
+	cmds[count++] = countable;
+	cmds[count++] = GENMASK(7, 0);
+	cmds[count++] = 0;
+
+	ret = submit_global_ctxt_cmd(adreno_dev, hfi->perfctr_scratch->gpuaddr, count << 2);
+
 	if (!ret) {
 		reg->value = 0;
 		return ret;

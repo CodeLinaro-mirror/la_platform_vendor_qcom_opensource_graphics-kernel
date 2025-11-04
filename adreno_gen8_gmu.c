@@ -353,7 +353,8 @@ int gen8_rscc_sleep_sequence(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	int ret;
-	u32 bitmask = adreno_is_gen8_2_x(adreno_dev) ? BIT(30) : BIT(16);
+	u32 bitmask = (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_0(adreno_dev)) ?
+		BIT(30) : BIT(16);
 
 	if (!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags))
 		return 0;
@@ -2016,7 +2017,9 @@ int gen8_gmu_probe(struct kgsl_device *device,
 		goto error;
 
 	gmu_core->vma = gen8_gmu_vma;
-	for (i = 0; i < ARRAY_SIZE(gen8_gmu_vma); i++) {
+	gmu_core->num_vmas = ARRAY_SIZE(gen8_gmu_vma);
+
+	for (i = 0; i < gmu_core->num_vmas; i++) {
 		struct gmu_vma_entry *vma = &gen8_gmu_vma[i];
 
 		vma->vma_root = RB_ROOT;
@@ -2377,6 +2380,8 @@ static int gen8_first_boot(struct adreno_device *adreno_dev)
 	device->pwrscale.devfreq_enabled = true;
 
 	device->pwrctrl.last_stat_updated = ktime_get();
+
+	set_bit(ADRENO_DEVICE_FIRST_BOOT_DONE, &adreno_dev->priv);
 
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_ACTIVE);
 

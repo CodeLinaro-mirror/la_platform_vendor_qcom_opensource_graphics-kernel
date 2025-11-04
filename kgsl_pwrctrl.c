@@ -53,6 +53,7 @@ static const char * const clocks[KGSL_MAX_CLKS] = {
 	"smmu_vote",
 	"apb_pclk",
 	"hub_cx_int_clk",
+	"gpu_cc_memnoc_gfx_clk",
 };
 
 static void kgsl_pwrctrl_clk(struct kgsl_device *device, bool state,
@@ -1854,15 +1855,8 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 
 	trace_kgsl_thermal_constraint(max_freq);
 
-	/* Make sure pmqos_max_pwrlevel is updated before reading active_cnt */
-	smp_mb();
-
-	/*
-	 * Return early if the device is not active. Constraint will be applied on
-	 * subsequent boot. This will also prevent unnecessarily holding device
-	 * mutex while the device is not active.
-	 */
-	if (!atomic_read(&device->active_cnt))
+	/* Apply the constraints only if first boot is done */
+	if (!device->ftbl->is_first_boot_done(device))
 		return NOTIFY_OK;
 
 	kgsl_mutex_lock(&device->mutex);
@@ -2220,7 +2214,7 @@ done:
 
 void kgsl_timer(struct timer_list *t)
 {
-	struct kgsl_device *device = from_timer(device, t, idle_timer);
+	struct kgsl_device *device = kgsl_timer_container_of(device, t, idle_timer);
 
 	if (device->requested_state != KGSL_STATE_SUSPEND) {
 		kgsl_pwrctrl_request_state(device, KGSL_STATE_SLUMBER);

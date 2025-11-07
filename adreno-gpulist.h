@@ -1112,7 +1112,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a622 = {
 		.compatible = "qcom,adreno-gpu-a622",
 		.features = ADRENO_CONTENT_PROTECTION | ADRENO_IOCOHERENT |
 			ADRENO_APRIV | ADRENO_PREEMPTION | ADRENO_BCL |
-			ADRENO_IFPC,
+			ADRENO_IFPC | ADRENO_ACD,
 		.gpudev = &adreno_a6xx_hwsched_gpudev.base,
 		.perfcounters = &adreno_a6xx_perfcounters,
 		.uche_gmem_alignment = 0,

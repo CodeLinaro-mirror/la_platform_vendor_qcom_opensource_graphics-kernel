@@ -188,6 +188,8 @@ const struct gen8_snapshot_block_list gen8_11_0_snapshot_block_list = {
 	.gbif_debugbus_blocks_len = ARRAY_SIZE(gen8_gbif_debugbus_blocks),
 	.cx_debugbus_blocks = gen8_cx_debugbus_blocks,
 	.cx_debugbus_blocks_len = ARRAY_SIZE(gen8_cx_debugbus_blocks),
+	.external_core_regs = gen8_11_0_external_core_regs,
+	.num_external_core_regs = ARRAY_SIZE(gen8_11_0_external_core_regs),
 	.gmu_cx_unsliced_regs = gen8_11_0_gmucx_registers,
 	.gmu_gx_regs = gen8_2_0_gmu_gx_registers,
 	.num_gmu_gx_regs = ARRAY_SIZE(gen8_2_0_gmu_gx_registers),
@@ -1956,6 +1958,29 @@ static bool gen8_snapshot_cp_indexed_regs(struct kgsl_device *device,
 	return ret;
 }
 
+static bool gen8_snapshot_pc_indexed_regs(struct kgsl_device *device,
+			struct kgsl_snapshot *snapshot)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	bool ret = true;
+	int i;
+
+	if (!adreno_is_gen8_11_0(adreno_dev))
+		return true;
+
+	for (i = 0; i < gen8_snapshot_block_list->pc_index_registers_len; i++) {
+		ret = gen8_snapshot_indexed_registers(device, snapshot,
+			gen8_snapshot_block_list->pc_index_registers[i].addr,
+			gen8_snapshot_block_list->pc_index_registers[i].data, 0,
+			gen8_snapshot_block_list->pc_index_registers[i].size,
+			gen8_snapshot_block_list->pc_index_registers[i].pipe_id, UINT_MAX);
+		if (!ret)
+			break;
+	}
+
+	return ret;
+}
+
 /*
  * gen8_snapshot() - GEN8 GPU snapshot function
  * @adreno_dev: Device being snapshotted
@@ -2077,6 +2102,10 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 
 	/* Mempool debug data */
 	if (!gen8_snapshot_mempool(device, snapshot))
+		goto err;
+
+	/* PC indexed regs data */
+	if (!gen8_snapshot_pc_indexed_regs(device, snapshot))
 		goto err;
 
 	/*

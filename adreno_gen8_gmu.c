@@ -408,7 +408,7 @@ static int find_vma_block(struct gen8_gmu_device *gmu, u32 addr, u32 size)
 {
 	int i;
 
-	for (i = 0; i < GMU_MEM_TYPE_MAX; i++) {
+	for (i = 0; i < gmu->num_vmas; i++) {
 		struct gmu_vma_entry *vma = &gmu->vma[i];
 
 		if ((addr >= vma->start) &&
@@ -1893,11 +1893,14 @@ static int gen8_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	if (gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1 &&
+	if (adreno_dev->gmu_ab &&
+		gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1 &&
 		!WARN_ONCE(!adreno_dev->gpucore->num_ddr_channels,
 			"Number of DDR channel is not specified in gpu core")) {
-		adreno_dev->gmu_ab = true;
 		set_bit(ADRENO_DEVICE_GMU_AB, &adreno_dev->priv);
+	} else {
+		/* If gmu_ab feature flag is enabled but GMU doesn't support it, set it to false */
+		adreno_dev->gmu_ab = false;
 	}
 
 	icc_set_bw(pwr->icc_path, 0, 0);
@@ -2384,7 +2387,9 @@ int gen8_gmu_probe(struct kgsl_device *device,
 		goto error;
 
 	gmu->vma = gen8_gmu_vma;
-	for (i = 0; i < ARRAY_SIZE(gen8_gmu_vma); i++) {
+	gmu->num_vmas = ARRAY_SIZE(gen8_gmu_vma);
+
+	for (i = 0; i < gmu->num_vmas; i++) {
 		struct gmu_vma_entry *vma = &gen8_gmu_vma[i];
 
 		vma->vma_root = RB_ROOT;
@@ -2395,6 +2400,9 @@ int gen8_gmu_probe(struct kgsl_device *device,
 	ret = gen8_gmu_reg_probe(adreno_dev);
 	if (ret)
 		goto error;
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_AB))
+		adreno_dev->gmu_ab = true;
 
 	/* Populates RPMh configurations */
 	ret = gen8_build_rpmh_tables(adreno_dev);

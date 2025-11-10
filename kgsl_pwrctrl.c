@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/clk/qcom.h>
@@ -52,6 +52,7 @@ static const char * const clocks[KGSL_MAX_CLKS] = {
 	"smmu_vote",
 	"apb_pclk",
 	"hub_cx_int_clk",
+	"gpu_cc_memnoc_gfx_clk",
 };
 
 static void kgsl_pwrctrl_clk(struct kgsl_device *device, bool state,

@@ -752,6 +752,8 @@ struct adreno_device {
 	bool dms_enabled;
 	/** @minbw_enabled: True if minbw vote is enabled */
 	bool minbw_enabled;
+	/** @malu_enabled: True if mALU is enabled */
+	bool malu_enabled;
 	/** @preempt_override: True if command line param enables preemption */
 	bool preempt_override;
 	struct kgsl_memdesc *profile_buffer;
@@ -960,8 +962,6 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_FIRST_BOOT_DONE = 19,
 	/** @ADRENO_DEVICE_FAST_CONTEXT_DESTROY: Set if fast context destroy is enabled on GMU */
 	ADRENO_DEVICE_FAST_CONTEXT_DESTROY = 20,
-	/** @ADRENO_DEVICE_ALLOW_MALU_WORKLOAD: mALU workload is supported by GMU and GPU */
-	ADRENO_DEVICE_ALLOW_MALU_WORKLOAD = 21,
 };
 
 /**

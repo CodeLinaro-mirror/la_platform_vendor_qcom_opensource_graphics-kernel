@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -3965,12 +3965,6 @@ static void adreno_set_thermal_index(struct kgsl_device *device)
 		ops->set_thermal_index(adreno_dev);
 }
 
-static bool adreno_is_reset_recovery(struct kgsl_device *device)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-
-	return test_bit(ADRENO_DEVICE_RESET_RECOVERY, &adreno_dev->priv);
-}
 
 static bool adreno_is_first_boot_done(struct kgsl_device *device)
 {
@@ -4023,7 +4017,6 @@ static const struct kgsl_functable adreno_functable = {
 	.gmu_based_dcvs_pwr_ops = adreno_gmu_based_dcvs_pwr_ops,
 	.set_thermal_index = adreno_set_thermal_index,
 	.alloc_dcvs_profile_memory = adreno_alloc_dcvs_profile_memory,
-	.is_reset_recovery = adreno_is_reset_recovery,
 	.is_first_boot_done = adreno_is_first_boot_done,
 };
 

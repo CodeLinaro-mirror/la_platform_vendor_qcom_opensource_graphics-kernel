@@ -3,6 +3,7 @@ targets = [
     "art",
     "canoe",
     "lahaina",
+    "malabar",
     "monaco",
     "parrot",
     "sun",

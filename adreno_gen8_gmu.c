@@ -1542,6 +1542,50 @@ void gen8_gmu_aop_send_acd_state(struct gen8_gmu_device *gmu, bool flag)
 			"AOP qmp send message failed: %d\n", ret);
 }
 
+int gen8_gmu_trigger_mx_voltage_change(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	unsigned long freq;
+	u32 val = 0;
+	int ret = 0;
+
+	if (!gen8_core->gmu_mx_gdsc)
+		return 0;
+
+	freq = kgsl_clk_get_rate(gmu_core->clks, gmu_core->num_clks, "gmu_clk");
+	if (freq < gmu_core->freqs[0]) {
+		dev_err_once(GMU_PDEV_DEV(device), "Incorrect GMU clock rate:%lu\n", freq);
+		return -EINVAL;
+	}
+
+	/* Bump up the frequency to bump the MX voltage corner */
+	ret = kgsl_clk_set_rate(gmu_core->clks, gmu_core->num_clks, "gmu_clk", INT_MAX);
+	if (ret) {
+		dev_err_once(GMU_PDEV_DEV(device), "Failed to bump GMU clock to:%d ret:%d\n",
+			INT_MAX, ret);
+		return ret;
+	}
+
+	/* Switch to the older frequency */
+	ret = kgsl_clk_set_rate(gmu_core->clks, gmu_core->num_clks, "gmu_clk", freq);
+	if (ret) {
+		dev_err_once(GMU_PDEV_DEV(device), "Failed to restore GMU clock to %lu ret:%d\n",
+			freq, ret);
+		return ret;
+	}
+
+	/* Make sure the voltage change has been broadcast */
+	if (kgsl_regmap_read_poll_timeout(&device->regmap, GEN8_GMUCX_CBCAST_MX_VRM_1_VAL,
+		val, val != 0, 100, 5 * 1000)) {
+		dev_err_once(GMU_PDEV_DEV(device), "MX voltage broadcast failed\n");
+		ret = -ETIMEDOUT;
+	}
+
+	return ret;
+}
+
 static int gen8_gmu_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1566,6 +1610,10 @@ static int gen8_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto gdsc_off;
 
 	ret = gen8_scm_gpu_init_cx_regs(adreno_dev);
+	if (ret)
+		goto clks_gdsc_off;
+
+	ret = gen8_gmu_trigger_mx_voltage_change(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;
 

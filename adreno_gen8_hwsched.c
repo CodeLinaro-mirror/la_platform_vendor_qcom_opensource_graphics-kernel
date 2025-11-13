@@ -256,6 +256,10 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto clks_gdsc_off;
 
+	ret = gen8_gmu_trigger_mx_voltage_change(adreno_dev);
+	if (ret)
+		goto clks_gdsc_off;
+
 	gen8_get_gpu_slice_info(adreno_dev);
 
 	/*

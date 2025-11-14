@@ -3421,6 +3421,7 @@ static const struct gen8_nonctxt_regs gen8_2_0_nonctxt_regs[] = {
 	{ GEN8_SP_CHICKEN_BITS_2, 0xc20800, BIT(PIPE_NONE) },
 	{ GEN8_SP_CHICKEN_BITS_3, 0x00300000, BIT(PIPE_NONE) },
 	{ GEN8_SP_PERFCTR_SHADER_MASK, 0x0000003f, BIT(PIPE_NONE) },
+	{ GEN8_SP_HLSQ_DBG_ECO_CNTL, BIT(14),  BIT(PIPE_NONE) },
 	/* Ignore HLSQ shared constant feedback from SP */
 	{ GEN8_SP_HLSQ_DBG_ECO_CNTL_1, BIT(17), BIT(PIPE_NONE) },
 	/* Disable CS dead batch merge */

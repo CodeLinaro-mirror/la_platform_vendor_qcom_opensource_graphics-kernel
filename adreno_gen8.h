@@ -135,6 +135,26 @@ struct gen8_limits_mit_cfg {
 };
 
 /**
+ * struct therm_tsens_en_cfg - Container for thermal tsense configuration
+ */
+struct therm_tsens_en_cfg {
+	/** @tsens_sl_cnt: Temperature sensor count per GPU slice */
+	u32 tsens_sl_cnt;
+	/** @tsens_us_cnt: Temperature sensor count per GPU unslice */
+	u32 tsens_us_cnt;
+};
+
+/**
+ * struct gen8_thermal_mit_cfg - Container for GPU thermal mitigation configuration
+ */
+struct gen8_thermal_mit_cfg {
+	/** @therm: Config for GPU thermal mitigation features */
+	struct hfi_therm_profile_ctrl *therm;
+	/** @tsens_en_cfg: Config for GPU thermal mitigation features */
+	const struct therm_tsens_en_cfg *tsens_en_cfg;
+};
+
+/**
  * struct adreno_gen8_core - gen8 specific GPU core definitions
  */
 struct adreno_gen8_core {
@@ -196,7 +216,7 @@ struct adreno_gen8_core {
 	/** @cl_no_ft_timeout_ms: Use this timeout for CL NO_FT instead of infinite */
 	u32 cl_no_ft_timeout_ms;
 	/** @therm_profile: GMU thermal mitigation profile */
-	const struct hfi_therm_profile_ctrl *therm_profile;
+	struct gen8_thermal_mit_cfg *therm_cfg;
 	/** @limits_mit_cfg: GPU limits mitigation configuration */
 	const struct gen8_limits_mit_cfg *limits_mit_cfg;
 	/** @clx_tbl: GPU CLX table */

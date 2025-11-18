@@ -192,7 +192,7 @@ int gmu_core_timed_poll_check(struct kgsl_device *device,
 int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memdesc,
 		u64 gmuaddr, int attrs)
 {
-	size_t mapped;
+	ssize_t mapped;
 
 	if (!memdesc->pages) {
 		mapped = kgsl_mmu_map_sg(domain, gmuaddr, memdesc->sgt->sgl,
@@ -211,7 +211,10 @@ int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memde
 		sg_free_table(&sgt);
 	}
 
-	return mapped == 0 ? -ENOMEM : 0;
+	if (!mapped)
+		mapped = -ENOMEM;
+
+	return (mapped < 0) ? mapped : 0;
 }
 
 struct kgsl_memdesc *gmu_core_find_memdesc(struct kgsl_device *device, u32 addr, u32 size)
@@ -235,7 +238,7 @@ int gmu_core_find_vma_block(struct kgsl_device *device, u32 addr, u32 size)
 	struct gmu_core_device *gmu = &device->gmu_core;
 	int i;
 
-	for (i = 0; i < GMU_MEM_TYPE_MAX; i++) {
+	for (i = 0; i < gmu->num_vmas; i++) {
 		struct gmu_vma_entry *vma = &gmu->vma[i];
 
 		if ((addr >= vma->start) &&
@@ -841,6 +844,11 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 		pwr->thermal_time += data->gpu_time;
 
 	pwr->aggr_max_pwrlevel = data->aggr_max_pwrlevel;
+
+	spin_lock(&pwr->stats_lock);
+	pwr->accum_busy_stats += data->gpu_time;
+	pwr->accum_total_time += data->total_time;
+	spin_unlock(&pwr->stats_lock);
 }
 
 static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packet *pkt)

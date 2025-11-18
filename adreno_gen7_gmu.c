@@ -2076,7 +2076,9 @@ int gen7_gmu_probe(struct kgsl_device *device,
 		goto error;
 
 	device->gmu_core.vma = gen7_gmu_vma;
-	for (i = 0; i < ARRAY_SIZE(gen7_gmu_vma); i++) {
+	device->gmu_core.num_vmas = ARRAY_SIZE(gen7_gmu_vma);
+
+	for (i = 0; i < device->gmu_core.num_vmas; i++) {
 		struct gmu_vma_entry *vma = &gen7_gmu_vma[i];
 
 		vma->vma_root = RB_ROOT;

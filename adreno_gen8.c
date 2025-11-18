@@ -346,11 +346,11 @@ static const u32 gen8_2_0_ifpc_pwrup_reglist[] = {
 	GEN8_SP_SS_CHICKEN_BITS_0,
 	GEN8_SP_CHICKEN_BITS_2,
 	GEN8_SP_CHICKEN_BITS_3,
-	GEN8_SP_CHICKEN_BITS_4,
 	GEN8_SP_PERFCTR_SHADER_MASK,
 	GEN8_RBBM_SLICE_INTERFACE_HANG_INT_CNTL,
 	GEN8_SP_HLSQ_DBG_ECO_CNTL_1,
 	GEN8_SP_HLSQ_DBG_ECO_CNTL_2,
+	GEN8_SP_HLSQ_DBG_ECO_CNTL_3,
 	GEN8_SP_HLSQ_LPAC_GMEM_RANGE_MIN_LO,
 	GEN8_SP_HLSQ_LPAC_GMEM_RANGE_MIN_HI,
 	GEN8_CP_INTERRUPT_STATUS_MASK_GLOBAL,
@@ -613,7 +613,7 @@ struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
 	{ GEN8_SP_CHICKEN_BITS_1, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_SP_CHICKEN_BITS_2, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_SP_CHICKEN_BITS_3, BIT(PIPE_NONE), 0, 0, 0, },
-	{ GEN8_SP_CHICKEN_BITS_4, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_SP_CHICKEN_BITS_4, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_DISPATCH_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_HLSQ_DBG_ECO_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_DBG_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
@@ -2908,11 +2908,19 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	u16 perfcntr_list_len = lock->dynamic_list_len - gen8_dev->ext_pwrup_list_len;
 	unsigned long irq_flags;
 	int ret = 0;
+	u32 num_dependencies = 0;
+	u32 pending_triplets = 2;
 
 	if (!ADRENO_ACQUIRE_CP_SEMAPHORE(adreno_dev, irq_flags))
 		return -EBUSY;
 
 	if (flags & ADRENO_PERFCOUNTER_GROUP_RESTORE) {
+		for (i = 0; i < PERFCOUNTER_REG_DEPENDENCY_LEN && reg->reg_dependency[i]; i++)
+			num_dependencies++;
+
+		/* Number of triplets to add: 1 main + dependencies + 2 controls */
+		pending_triplets += num_dependencies + 1;
+
 		for (i = 0; i < perfcntr_list_len - 2; i++) {
 			if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
 				start_offset = offset;
@@ -2923,6 +2931,13 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 		}
 	} else if (perfcntr_list_len) {
 		goto update;
+	}
+
+	/* Ensure there is enough space in the reglist buffer for new triplets */
+	if ((start_offset == -1) && (offset + (pending_triplets * 3)) >=
+		(adreno_dev->pwrup_reglist->size / sizeof(u32))) {
+		ret = -ENOSPC;
+		goto err;
 	}
 
 	if (kgsl_hwlock(lock)) {

@@ -529,9 +529,7 @@ static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 		return VM_FAULT_SIGBUS;
 
 	pgoff = offset >> PAGE_SHIFT;
-
-	if (!down_read_trylock(&memdesc->lock))
-		return VM_FAULT_RETRY;
+	spin_lock(&memdesc->lock);
 
 	if (memdesc->pages[pgoff]) {
 		page = memdesc->pages[pgoff];
@@ -542,29 +540,30 @@ static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 
 		/* We are here because page was reclaimed */
 		SET_FLAG(KGSL_MEMDESC_SKIP_RECLAIM, &memdesc->priv);
+		spin_unlock(&memdesc->lock);
 
 		page = shmem_read_mapping_page_gfp(
 			memdesc->shmem_filp->f_mapping, pgoff,
 			kgsl_gfp_mask(0));
-		if (IS_ERR(page)) {
-			up_read(&memdesc->lock);
+		if (IS_ERR(page))
 			return VM_FAULT_SIGBUS;
-		}
+
 		kgsl_page_sync(memdesc->dev, page, PAGE_SIZE, DMA_BIDIRECTIONAL);
 
 		/*
 		 * Update the pages array only if the page was
 		 * not already brought back.
 		 */
+		spin_lock(&memdesc->lock);
 		if (!memdesc->pages[pgoff]) {
 			memdesc->pages[pgoff] = page;
 			atomic_dec(&priv->unpinned_page_count);
 			get_page(page);
 		}
 	}
+	spin_unlock(&memdesc->lock);
 
 	ret = vmf_insert_page(vma, vmf->address, page);
-	up_read(&memdesc->lock);
 	put_page(page);
 	return ret;
 }
@@ -838,7 +837,7 @@ void kgsl_memdesc_init(struct kgsl_device *device,
 		kgsl_memdesc_get_align(memdesc), ilog2(PAGE_SIZE));
 	kgsl_memdesc_set_align(memdesc, align);
 
-	init_rwsem(&memdesc->lock);
+	spin_lock_init(&memdesc->lock);
 	idr_init(&memdesc->vma_idr);
 }
 
@@ -1312,11 +1311,16 @@ void kgsl_memdesc_pagelist_cleanup(struct file *shmem_filp, struct kgsl_memdesc 
 
 static void kgsl_shmem_free_pages(struct kgsl_memdesc *memdesc)
 {
-	int i;
+	u32 i, n = 1;
 
-	for (i = 0; i < memdesc->page_count; i++)
-		if (memdesc->pages[i])
+	for (i = 0; i < memdesc->page_count; i += n) {
+		n = 1;
+
+		if (memdesc->pages[i]) {
+			n = 1 << compound_order(memdesc->pages[i]);
 			put_page(memdesc->pages[i]);
+		}
+	}
 
 	memdesc->page_count = 0;
 	kvfree(memdesc->pages);

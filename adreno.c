@@ -156,6 +156,10 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 		return 0;
 
 	np = of_get_child_by_name(dev->of_node, "zap-shader");
+	if (!of_device_is_available(np)) {
+		of_node_put(np);
+		return 0;
+	}
 
 	/*
 	 * While loading the zap firmware, follow the priority order below to determine
@@ -166,8 +170,7 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 	 * 3. If both are missing, skip zap fw loading and use direct register write
 	 * to switch secure state.
 	 */
-	if (np)
-		of_property_read_string(np, "firmware-name", &firmware_name);
+	of_property_read_string(np, "firmware-name", &firmware_name);
 	firmware_name = firmware_name ?: name;
 
 	if (!firmware_name) {

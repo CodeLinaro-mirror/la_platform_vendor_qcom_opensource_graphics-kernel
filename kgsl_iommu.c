@@ -2545,9 +2545,9 @@ static int iommu_probe_secure_context(struct kgsl_device *device,
 		return -EPERM;
 
 	node = of_find_node_by_name(parent, "gfx3d_secure");
-	if (!node) {
+	if (!of_device_is_available(node)) {
 		ret = -ENOENT;
-		goto err;
+		goto err_node_put;
 	}
 
 	pdev = of_find_device_by_node(node);
@@ -2612,7 +2612,6 @@ err_device_put:
 	context->pdev = NULL;
 err_node_put:
 	of_node_put(node);
-err:
 	mmu->secured = false;
 
 	return ret;

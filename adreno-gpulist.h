@@ -3486,6 +3486,7 @@ static const struct gen8_nonctxt_regs gen8_2_0_nonctxt_regs[] = {
 	{ GEN8_SP_CHICKEN_BITS, BIT(26), BIT(PIPE_NONE) },
 	/* Disable LPAC large-LM mode */
 	{ GEN8_SP_SS_CHICKEN_BITS_0, BIT(3), BIT(PIPE_NONE) },
+	{ GEN8_SP_CHICKEN_BITS_1, BIT(3), BIT(PIPE_NONE) },
 	/* Disable PS out of order retire */
 	{ GEN8_SP_CHICKEN_BITS_2, 0xc20800, BIT(PIPE_NONE) },
 	{ GEN8_SP_CHICKEN_BITS_3, 0x00300000, BIT(PIPE_NONE) },
@@ -4079,6 +4080,7 @@ static const struct gen8_nonctxt_regs gen8_9_0_nonctxt_regs[] = {
 	{ GEN8_SP_CHICKEN_BITS, BIT(26), BIT(PIPE_NONE) },
 	/* Disable LPAC large-LM mode */
 	{ GEN8_SP_SS_CHICKEN_BITS_0, BIT(3), BIT(PIPE_NONE) },
+	{ GEN8_SP_CHICKEN_BITS_1, BIT(3), BIT(PIPE_NONE) },
 	/* Disable PS out of order retire */
 	{ GEN8_SP_CHICKEN_BITS_2, 0xc21800, BIT(PIPE_NONE) },
 	{ GEN8_RBBM_NC_MODE_CNTL, 0x00000001, BIT(PIPE_NONE) },

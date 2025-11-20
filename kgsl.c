@@ -985,9 +985,6 @@ static void kgsl_destroy_process_private(struct kref *kref)
 			struct kgsl_process_private, refcount);
 	struct kgsl_device *device = KGSL_MMU_DEVICE(private->pagetable->mmu);
 
-	if (private->profile.md.gmuaddr)
-		gmu_core_free_block(device, &private->profile.md);
-
 	kgsl_put_work_period(private->period);
 	/*
 	 * While removing sysfs entries, kernfs_mutex is held by sysfs apis. Since
@@ -997,7 +994,6 @@ static void kgsl_destroy_process_private(struct kref *kref)
 	 * mutex to avoid wasting re-tries when kgsl is waiting for kernfs mutex.
 	 */
 	mutex_lock(&kgsl_driver.process_mutex);
-
 	debugfs_remove_recursive(private->debug_root);
 	kobject_put(&private->kobj_memtype);
 	kobject_put(&private->kobj);
@@ -1020,6 +1016,16 @@ static void kgsl_destroy_process_private(struct kref *kref)
 	/* When using global pagetables, do not put global pagetable */
 	if (private->pagetable->name != KGSL_MMU_GLOBAL_PT)
 		kgsl_mmu_putpagetable(private->pagetable);
+
+
+	if (private->profile.md.gmuaddr) {
+		/*
+		 * This calls iommu_unmap(), which may take variable amount of time to
+		 * complete. So do this at the very end of process private cleanup, so that
+		 * this doesn't delay the clean up of rest of the process private resources.
+		 */
+		gmu_core_free_block(device, &private->profile.md);
+	}
 
 	kfree(private);
 }

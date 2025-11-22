@@ -1397,6 +1397,29 @@ int kgsl_regulator_disable_wait(struct regulator *reg, u32 timeout)
 	}
 }
 
+void kgsl_pwrctrl_disable_mx_gdsc(struct kgsl_device *device)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (pwr->gmu_mx_pd)
+		pm_runtime_put_sync(pwr->gmu_mx_pd);
+}
+
+int kgsl_pwrctrl_enable_mx_gdsc(struct kgsl_device *device)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	int ret;
+
+	if (!pwr->gmu_mx_pd)
+		return 0;
+
+	ret = pm_runtime_resume_and_get(pwr->gmu_mx_pd);
+	if (ret)
+		dev_err(device->dev, "Failed to enable MX gdsc, error %d\n", ret);
+
+	return ret;
+}
+
 int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
@@ -1405,23 +1428,17 @@ int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 	if (!pwr->cx_regulator && !pwr->gmu_cx_pd)
 		return 0;
 
-	/*
-	 * Wait for CX GDSC collapse during hang recovery to prevent
-	 * boot up from stale state.
-	 */
-	if (device->ftbl->is_reset_recovery(device)) {
-		ret = wait_for_completion_timeout(&pwr->cx_gdsc_gate, msecs_to_jiffies(5000));
-		if (!ret) {
-			/* Dump the cx regulator consumer list */
-			if (pwr->cx_regulator) {
-				dev_err(device->dev, "GPU CX wait timeout. Dumping CX votes:\n");
-				qcom_clk_dump(NULL, pwr->cx_regulator, false);
-			} else {
-				dev_err(device->dev, "GPU CX wait timeout\n");
-			}
-			KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
-				GMU_PDEV(device), 0ULL, GMU_FAULT_CX_WAIT_TIMEOUT);
+	ret = wait_for_completion_timeout(&pwr->cx_gdsc_gate, msecs_to_jiffies(5000));
+	if (!ret) {
+		/* Dump the cx regulator consumer list */
+		if (pwr->cx_regulator) {
+			dev_err(device->dev, "GPU CX wait timeout. Dumping CX votes:\n");
+			qcom_clk_dump(NULL, pwr->cx_regulator, false);
+		} else {
+			dev_err(device->dev, "GPU CX wait timeout\n");
 		}
+		KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
+			GMU_PDEV(device), 0ULL, GMU_FAULT_CX_WAIT_TIMEOUT);
 	}
 
 	if (!completion_done(&pwr->cx_gdsc_gate))
@@ -1517,6 +1534,26 @@ static int enable_gdscs(struct kgsl_device *device)
 	}
 
 	trace_kgsl_rail(device, KGSL_PWRFLAGS_POWER_ON);
+	return 0;
+}
+
+int kgsl_pwrctrl_probe_mx_gdsc(struct kgsl_device *device, struct platform_device *pdev)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (!IS_ERR_OR_NULL(pwr->gmu_mx_pd))
+		return 0;
+
+	if (of_property_read_bool(pdev->dev.of_node, "power-domains")) {
+		pwr->gmu_mx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "gmu_mx");
+
+		if (IS_ERR_OR_NULL(pwr->gmu_mx_pd)) {
+			dev_err(device->dev,
+				"Failed to attach GMU mx power domain\n");
+			return -EINVAL;
+		}
+	}
+
 	return 0;
 }
 
@@ -2142,9 +2179,13 @@ void kgsl_pwrctrl_close(struct kgsl_device *device)
 	if (pwr->gx_pd)
 		dev_pm_domain_detach(pwr->gx_pd, false);
 
+	if (pwr->gmu_mx_pd)
+		dev_pm_domain_detach(pwr->gmu_mx_pd, false);
+
 	pwr->gmu_cx_pd = NULL;
 	pwr->cx_pd = NULL;
 	pwr->gx_pd = NULL;
+	pwr->gmu_mx_pd = NULL;
 }
 
 void kgsl_idle_check(struct work_struct *work)

@@ -111,7 +111,7 @@ def external_deps(target, variant):
             "//vendor/qcom/opensource/synx-kernel:synx_headers"
             ]
 
-    if target in [ "monaco", "parrot", "vienna", "lahaina" ]:
+    if target in [ "monaco", "parrot", "vienna", "lahaina", "art" ]:
         deplist = deplist + [
             "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers"
             ]
@@ -164,7 +164,7 @@ def define_target_variant_module(target, variant):
                   "//soc-repo:{}/drivers/soc/qcom/secure_buffer".format(tv),
                   "//soc-repo:{}/drivers/soc/qcom/socinfo".format(tv),
                   "//soc-repo:{}/kernel/msm_sysstats".format(tv),
-                  "//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
+                  #"//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
                 ],
                 "//build/qcom_build_extensions:qtisocrepo_false": [ "//msm-kernel:all_headers" ],
         })

@@ -1220,7 +1220,8 @@ static int adreno_probe_llcc(struct adreno_device *adreno_dev,
 	} else
 		adreno_dev->gpuhtw_llc_slice_enable = true;
 
-#if (KERNEL_VERSION(6, 1, 0) == LINUX_VERSION_CODE)
+#if ((KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE) && \
+		(KERNEL_VERSION(6, 2, 0) > LINUX_VERSION_CODE))
 	if (adreno_is_a621(adreno_dev)) {
 		/* Get the system cache slice descriptor for GPU MV grid buffer */
 		adreno_dev->gpumv_llc_slice = llcc_slice_getd(LLCC_GPUMV);
@@ -1285,6 +1286,8 @@ const char *hfi_feature_to_string(u32 feature)
 		return "DMS";
 	case HFI_FEATURE_AQE:
 		return "AQE";
+	case HFI_FEATURE_FAST_CONTEXT_DESTROY:
+		return "FAST_CONTEXT_DESTROY";
 	}
 	return "unknown";
 }
@@ -3965,13 +3968,6 @@ static void adreno_set_thermal_index(struct kgsl_device *device)
 		ops->set_thermal_index(adreno_dev);
 }
 
-static bool adreno_is_reset_recovery(struct kgsl_device *device)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-
-	return test_bit(ADRENO_DEVICE_RESET_RECOVERY, &adreno_dev->priv);
-}
-
 static bool adreno_is_first_boot_done(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
@@ -4023,7 +4019,6 @@ static const struct kgsl_functable adreno_functable = {
 	.gmu_based_dcvs_pwr_ops = adreno_gmu_based_dcvs_pwr_ops,
 	.set_thermal_index = adreno_set_thermal_index,
 	.alloc_dcvs_profile_memory = adreno_alloc_dcvs_profile_memory,
-	.is_reset_recovery = adreno_is_reset_recovery,
 	.is_first_boot_done = adreno_is_first_boot_done,
 };
 

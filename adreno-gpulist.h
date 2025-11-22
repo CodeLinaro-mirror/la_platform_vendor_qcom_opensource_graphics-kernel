@@ -3392,6 +3392,8 @@ static const struct gen8_nonctxt_regs gen8_2_0_nonctxt_regs[] = {
 	{ GEN8_RB_CCU_CNTL, 0x00000068, BIT(PIPE_BR) },
 	/* Partially enable perf clear, Disable DINT to c/z be data forwarding */
 	{ GEN8_RB_CCU_DBG_ECO_CNTL, 0x00002200, BIT(PIPE_BR) },
+	/* Disable the early return of eoblk from RB to LRZ in consZ */
+	{ GEN8_RB_DBG_ECO_CNTL, BIT(17), BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_GC_GMEM_PROTECT, 0x12000000, BIT(PIPE_BR) },
 	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, 0x00000007, BIT(PIPE_BR) },
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, 0x00004000, BIT(PIPE_BR) },
@@ -3492,7 +3494,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 			ADRENO_HW_FENCE | ADRENO_BCL | ADRENO_ACD | ADRENO_GMU_BASED_DCVS |
 			ADRENO_GMU_THERMAL_MITIGATION | ADRENO_CLX | ADRENO_DEFER_GMEM_ALLOC |
 			ADRENO_GMU_MINBW | ADRENO_DCVS_PROFILE | ADRENO_TSENSE_DYNAMIC_PERIOD |
-			ADRENO_GMU_AB,
+			ADRENO_GMU_AB | ADRENO_GMU_FAST_CONTEXT_DESTROY,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_2_x_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -3538,7 +3540,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_1 = {
 			ADRENO_HW_FENCE | ADRENO_BCL | ADRENO_ACD | ADRENO_GMU_BASED_DCVS |
 			ADRENO_GMU_THERMAL_MITIGATION | ADRENO_CLX | ADRENO_DEFER_GMEM_ALLOC |
 			ADRENO_GMU_MINBW | ADRENO_DCVS_PROFILE | ADRENO_TSENSE_DYNAMIC_PERIOD |
-			ADRENO_GMU_AB,
+			ADRENO_GMU_AB | ADRENO_GMU_FAST_CONTEXT_DESTROY,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_2_x_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -3953,6 +3955,8 @@ static const struct gen8_nonctxt_regs gen8_9_0_nonctxt_regs[] = {
 	{ GEN8_GRAS_DBG_ECO_CNTL, 0x00000800, BIT(PIPE_BR) | BIT(PIPE_BV) },
 	{ GEN8_RB_CCU_CNTL, 0x00000068, BIT(PIPE_BR) },
 	{ GEN8_RB_CCU_DBG_ECO_CNTL, 0x00002200, BIT(PIPE_BR) },
+	/* Disable the early return of eoblk from RB to LRZ in consZ */
+	{ GEN8_RB_DBG_ECO_CNTL, BIT(17), BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_GC_GMEM_PROTECT, 0x02600000, BIT(PIPE_BR) },
 	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, 0x00000007, BIT(PIPE_BR) },
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, 0x00004000, BIT(PIPE_BR) },
@@ -4201,6 +4205,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_0 = {
 	.therm_profile = &therm_profile_8_2_0,
 	.limits_mit_cfg = &gen8_2_0_limits_mit_cfg,
 	.preempt_level = 0,
+	.gmu_mx_gdsc = true,
+	.three_rail_memory = true,
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {

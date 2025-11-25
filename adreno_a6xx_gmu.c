@@ -3161,16 +3161,14 @@ void a6xx_disable_gpu_irq(struct adreno_device *adreno_dev)
 static void a6xx_fusa_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	void __iomem *fusa_virt = NULL;
-	struct resource *res;
+	void __iomem *fusa_virt;
+	struct resource *res = platform_get_resource_byname(device->pdev,
+			IORESOURCE_MEM, "fusa");
 
-	if (!(adreno_is_a663(adreno_dev) || adreno_is_a623(adreno_dev)))
+	if (!res)
 		return;
 
-	res = platform_get_resource_byname(device->pdev,
-			IORESOURCE_MEM, "fusa");
-	if (res)
-		fusa_virt = ioremap(res->start, resource_size(res));
+	fusa_virt = ioremap(res->start, resource_size(res));
 
 	if (!fusa_virt) {
 		dev_err(device->dev, "Failed to map fusa\n");

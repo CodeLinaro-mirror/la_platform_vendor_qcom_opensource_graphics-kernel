@@ -1482,6 +1482,12 @@ static void gen8_dbgc_debug_bus_read(struct kgsl_device *device,
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_D, reg);
 
 	/*
+	 * Workaround for GEN8_2_0, GEN8_9_0 and GEN8_11_0 target, to flush
+	 * the last segment twice as per recommendation
+	 */
+	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_D, reg);
+
+	/*
 	 * There needs to be a delay of 1 us to ensure enough time for correct
 	 * data is funneled into the trace buffer
 	 */
@@ -1525,6 +1531,12 @@ static void gen8_dbgc_side_debug_bus_read(struct kgsl_device *device,
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_A, reg);
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_B, reg);
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_C, reg);
+	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_D, reg);
+
+	/*
+	 * Workaround for GEN8_2_0, GEN8_9_0 and GEN8_11_0 target, to flush
+	 * the last segment twice as per recommendation
+	 */
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_D, reg);
 
 	/*

@@ -212,6 +212,8 @@ struct kgsl_functable {
 		struct kgsl_process_private *proc_priv);
 	/** @is_reset_recovery: Check if the ADRENO device under goes reset recovery */
 	bool (*is_reset_recovery)(struct kgsl_device *device);
+	/** @is_first_boot_done: Check if the ADRENO device first boot is done */
+	bool (*is_first_boot_done)(struct kgsl_device *device);
 };
 
 struct kgsl_ioctl {

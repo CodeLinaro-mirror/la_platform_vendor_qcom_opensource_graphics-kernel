@@ -2504,6 +2504,20 @@ static void gen8_swfuse_violation_callback(struct adreno_device *adreno_dev, int
 	}
 }
 
+/*
+ * gen8_dbgc_intr_callback() - ISR for DBGC error interrupt
+ * @adreno_dev: Pointer to device
+ * @bit: Interrupt bit
+ */
+static void gen8_dbgc_intr_callback(struct adreno_device *adreno_dev, int bit)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	dev_crit_ratelimited(device->dev, "RBBM: Debug bus interrupt: bit (%d)\n", bit);
+	adreno_irqctrl(adreno_dev, 0);
+	adreno_scheduler_fault(adreno_dev, ADRENO_HARD_FAULT);
+}
+
 static const struct adreno_irq_funcs gen8_irq_funcs[32] = {
 	ADRENO_IRQ_CALLBACK(NULL), /* 0 - RBBM_GPU_IDLE */
 	ADRENO_IRQ_CALLBACK(gen8_err_callback), /* 1 - RBBM_AHB_ERROR */
@@ -2531,8 +2545,8 @@ static const struct adreno_irq_funcs gen8_irq_funcs[32] = {
 	ADRENO_IRQ_CALLBACK(adreno_hang_int_callback), /* 23 - MISHANGDETECT */
 	ADRENO_IRQ_CALLBACK(gen8_err_callback), /* 24 - UCHE_OOB_ACCESS */
 	ADRENO_IRQ_CALLBACK(gen8_err_callback), /* 25 - UCHE_TRAP_INTR */
-	ADRENO_IRQ_CALLBACK(NULL), /* 26 - DEBBUS_INTR_0 */
-	ADRENO_IRQ_CALLBACK(NULL), /* 27 - DEBBUS_INTR_1 */
+	ADRENO_IRQ_CALLBACK(gen8_dbgc_intr_callback), /* 26 - DEBUG_BUS_INTR_0 */
+	ADRENO_IRQ_CALLBACK(gen8_dbgc_intr_callback), /* 27 - DEBUG_BUS_INTR_1 */
 	ADRENO_IRQ_CALLBACK(gen8_err_callback), /* 28 - TSBWRITEERROR */
 	ADRENO_IRQ_CALLBACK(gen8_swfuse_violation_callback), /* 29 - SWFUSEVIOLATION */
 	ADRENO_IRQ_CALLBACK(NULL), /* 30 - ISDB_CPU_IRQ */

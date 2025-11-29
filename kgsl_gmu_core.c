@@ -904,6 +904,12 @@ static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packe
 		trace_kgsl_constraint(device, data->type, data->value, data->status, pkt->ticks);
 		break;
 		}
+	case GMU_TRACE_DCVS_PROFILE: {
+		struct trace_dcvs_profile *data =
+				(struct trace_dcvs_profile *)pkt->payload;
+		trace_adreno_gpu_dcvs_profile(data, pkt->ticks);
+		break;
+		}
 	default: {
 		char str[64];
 

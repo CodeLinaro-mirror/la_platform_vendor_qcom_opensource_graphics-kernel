@@ -230,6 +230,8 @@ enum gmu_vrb_idx {
 	VRB_CTXRECORD_AQE_SZ = 11,
 	/* Contains the size of GMEM inside context record in KB */
 	VRB_CTXRECORD_GMEM_SZ = 12,
+	/* Contains whether to enable fault on DBGC interrupts */
+	VRB_DBGC_FAULT_ENABLE = 17,
 };
 
 /* For GMU Trace */
@@ -327,6 +329,7 @@ enum gmu_trace_id {
 	GMU_TRACE_DCVS_BUSLVL = 6,
 	GMU_TRACE_DCVS_PWRSTATS = 7,
 	GMU_TRACE_PWR_CONSTRAINT = 8,
+	GMU_TRACE_DCVS_PROFILE = 9,
 	GMU_TRACE_MAX,
 };
 
@@ -396,6 +399,13 @@ struct trace_pwr_constraint {
 	u32 value;
 	u32 status;
 } __packed;
+
+struct trace_dcvs_profile {
+	u32 action;
+	u32 profile;
+	struct kgsl_dcvs_attrs attrs;
+} __packed;
+
 /**
  * struct kgsl_gmu_trace  - wrapper for gmu trace memory object
  */

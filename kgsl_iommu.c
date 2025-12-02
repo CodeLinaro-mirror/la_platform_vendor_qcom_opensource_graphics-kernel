@@ -309,6 +309,7 @@ static int _iopgtbl_unmap(struct kgsl_iommu_pt *pt, u64 gpuaddr, size_t size)
 		return -EINVAL;
 
 flush:
+	qcom_skip_tlb_management(&pt->base.mmu->iommu.user_context.pdev->dev, false);
 	kgsl_iommu_flush_tlb(pt->base.mmu);
 	return 0;
 }

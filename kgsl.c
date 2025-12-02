@@ -985,7 +985,6 @@ static void kgsl_destroy_process_private(struct kref *kref)
 			struct kgsl_process_private, refcount);
 	struct kgsl_device *device = KGSL_MMU_DEVICE(private->pagetable->mmu);
 
-	kgsl_put_work_period(private->period);
 	/*
 	 * While removing sysfs entries, kernfs_mutex is held by sysfs apis. Since
 	 * it is a global fs mutex, sometimes it takes longer for kgsl to get hold
@@ -1008,6 +1007,7 @@ static void kgsl_destroy_process_private(struct kref *kref)
 	write_unlock(&kgsl_driver.proclist_lock);
 	mutex_unlock(&kgsl_driver.process_mutex);
 
+	kgsl_put_work_period(private->period);
 	kfree(private->cmdline);
 	put_pid(private->pid);
 	idr_destroy(&private->mem_idr);

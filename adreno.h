@@ -307,6 +307,7 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN8_2_1 = ADRENO_GPUREV_VALUE(8, 2, 1),
 	ADRENO_REV_GEN8_3_0 = ADRENO_GPUREV_VALUE(8, 3, 0),
 	ADRENO_REV_GEN8_4_0 = ADRENO_GPUREV_VALUE(8, 4, 0),
+	ADRENO_REV_GEN8_5_0 = ADRENO_GPUREV_VALUE(8, 5, 0),
 	ADRENO_REV_GEN8_6_0 = ADRENO_GPUREV_VALUE(8, 6, 0),
 	ADRENO_REV_GEN8_8_0 = ADRENO_GPUREV_VALUE(8, 8, 0),
 	ADRENO_REV_GEN8_9_0 = ADRENO_GPUREV_VALUE(8, 9, 0),
@@ -730,6 +731,12 @@ struct adreno_device {
 	struct adreno_coresight_device cx_coresight;
 	/** @funnel_gfx:  A coresight instance for gfx funnel */
 	struct adreno_funnel_device funnel_gfx;
+	/**
+	 * @coresight_en_cnt: Retain mask if either coresight-gfx
+	 * or coresight-gfx-cx is enabled; remove only when both
+	 * are disabled
+	 */
+	u32 coresight_en_cnt;
 #endif
 
 	uint32_t gpmu_throttle_counters[ADRENO_GPMU_THROTTLE_COUNTERS];
@@ -1405,6 +1412,7 @@ ADRENO_TARGET(gen8_2_0, ADRENO_REV_GEN8_2_0)
 ADRENO_TARGET(gen8_2_1, ADRENO_REV_GEN8_2_1)
 ADRENO_TARGET(gen8_3_0, ADRENO_REV_GEN8_3_0)
 ADRENO_TARGET(gen8_4_0, ADRENO_REV_GEN8_4_0)
+ADRENO_TARGET(gen8_5_0, ADRENO_REV_GEN8_5_0)
 ADRENO_TARGET(gen8_6_0, ADRENO_REV_GEN8_6_0)
 ADRENO_TARGET(gen8_8_0, ADRENO_REV_GEN8_8_0)
 ADRENO_TARGET(gen8_9_0, ADRENO_REV_GEN8_9_0)
@@ -1436,7 +1444,7 @@ static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 static inline int adreno_is_gen8_2_x(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen8_2_0(adreno_dev) || adreno_is_gen8_2_1(adreno_dev) ||
-		adreno_is_gen8_9_0(adreno_dev);
+		adreno_is_gen8_5_0(adreno_dev) || adreno_is_gen8_9_0(adreno_dev);
 }
 
 static inline int adreno_is_gen8_0_x_family(struct adreno_device *adreno_dev)

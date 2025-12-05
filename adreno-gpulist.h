@@ -4122,6 +4122,94 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_9_0 = {
 	.bcl_data = 1,
 };
 
+static const struct hfi_clx_table_v2_cmd gen8_11_0_clx_table = {
+	.version = (2 << 16) | 1,
+	.domain = {
+		/* GFX domain */
+		{
+			.data0 = CLX_DATA(60, 6, 1, 1),
+			.clxt = 0,
+			.clxh = 0,
+			.urgmode = 1,
+			.lkgen = 0,
+			.currbudget = 100,
+		},
+		/* MxG domain */
+		{
+			.data0 = CLX_DATA(60, 1, 1, 1),
+			.clxt = 0,
+			.clxh = 0,
+			.urgmode = 1,
+			.lkgen = 0,
+			.currbudget = 50,
+		},
+	},
+};
+
+static const struct hfi_limits_mit_tbl gen8_11_0_limits_mit_tbl[] = {
+	{
+		.feature_id = GMU_MIT_IFF,
+		.domain = GMU_GX_DOMAIN,
+		.feature_rev = 0,
+		.mit_cfg = {
+			.enable = 1,
+			.msg_path = 0,
+			.lkgen = 0,
+			.mode = 0,
+			.sid_val = 0xC,
+			.mit_time = 5,
+			.curr_limit = 6000,
+		}
+	},
+	{
+		.feature_id = GMU_MIT_IFF,
+		.domain = GMU_MX_DOMAIN,
+		.feature_rev = 0,
+		.mit_cfg = {
+			.enable = 1,
+			.msg_path = 0,
+			.lkgen = 0,
+			.mode = 0,
+			.sid_val = 0x12,
+			.mit_time = 2000,
+			.curr_limit = 6000,
+		}
+	},
+	{
+		.feature_id = GMU_MIT_PCLX,
+		.domain = GMU_GX_DOMAIN,
+		.feature_rev = 0,
+		.mit_cfg = {
+			.enable = 1,
+			.msg_path = 0,
+			.lkgen = 0,
+			.mode = 0,
+			.sid_val = 7,
+			.mit_time = 3,
+			.curr_limit = 30000,
+		}
+	},
+	{
+		.feature_id = GMU_MIT_PCLX,
+		.domain = GMU_MX_DOMAIN,
+		.feature_rev = 0,
+		.mit_cfg = {
+			.enable = 0,
+			.msg_path = 0,
+			.lkgen = 0,
+			.mode = 0,
+			.sid_val = 7,
+			.mit_time = 3,
+			.curr_limit = 6000,
+		}
+	},
+};
+
+static const struct gen8_limits_mit_cfg gen8_11_0_limits_mit_cfg = {
+	.limits_mit_tbl = gen8_11_0_limits_mit_tbl,
+	.len = ARRAY_SIZE(gen8_11_0_limits_mit_tbl),
+};
+
 /* GEN8_11_0 protected register list */
 static const struct gen8_protected_regs gen8_11_0_protected_regs[] = {
 	{ GEN8_CP_PROTECT_REG_GLOBAL + 0, 0x00008, 0x003a3, 0 },
@@ -4264,7 +4352,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_0 = {
 				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
 		.compatible = "qcom,adreno-gpu-gen8-11-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_LPAC | ADRENO_PREEMPTION |
-			ADRENO_GMU_WARMBOOT | ADRENO_GMU_BASED_DCVS |
+			ADRENO_GMU_WARMBOOT | ADRENO_GMU_BASED_DCVS | ADRENO_CLX |
 			ADRENO_GMU_THERMAL_MITIGATION | ADRENO_AQE | ADRENO_CONTENT_PROTECTION |
 			ADRENO_BCL,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
@@ -4296,11 +4384,12 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_0 = {
 	.cl_no_ft_timeout_ms = 6500,
 	.ctxt_record_size = (19708 * SZ_1K),
 	.therm_cfg = &therm_mit_cfg_8_2_0,
-	.limits_mit_cfg = &gen8_2_0_limits_mit_cfg,
+	.limits_mit_cfg = &gen8_11_0_limits_mit_cfg,
 	.preempt_level = 0,
 	.gmu_mx_gdsc = true,
 	.three_rail_memory = true,
 	.malu = true,
+	.clx_tbl = &gen8_11_0_clx_table,
 };
 
 static const struct adreno_gen8_core adreno_gpu_core_gen8_17_0 = {

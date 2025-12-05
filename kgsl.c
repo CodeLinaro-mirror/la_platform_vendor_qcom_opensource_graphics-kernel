@@ -5301,10 +5301,14 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 	if (status)
 		return status;
 
+	status = gmu_core_init(device);
+	if (status)
+		goto error_gmu_core;
+
 	/* Can return -EPROBE_DEFER */
 	status = kgsl_pwrctrl_init(device);
 	if (status)
-		goto error;
+		goto error_pwrctrl;
 
 	device->events_worker = kthread_create_worker(0, "kgsl-events");
 
@@ -5348,7 +5352,9 @@ error_pwrctrl_close:
 		kthread_destroy_worker(device->events_worker);
 
 	kgsl_pwrctrl_close(device);
-error:
+error_pwrctrl:
+	gmu_core_close(device);
+error_gmu_core:
 	_unregister_device(device);
 	return status;
 }
@@ -5369,6 +5375,7 @@ void kgsl_device_platform_remove(struct kgsl_device *device)
 	kgsl_free_globals(device);
 
 	kgsl_pwrctrl_close(device);
+	gmu_core_close(device);
 
 	kgsl_device_debugfs_close(device);
 	_unregister_device(device);

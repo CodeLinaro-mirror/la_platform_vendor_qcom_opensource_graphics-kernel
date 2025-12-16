@@ -2511,8 +2511,8 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_5_0 = {
 				UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
 		.compatible = "qcom,adreno-gpu-gen7-5-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_IFPC |
-			ADRENO_PREEMPTION | ADRENO_L3_VOTE | ADRENO_DMS | ADRENO_ACD |
-			ADRENO_LPAC,
+				ADRENO_PREEMPTION | ADRENO_L3_VOTE | ADRENO_DMS | ADRENO_ACD |
+				ADRENO_LPAC | ADRENO_BCL,
 		.gpudev = &adreno_gen7_gmu_gpudev.base,
 		.perfcounters = &adreno_gen7_2_0_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
@@ -2534,6 +2534,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_5_0 = {
 	.protected_regs = gen7_2_0_protected_regs,
 	.highest_bank_bit = 17,
 	.gmu_hub_clk_freq = 200000000,
+	.bcl_data = 1,
 	.gen7_snapshot_block_list = &gen7_5_0_snapshot_block_list,
 	.preempt_level = 1,
 	.ctxt_record_size = (4192 * SZ_1K),

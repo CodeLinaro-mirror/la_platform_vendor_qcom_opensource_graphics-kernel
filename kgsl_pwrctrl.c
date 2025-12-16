@@ -17,6 +17,11 @@
 #include <linux/units.h>
 #include <soc/qcom/dcvs.h>
 #include <linux/version.h>
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+#include <linux/firmware/qcom/qcom_scm.h>
+#else
+#include <linux/qcom_scm.h>
+#endif
 
 #include "kgsl_device.h"
 #include "kgsl_bus.h"
@@ -26,12 +31,16 @@
 #include "kgsl_sysfs.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
+#include "gen8_reg.h"
 
 #define UPDATE_BUSY_VAL		1000000
 
 #define KGSL_MAX_BUSLEVELS	20
 
 #define GX_GDSC_TIMEOUT_MS	200
+
+#define SECURE_REGREAD(GEN8_GCC_BASE, offset) \
+	(GEN8_GCC_BASE + ((offset) << 2))
 
 /* Order deeply matters here because reasons. New entries go on the end */
 static const char * const clocks[KGSL_MAX_CLKS] = {
@@ -1421,6 +1430,85 @@ int kgsl_pwrctrl_enable_mx_gdsc(struct kgsl_device *device)
 	return ret;
 }
 
+struct reg_pairs {
+	u32 address;
+	const char *str;
+};
+
+static const struct reg_pairs gpucc_reg_pairs[] = {
+	{ GEN8_GPUCC_GPU_CC_CX_GDSCR, "GPUCC_GPU_CC_CX_GDSCR" },
+	{ GEN8_GPUCC_GPU_CC_CX_CFG_GDSCR, "GPUCC_GPU_CC_CX_CFG_GDSCR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_CFG1_GDSR, "GPUCC_GPU_CC_CX_HW_CTRL_CFG1_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_CFG2_GDSR, "GPUCC_GPU_CC_CX_HW_CTRL_CFG2_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_DVM_STATUS_GDSR, "GPUCC_GPU_CC_CX_HW_CTRL_DVM_STATUS_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_HALT1_STATUS_GDSR,
+		"GPUCC_GPU_CC_CX_HW_CTRL_HALT1_STATUS_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_HALT2_STATUS_GDSR,
+		"GPUCC_GPU_CC_CX_HW_CTRL_HALT2_STATUS_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_REQ_SW_GDSR, "GPUCC_GPU_CC_CX_HW_CTRL_REQ_SW_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_IRQ_STATUS_GDSR, "GPUCC_GPU_CC_CX_HW_CTRL_IRQ_STATUS_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_GDS_HW_CTL_SMMU_HALT_STATUS,
+		"GPUCC_GPU_CC_CX_GDS_HW_CTL_SMMU_HALT_STATUS" },
+	{ GEN8_GPUCC_GPU_CC_TZ_VOTE_GPU_SMMU_GDS, "GPUCC_GPU_CC_TZ_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GPUCC_GPU_CC_HYP_VOTE_GPU_SMMU_GDS, "GPUCC_GPU_CC_HYP_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GPUCC_GPU_CC_HLOS1_VOTE_GPU_SMMU_GDS, "GPUCC_GPU_CC_HLOS1_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GPUCC_GPU_CC_SPARE_VOTE_GPU_SMMU_GDS, "GPUCC_GPU_CC_SPARE_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GPUCC_GPU_CC_CX_CFG2_GDSCR, "GPUCC_GPU_CC_CX_CFG2_GDSCR" },
+	{ GEN8_GPUCC_GPU_CC_CX_CFG3_GDSCR, "GPUCC_GPU_CC_CX_CFG3_GDSCR" },
+	{ GEN8_GPUCC_GPU_CC_CX_CFG4_GDSCR, "GPUCC_GPU_CC_CX_CFG4_GDSCR" },
+	{ GEN8_GPUCC_GPU_CC_MEMNOC_GFX_CBCR, "GPUCC_GPU_CC_MEMNOC_GFX_CBCR" },
+	{ GEN8_GPUCC_GPU_CC_MEMNOC_GFX_SREGR, "GPUCC_GPU_CC_MEMNOC_GFX_SREGR" },
+	{ GEN8_GPUCC_GPU_CC_MEMNOC_GFX_CFG_SREGR, "GPUCC_GPU_CC_MEMNOC_GFX_CFG_SREGR" },
+	{ GEN8_GPUCC_GPU_CC_MEMNOC_GFX_CFG2_SREGR, "GPUCC_GPU_CC_MEMNOC_GFX_CFG2_SREGR" },
+	{ GEN8_GPUCC_GPU_CC_MEMNOC_GFX_SW_CLK_DIS, "GPUCC_GPU_CC_MEMNOC_GFX_SW_CLK_DIS" },
+	{ GEN8_GPUCC_GPU_CC_HLOS1_VOTE_GPU_SMMU_CLK, "GPUCC_GPU_CC_HLOS1_VOTE_GPU_SMMU_CLK" },
+	{ GEN8_GPUCC_GPU_CC_HYP_VOTE_GPU_SMMU_CLK, "GPUCC_GPU_CC_HYP_VOTE_GPU_SMMU_CLK" },
+};
+
+static const struct reg_pairs gcc_reg_pairs[] = {
+	{ GEN8_GCC_TURING_DSP_VOTE_GPU_SMMU_GDS, "GCC_TURING_DSP_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_TURING_DSP_VOTE_ALL_SMMU_MMU_GDS, "GCC_TURING_DSP_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_TZ_VOTE_GPU_SMMU_GDS, "GCC_TZ_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_TZ_VOTE_ALL_SMMU_MMU_GDS, "GCC_TZ_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_HYP_VOTE_GPU_SMMU_GDS, "GCC_HYP_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_HYP_VOTE_ALL_SMMU_MMU_GDS, "GCC_HYP_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_HLOS1_VOTE_GPU_SMMU_GDS, "GCC_HLOS1_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_HLOS1_VOTE_ALL_SMMU_MMU_GDS, "GCC_HLOS1_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_HLOS2_VOTE_GPU_SMMU_GDS, "GCC_HLOS2_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_HLOS2_VOTE_ALL_SMMU_MMU_GDS, "GCC_HLOS2_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_SP_VOTE_GPU_SMMU_GDS, "GCC_SP_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_SP_VOTE_ALL_SMMU_MMU_GDS, "GCC_SP_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_MSS_VOTE_GPU_SMMU_GDS, "GCC_MSS_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_MSS_VOTE_ALL_SMMU_MMU_GDS, "GCC_MSS_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_GPU_GEMNOC_GFX_CBCR, "GCC_GPU_GEMNOC_GFX_CBCR" },
+};
+
+static void dump_cx_gdsc_timeout_reg(struct kgsl_device *device)
+{
+	int i;
+	u32 val;
+	phys_addr_t phys;
+
+	for (i = 0; i < ARRAY_SIZE(gpucc_reg_pairs); i++) {
+		kgsl_regread(device, gpucc_reg_pairs[i].address, &val);
+
+		dev_err(device->dev, "GPUCC: register: %s, value: 0x%x\n",
+			gpucc_reg_pairs[i].str, val);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(gcc_reg_pairs); i++) {
+		phys = SECURE_REGREAD(GEN8_GCC_BASE, gcc_reg_pairs[i].address);
+
+		if (qcom_scm_io_readl(phys, &val) == 0) {
+			dev_err(device->dev, "GCC: register: %s, value: 0x%x\n",
+				gcc_reg_pairs[i].str, val);
+		} else {
+			dev_err(device->dev, "Failed to read %s value\n",
+				gcc_reg_pairs[i].str);
+		}
+	}
+}
+
 int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
@@ -1440,6 +1528,7 @@ int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 #if (KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE)
 			qcom_gdsc_genpd_dump(pwr->cx_pd);
 #endif
+			dump_cx_gdsc_timeout_reg(device);
 		}
 		KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
 			GMU_PDEV(device), 0ULL, GMU_FAULT_CX_WAIT_TIMEOUT);
@@ -1676,6 +1765,7 @@ static int kgsl_cx_gdsc_event(struct notifier_block *nb,
 			qcom_gdsc_genpd_dump(pwr->cx_pd);
 #endif
 			log_kgsl_cx_wait_timeout_event(NONHLOS_CX_WAIT_TIMEOUT);
+			dump_cx_gdsc_timeout_reg(device);
 			KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
 				GMU_PDEV(device), 0ULL, GMU_FAULT_WAIT_FOR_CX);
 		}

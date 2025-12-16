@@ -4298,6 +4298,39 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_0 = {
 	.malu = true,
 };
 
+static const struct adreno_gen8_core adreno_gpu_core_gen8_17_0 = {
+	.base = {
+		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_17_0,
+				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
+		.compatible = "qcom,adreno-gpu-gen8-17-0",
+		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
+			ADRENO_CONTENT_PROTECTION | ADRENO_IFPC |
+			ADRENO_GMU_AB,
+		.gpudev = &adreno_gen8_hwsched_gpudev.base,
+		.perfcounters = &adreno_gen8_perfcounters,
+		.uche_gmem_alignment = SZ_64M,
+		.gmem_size = (SZ_512K + SZ_64K),
+		.bus_width = 32,
+		.snapshot_size = SZ_8M,
+		.num_ddr_channels = 2,
+	},
+	.sqefw_name = "gen80300_sqe.fw",
+	.gmufw_name = "gen81700_gmu.bin",
+	.zap_name = "gen80300_zap.mbn",
+	.ao_hwcg = gen8_ao_hwcg_regs,
+	.ao_hwcg_count = ARRAY_SIZE(gen8_ao_hwcg_regs),
+	.gbif = gen8_3_0_gbif_cx_regs,
+	.gbif_count = ARRAY_SIZE(gen8_3_0_gbif_cx_regs),
+	.hang_detect_cycles = 0xcfffff,
+	.protected_regs = gen8_0_0_protected_regs, /* Reuse the protected regs list from Gen8_0_0 */
+	.nonctxt_regs = gen8_3_0_nonctxt_regs,
+	.highest_bank_bit = 15,
+	.gmu_hub_clk_freq = 200000000,
+	.gen8_snapshot_block_list = &gen8_3_0_snapshot_block_list,
+	.ctxt_record_size = (4558 * SZ_1K),
+	.noc_timeout_us = 3410, /* 3.41 msec */
+};
+
 static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_a306,		/* Deprecated */
 	&adreno_gpu_core_a306a,		/* Deprecated */
@@ -4367,4 +4400,5 @@ static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_gen8_8_0.base,
 	&adreno_gpu_core_gen8_9_0.base,
 	&adreno_gpu_core_gen8_11_0.base,
+	&adreno_gpu_core_gen8_17_0.base,
 };

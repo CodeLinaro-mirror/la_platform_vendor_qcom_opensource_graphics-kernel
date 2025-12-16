@@ -1169,7 +1169,7 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 		 * of bits set in the slice mask.
 		 */
 		adreno_dev->chipid |= FIELD_PREP(GENMASK(7, 4), hweight32(slice_mask));
-	} else if (adreno_is_gen8_3_0(adreno_dev) || adreno_is_gen8_8_0(adreno_dev))
+	} else if (adreno_is_gen8_3_0_family(adreno_dev))
 		slice_mask = GENMASK(GEN8_3_0_NUM_PHYSICAL_SLICES - 1, 0);
 	else if (adreno_is_gen8_6_0(adreno_dev))
 		slice_mask = GENMASK(GEN8_6_0_NUM_PHYSICAL_SLICES - 1, 0);
@@ -1484,7 +1484,7 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	u32 first_slice = gen8_first_slice(adreno_dev);
 
 	/* Static IFPC restore only registers */
-	if (adreno_is_gen8_3_0(adreno_dev) || adreno_is_gen8_8_0(adreno_dev)) {
+	if (adreno_is_gen8_3_0_family(adreno_dev)) {
 		reglist[items].regs = gen8_3_0_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_3_0_ifpc_pwrup_reglist);
 	} else if (adreno_is_gen8_2_x(adreno_dev)) {
@@ -1501,7 +1501,7 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	items++;
 
 	/* Static IFPC + preemption registers */
-	if (adreno_is_gen8_3_0(adreno_dev) || adreno_is_gen8_8_0(adreno_dev)) {
+	if (adreno_is_gen8_3_0_family(adreno_dev)) {
 		reglist[items].regs = gen8_3_0_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_3_0_pwrup_reglist);
 	} else if (adreno_is_gen8_2_x(adreno_dev)) {

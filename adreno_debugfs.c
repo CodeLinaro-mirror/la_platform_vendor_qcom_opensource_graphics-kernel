@@ -1020,6 +1020,88 @@ static int _host_based_dcvs_store(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(host_based_dcvs_fops, _host_based_dcvs_show,
 				_host_based_dcvs_store, "%llu\n");
 
+static int _gpu_voltage_show(struct seq_file *s, void *unused)
+{
+	struct kgsl_device *device = s->private;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	int i;
+
+	for (i = 0; i < pwr->num_pwrlevels; i++)
+		seq_printf(s, "pwrlevel %d: voltage %u\n", i,
+			pwr->pwrlevels[i].voltage_level);
+
+	return 0;
+}
+
+static int _gpu_voltage_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, _gpu_voltage_show, inode->i_private);
+}
+
+static ssize_t _gpu_voltage_write(struct file *file, const char __user *user_buf,
+		size_t count, loff_t *ppos)
+{
+	struct seq_file *s = file->private_data;
+	struct kgsl_device *device = s->private;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 pwrlevel, voltage_level;
+	int ret, i;
+	char buf[32];
+
+	if (!adreno_is_gen8(adreno_dev))
+		return -EINVAL;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	buf[count] = 0;
+
+	ret = sscanf(buf, "%u %u", &pwrlevel, &voltage_level);
+	if (ret != 2)
+		return -EINVAL;
+
+	if (pwrlevel >= pwr->num_pwrlevels)
+		return -EINVAL;
+
+	/* Clamp voltage_level to supported range of gpu frequency */
+	if (voltage_level > pwr->pwrlevels[0].voltage_level)
+		voltage_level = pwr->pwrlevels[0].voltage_level;
+	else if (voltage_level < pwr->pwrlevels[pwr->num_pwrlevels - 1].voltage_level)
+		voltage_level = pwr->pwrlevels[pwr->num_pwrlevels - 1].voltage_level;
+	else {
+		/*
+		 * Find the first existing voltage_level level that is greater than or
+		 * equal to the requested voltage_level.
+		 */
+		for (i = pwr->num_pwrlevels - 1; i >= 0; i--) {
+			if (voltage_level <= pwr->pwrlevels[i].voltage_level) {
+				voltage_level = pwr->pwrlevels[i].voltage_level;
+				break;
+			}
+		}
+	}
+
+	kgsl_mutex_lock(&device->mutex);
+	pwr->pwrlevels[pwrlevel].voltage_level = voltage_level;
+	pwr->update_dcvs_table = true;
+	gmu_core_mark_for_coldboot(device);
+	kgsl_mutex_unlock(&device->mutex);
+	return count;
+}
+
+static const struct file_operations gpu_voltage_fops = {
+	.owner = THIS_MODULE,
+	.open = _gpu_voltage_open,
+	.read = seq_read,
+	.write = _gpu_voltage_write,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 void adreno_debugfs_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1123,4 +1205,7 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS))
 		debugfs_create_file("host_based_dcvs", 0644, device->d_debugfs,
 				device, &host_based_dcvs_fops);
+
+	debugfs_create_file("gpu_voltage", 0644, device->d_debugfs,
+			device, &gpu_voltage_fops);
 }

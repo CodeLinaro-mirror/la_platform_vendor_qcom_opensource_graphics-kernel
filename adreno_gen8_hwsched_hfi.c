@@ -2737,6 +2737,7 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct pending_cmd ack = {0};
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int ret;
 
 	reset_hfi_queues(adreno_dev);
@@ -2772,6 +2773,12 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	ret = gen8_allocate_pwr_limits_trace_buf(adreno_dev);
 	if (ret)
 		goto err;
+
+	if (pwr->update_dcvs_table) {
+		ret = gen8_build_rpmh_tables(adreno_dev);
+		if (ret)
+			goto err;
+	}
 
 	ret = gen8_hfi_send_gpu_perf_table(adreno_dev);
 	if (ret)

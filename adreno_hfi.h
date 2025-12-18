@@ -1389,6 +1389,8 @@ struct payload_section {
 #define GMU_UCHE_OOB_ACCESS 653
 #define GMU_UCHE_TRAP_INTR  654
 #define GMU_TSB_WRITE_ERROR 655
+/* DBGC interrupt */
+#define GMU_DBGC_INTR_ERROR 656
 
 /* GPU encountered an unknown CP error */
 #define GMU_CP_UNKNOWN_ERROR 700
@@ -1424,6 +1426,12 @@ enum gpu_tuning_attr {
 /* Macro for subtype of the HFI_VALUE_DCVS_TUNING_PARAM property */
 #define HFI_DCVS_ATTRS_DEFAULT 0
 #define HFI_DCVS_ATTRS_AGGREGATED 1
+
+enum gpu_dcvs_profile_action {
+	GMU_DCVS_PROFILE_REGISTER = 1,
+	GMU_DCVS_PROFILE_ACTIVATE = 2,
+	GMU_DCVS_PROFILE_DEACTIVATE = 3,
+};
 
 /**
  * hfi_update_read_idx - Update the read index of an hfi queue

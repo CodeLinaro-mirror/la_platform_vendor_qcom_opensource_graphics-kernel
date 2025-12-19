@@ -3531,6 +3531,29 @@ static struct gen8_thermal_mit_cfg therm_mit_cfg_8_2_0 = {
 	.tsens_en_cfg = &tsens_en_cfg_8_2_0,
 };
 
+static struct hfi_therm_profile_ctrl therm_profile_8_11_0 = {
+	.feature_en = 1,
+	.feature_rev = 1,
+	.tj_limit = 900,
+	.tskin_addr = 0,
+	.tskin_limit = 0,
+	.tsens_cfg_cnt = 1,
+	.tsens_cfg.limit_u = 1080,
+	.tsens_cfg.limit_l = 10,
+	.tsens_cfg.margin_u = 30,
+	.tsens_cfg.margin_l = 20,
+	.throttle_cfg.throttle_hyst = 250,
+	.throttle_cfg.num_throttle_cnt = 3,
+	.throttle_cfg.throttle_lvls[0] = 50,
+	.throttle_cfg.throttle_lvls[1] = 37,
+	.throttle_cfg.throttle_lvls[2] = 20,
+};
+
+static struct gen8_thermal_mit_cfg therm_mit_cfg_8_11_0 = {
+	.therm = &therm_profile_8_11_0,
+	.tsens_en_cfg = &tsens_en_cfg_8_2_0,
+};
+
 static const struct hfi_therm_profile_ctrl therm_profile_8_9_0 = {
 	.feature_en = 1,
 	.feature_rev = 1,
@@ -4411,7 +4434,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_0 = {
 	.noc_timeout_us = 3410, /* 3.41 msec */
 	.cl_no_ft_timeout_ms = 6500,
 	.ctxt_record_size = (19708 * SZ_1K),
-	.therm_cfg = &therm_mit_cfg_8_2_0,
+	.therm_cfg = &therm_mit_cfg_8_11_0,
 	.limits_mit_cfg = &gen8_11_0_limits_mit_cfg,
 	.preempt_level = 0,
 	.gmu_mx_gdsc = true,

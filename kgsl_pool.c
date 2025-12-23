@@ -6,6 +6,7 @@
 
 #include <linux/debugfs.h>
 #include <linux/highmem.h>
+#include <linux/mm.h>
 #include <linux/of.h>
 #include <linux/scatterlist.h>
 #include <linux/version.h>
@@ -15,6 +16,7 @@
 #include "kgsl_pool.h"
 #include "kgsl_sharedmem.h"
 #include "kgsl_trace.h"
+#include "kgsl_util.h"
 
 #ifdef CONFIG_QCOM_KGSL_SORT_POOL
 
@@ -518,7 +520,7 @@ int kgsl_pool_alloc_page(int *page_size, struct page **pages,
 
 done:
 	for (j = 0; j < (*page_size >> PAGE_SHIFT); j++) {
-		p = nth_page(page, j);
+		p = kgsl_nth_page(page, j);
 		pages[pcount] = p;
 		pcount++;
 	}

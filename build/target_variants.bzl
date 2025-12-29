@@ -28,7 +28,6 @@ gki_targets = [
     "niobe",
     "pitti",
     "sdmsteppeauto",
-    "seraph",
 ]
 
 gki_variants = [
@@ -41,6 +40,7 @@ gki_perf_targets = [
     # keep sorted
     "gen3auto",
     "pineapple",
+    "seraph",
 ]
 
 gki_perf_variants = [

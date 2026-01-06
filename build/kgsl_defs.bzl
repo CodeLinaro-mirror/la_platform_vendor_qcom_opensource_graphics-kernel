@@ -1,7 +1,7 @@
 load("@rules_pkg//pkg:install.bzl", "pkg_install")
 load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
 load("//build/kernel/kleaf:kernel.bzl", "ddk_headers", "ddk_module", "kernel_module_group")
-load(":build/target_variants.bzl", "get_all_variants")
+load(":build/target_variants.bzl", "get_16k_tv", "get_all_variants", "targets")
 
 msm_kgsl_includes = [
     "include/linux/msm_kgsl.h",
@@ -119,6 +119,7 @@ def external_deps(target, variant):
         "vienna-le",
         "lahaina",
         "art",
+        "art16k",
         "bengal",
         "chora",
         "malabar",
@@ -229,6 +230,20 @@ def define_target_variant_module(target, variant):
         destdir = "out/target/product/{}/dlkm/lib/modules/".format(target),
     )
 
+def matching_la_variant(target_16k):
+    for target in targets:
+        if target_16k.startswith(target):
+            return target
+    return None
+
+def define_16k_aliases(target_16k, variant):
+    tv_16k = "{}_{}".format(target_16k, variant)
+    tv = "{}_{}".format(matching_la_variant(target_16k), variant)
+    native.alias(
+        name = "config/{}_gpuconf".format(tv_16k),
+        actual = "config/{}_gpuconf".format(tv),
+    )
+
 def define_target_modules():
     ddk_headers(
         name = "kgsl_uapi_headers",
@@ -237,5 +252,7 @@ def define_target_modules():
         visibility = ["//visibility:public"],
     )
 
+    for target, variant in get_16k_tv():
+        define_16k_aliases(target, variant)
     for target, variant in get_all_variants():
         define_target_variant_module(target, variant)

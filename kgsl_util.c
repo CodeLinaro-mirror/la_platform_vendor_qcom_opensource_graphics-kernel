@@ -225,6 +225,30 @@ void kgsl_hwunlock(struct cpu_gpu_lock *lock)
 	lock->cpu_req = 0;
 }
 
+int kgsl_get_resource_address_size(struct kgsl_device *device, struct platform_device *pdev,
+	const char *resource, uint64_t *address, uint64_t *size)
+{
+	const __be32 *prop;
+	int len;
+	int addr_cells = of_n_addr_cells(pdev->dev.of_node);
+	int size_cells = of_n_size_cells(pdev->dev.of_node);
+
+	prop = of_get_property(pdev->dev.of_node, resource, &len);
+	if (!prop)
+		return -ENODEV;
+
+	if (len != ((addr_cells + size_cells) * sizeof(__be32))) {
+		dev_err_ratelimited(device->dev, "of property %s has len %d expected %lu\n",
+		resource, len, (addr_cells + size_cells) * sizeof(__be32));
+		return -E2BIG;
+	}
+
+	*address =  of_read_number(prop, addr_cells);
+	*size = of_read_number(prop + addr_cells, size_cells);
+
+	return 0;
+}
+
 #if IS_ENABLED(CONFIG_QCOM_VA_MINIDUMP)
 #include <soc/qcom/minidump.h>
 

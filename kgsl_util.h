@@ -199,6 +199,19 @@ int kgsl_zap_shader_load(struct device *dev, const char *name);
  */
 int kgsl_zap_shader_unload(struct device *dev);
 
+/**
+ * kgsl_get_resource_address_size - Get a resource's address and size
+ * @device: Pointer to the kgsl device
+ * @pdev: Pointer to the platform device
+ * #resource: Resource name
+ * address: Pointer to store resource address in
+ * @size: Pointer to store resource size in
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int kgsl_get_resource_address_size(struct kgsl_device *device, struct platform_device *pdev,
+	const char *resource, uint64_t *address, uint64_t *size);
+
 #if IS_ENABLED(CONFIG_QCOM_VA_MINIDUMP)
 /**
  * kgsl_add_to_minidump - Add a physically contiguous section to minidump

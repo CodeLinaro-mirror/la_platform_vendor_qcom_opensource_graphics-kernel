@@ -326,6 +326,17 @@ static void gen8_hwsched_spel_handshake(struct adreno_device *adreno_dev)
 	spel->handshake_done = true;
 }
 
+static int _populate_ipcc_vrb_size(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u64 addr = 0, size = 0;
+
+	if (kgsl_get_resource_address_size(device, GMU_PDEV(device), "qcom,ipc-core", &addr, &size))
+		return 0;
+
+	return gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_IPCC_SIZE_BYTES, size);
+}
+
 static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -384,6 +395,10 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto clks_gdsc_off;
 
 	ret = gen8_gmu_set_non_bufferable_carveout(adreno_dev);
+	if (ret)
+		goto clks_gdsc_off;
+
+	ret = _populate_ipcc_vrb_size(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;
 

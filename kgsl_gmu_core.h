@@ -251,6 +251,16 @@ enum gmu_vrb_idx {
 	VRB_NON_BUFFERABLE_CARVEOUT_SIZE = 20,
 	/* Contains the size (bytes) of synx memory */
 	VRB_SYNX_SIZE_BYTES = 21,
+	/*
+	 * Contains the size (bytes) of hw fence memory. This needs to be communicated to GMU so
+	 * that GMU doesn't hardcode it.
+	 */
+	VRB_HW_FENCE_SIZE_BYTES = 22,
+	/*
+	 * Contains the size (bytes) of ipcc register space. This needs to be communicated to GMU so
+	 * that GMU doesn't hardcode it.
+	 */
+	VRB_IPCC_SIZE_BYTES = 23,
 };
 
 /* For GMU Trace */

@@ -3230,6 +3230,9 @@ static void _hw_fence_register(struct adreno_device *adreno_dev)
 	if (kgsl_hw_fence_register(device, &hwsched->hw_fence.md))
 		return;
 
+	gmu_core_set_vrb_register(device->gmu_core.vrb,
+		VRB_HW_FENCE_SIZE_BYTES, hwsched->hw_fence.md.size);
+
 	set_bit(GMU_HWSCHED_HW_FENCE, &device->gmu_core.flags);
 }
 

@@ -1779,18 +1779,22 @@ static const struct kgsl_regmap_list gen8_0_0_bicubic_regs[] = {
 void gen8_enable_ahb_timeout_detection(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	u32 val;
+	u32 cntl_val, host_cntl_val;
 
 	if (!adreno_dev->ahb_timeout_val)
 		return;
 
-	val = (ADRENO_AHB_CNTL_DEFAULT | FIELD_PREP(GENMASK(4, 0),
+	/* HOST timeout should be greater than other AHB slaves */
+	cntl_val = (ADRENO_AHB_CNTL_DEFAULT | FIELD_PREP(GENMASK(4, 0),
+			adreno_dev->ahb_timeout_val - 1));
+	host_cntl_val = (ADRENO_AHB_CNTL_DEFAULT | FIELD_PREP(GENMASK(4, 0),
 			adreno_dev->ahb_timeout_val));
-	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_AON_CNTL, val);
-	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_GMU_CNTL, val);
-	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_CP_CNTL, val);
-	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, val);
-	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_HOST_CNTL, val);
+
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_AON_CNTL, cntl_val);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_GMU_CNTL, cntl_val);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_CP_CNTL, cntl_val);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, cntl_val);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_HOST_CNTL, host_cntl_val);
 }
 
 #define MIN_HBB 13

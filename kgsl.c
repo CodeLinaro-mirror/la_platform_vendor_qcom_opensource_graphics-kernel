@@ -98,17 +98,24 @@ static const struct vm_operations_struct kgsl_gpumem_vm_ops;
 
 #if (KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE)
 static unsigned long kgsl_mm_get_unmapped_area(struct mm_struct *mm, struct file *file,
-		     unsigned long addr, unsigned long len,
-		     unsigned long pgoff, unsigned long flags)
+			unsigned long addr, unsigned long len,
+			unsigned long pgoff, unsigned long flags)
 {
 	return mm->get_unmapped_area(file, addr, len, pgoff, flags);
 }
-#else
+#elif (KERNEL_VERSION(6, 19, 0) > LINUX_VERSION_CODE)
 static unsigned long kgsl_mm_get_unmapped_area(struct mm_struct *mm, struct file *file,
-		     unsigned long addr, unsigned long len,
-		     unsigned long pgoff, unsigned long flags)
+			unsigned long addr, unsigned long len,
+			unsigned long pgoff, unsigned long flags)
 {
 	return mm_get_unmapped_area(mm, file, addr, len, pgoff, flags);
+}
+#else
+static unsigned long kgsl_mm_get_unmapped_area(struct mm_struct *mm, struct file *file,
+			unsigned long addr, unsigned long len,
+			unsigned long pgoff, unsigned long flags)
+{
+	return mm_get_unmapped_area(file, addr, len, pgoff, flags);
 }
 #endif
 

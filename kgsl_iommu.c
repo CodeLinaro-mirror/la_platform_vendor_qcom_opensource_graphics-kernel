@@ -841,7 +841,7 @@ static int kgsl_iommu_reserve_global_gpuaddr(struct kgsl_mmu *mmu,
 	if (memdesc->gpuaddr)
 		return -EINVAL;
 
-	if (memdesc->flags & KGSL_MEMFLAGS_SECURE) {
+	if (kgsl_memdesc_is_secured(memdesc)) {
 		int ret = kgsl_iommu_get_gpuaddr(mmu->securepagetable, memdesc);
 
 		WARN_ON(ret);
@@ -867,7 +867,7 @@ static void kgsl_iommu_map_global(struct kgsl_mmu *mmu,
 			return;
 	}
 
-	if (memdesc->flags & KGSL_MEMFLAGS_SECURE)
+	if (kgsl_memdesc_is_secured(memdesc))
 		kgsl_iommu_secure_map(mmu->securepagetable, memdesc);
 	else
 		kgsl_iommu_default_map(mmu->defaultpagetable, memdesc);
@@ -1408,7 +1408,7 @@ static void kgsl_iommu_destroy_default_pagetable(struct kgsl_pagetable *pagetabl
 	struct kgsl_global_memdesc *md;
 
 	list_for_each_entry(md, &device->globals, node) {
-		if (md->memdesc.flags & KGSL_MEMFLAGS_SECURE)
+		if (kgsl_memdesc_is_secured(&md->memdesc))
 			continue;
 
 		kgsl_iommu_default_unmap(pagetable, &md->memdesc);
@@ -2461,8 +2461,7 @@ static int kgsl_iommu_get_gpuaddr(struct kgsl_pagetable *pagetable,
 	if (WARN_ON(kgsl_memdesc_use_cpu_map(memdesc)))
 		return -EINVAL;
 
-	if (memdesc->flags & KGSL_MEMFLAGS_SECURE &&
-			pagetable->name != KGSL_MMU_SECURE_PT)
+	if (kgsl_memdesc_is_secured(memdesc) && (pagetable->name != KGSL_MMU_SECURE_PT))
 		return -EINVAL;
 
 	size = kgsl_memdesc_footprint(memdesc);
@@ -2905,7 +2904,7 @@ int kgsl_iommu_bind(struct kgsl_device *device, struct platform_device *pdev)
 	/* Map any globals that might have been created early */
 	list_for_each_entry(md, &device->globals, node) {
 
-		if (md->memdesc.flags & KGSL_MEMFLAGS_SECURE) {
+		if (kgsl_memdesc_is_secured(&md->memdesc)) {
 			if (IS_ERR_OR_NULL(mmu->securepagetable))
 				continue;
 

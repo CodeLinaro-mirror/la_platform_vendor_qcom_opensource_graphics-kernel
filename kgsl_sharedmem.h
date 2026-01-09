@@ -737,4 +737,10 @@ int kgsl_alloc_shmem_page(struct kgsl_memdesc *memdesc, struct file *shmem_file,
  */
 void kgsl_memdesc_pagelist_cleanup(struct file *shmem_filp, struct kgsl_memdesc *memdesc);
 
+/**
+ * kgsl_memdesc_free_sgt - Clean up the memdesc's sg table
+ * @memdesc: Pointer to the memdesc
+ */
+void kgsl_memdesc_free_sgt(struct kgsl_memdesc *md);
+
 #endif /* __KGSL_SHAREDMEM_H */

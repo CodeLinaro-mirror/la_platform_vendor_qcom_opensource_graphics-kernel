@@ -1010,10 +1010,7 @@ static void _kgsl_contiguous_free(struct kgsl_memdesc *memdesc)
 			memdesc->hostptr, memdesc->physaddr,
 			memdesc->attrs);
 
-	sg_free_table(memdesc->sgt);
-	kfree(memdesc->sgt);
-
-	memdesc->sgt = NULL;
+	kgsl_memdesc_free_sgt(memdesc);
 }
 
 static void kgsl_contiguous_free(struct kgsl_memdesc *memdesc)
@@ -1695,10 +1692,7 @@ static void kgsl_free_secure_system_pages(struct kgsl_memdesc *memdesc)
 		__free_pages(page, get_order(PAGE_SIZE));
 	}
 
-	sg_free_table(memdesc->sgt);
-	kfree(memdesc->sgt);
-
-	memdesc->sgt = NULL;
+	kgsl_memdesc_free_sgt(memdesc);
 }
 
 static void kgsl_free_secure_pages(struct kgsl_memdesc *memdesc)
@@ -1725,10 +1719,7 @@ static void kgsl_free_secure_pages(struct kgsl_memdesc *memdesc)
 
 	kgsl_free_pages_from_sgt(memdesc);
 
-	sg_free_table(memdesc->sgt);
-	kfree(memdesc->sgt);
-
-	memdesc->sgt = NULL;
+	kgsl_memdesc_free_sgt(memdesc);
 }
 
 void kgsl_free_secure_page(struct page *page)
@@ -1911,9 +1902,7 @@ static int kgsl_alloc_secure_pages(struct kgsl_device *device,
 	if (ret) {
 		if (ret != -EADDRNOTAVAIL)
 			kgsl_free_pages_from_sgt(memdesc);
-		sg_free_table(sgt);
-		kfree(sgt);
-		memdesc->sgt = NULL;
+		kgsl_memdesc_free_sgt(memdesc);
 		return ret;
 	}
 
@@ -2051,6 +2040,13 @@ int kgsl_allocate_kernel(struct kgsl_device *device,
 	return 0;
 }
 
+void kgsl_memdesc_free_sgt(struct kgsl_memdesc *md)
+{
+	sg_free_table(md->sgt);
+	kfree(md->sgt);
+	md->sgt = NULL;
+}
+
 int kgsl_memdesc_init_fixed(struct kgsl_device *device,
 		struct platform_device *pdev, const char *resource,
 		struct kgsl_memdesc *memdesc)
@@ -2098,6 +2094,13 @@ struct kgsl_memdesc *kgsl_allocate_global_fixed(struct kgsl_device *device,
 		return ERR_PTR(ret);
 	}
 
+	ret = kgsl_mmu_map_global(device, &gmd->memdesc, 0);
+	if (ret) {
+		kgsl_memdesc_free_sgt(&gmd->memdesc);
+		kfree(gmd);
+		return ERR_PTR(ret);
+	}
+
 	atomic_set(&gmd->memdesc.priv, KGSL_MEMDESC_GLOBAL);
 	gmd->name = name;
 
@@ -2106,7 +2109,6 @@ struct kgsl_memdesc *kgsl_allocate_global_fixed(struct kgsl_device *device,
 	 * while the caller is holding the mutex
 	 */
 	list_add_tail(&gmd->node, &device->globals);
-	kgsl_mmu_map_global(device, &gmd->memdesc, 0);
 
 	return &gmd->memdesc;
 }
@@ -2143,6 +2145,13 @@ struct kgsl_memdesc *kgsl_alloc_map_gpu_global(struct kgsl_device *device,
 	if (gpuaddr)
 		md->memdesc.gpuaddr = gpuaddr;
 
+	ret = kgsl_mmu_map_global(device, &md->memdesc, padding);
+	if (ret) {
+		kgsl_sharedmem_free(&md->memdesc);
+		kfree(md);
+		return ERR_PTR(ret);
+	}
+
 	md->name = name;
 
 	/*
@@ -2151,7 +2160,6 @@ struct kgsl_memdesc *kgsl_alloc_map_gpu_global(struct kgsl_device *device,
 	 */
 	list_add_tail(&md->node, &device->globals);
 
-	kgsl_mmu_map_global(device, &md->memdesc, padding);
 	kgsl_trace_gpu_mem_total(device, md->memdesc.size);
 
 	return &md->memdesc;

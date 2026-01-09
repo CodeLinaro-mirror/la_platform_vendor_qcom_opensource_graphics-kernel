@@ -584,9 +584,7 @@ struct kgsl_memdesc *gmu_core_reserve_kernel_block_fixed(struct kgsl_device *dev
 
 	ret = gmu_core_map_gmu(device, md, addr, vma_id, attrs, align);
 
-	sg_free_table(md->sgt);
-	kfree(md->sgt);
-	md->sgt = NULL;
+	kgsl_memdesc_free_sgt(md);
 
 	if (!ret) {
 		gmu->global_entries++;

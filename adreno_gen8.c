@@ -286,6 +286,7 @@ static const u32 gen8_ifpc_pwrup_reglist[] = {
 	GEN8_SP_CHICKEN_BITS_2,
 	GEN8_SP_CHICKEN_BITS_3,
 	GEN8_SP_PERFCTR_SHADER_MASK,
+	GEN8_SP_HLSQ_DBG_ECO_CNTL,
 	GEN8_CP_PROTECT_REG_GLOBAL,
 	GEN8_CP_PROTECT_REG_GLOBAL + 1,
 	GEN8_CP_PROTECT_REG_GLOBAL + 2,
@@ -344,10 +345,13 @@ static const u32 gen8_2_0_ifpc_pwrup_reglist[] = {
 	GEN8_SP_NC_MODE_CNTL,
 	GEN8_SP_CHICKEN_BITS,
 	GEN8_SP_SS_CHICKEN_BITS_0,
+	GEN8_SP_CHICKEN_BITS_1,
 	GEN8_SP_CHICKEN_BITS_2,
 	GEN8_SP_CHICKEN_BITS_3,
 	GEN8_SP_PERFCTR_SHADER_MASK,
+	GEN8_RBBM_SLICE_PERFCTR_CNTL,
 	GEN8_RBBM_SLICE_INTERFACE_HANG_INT_CNTL,
+	GEN8_SP_HLSQ_DBG_ECO_CNTL,
 	GEN8_SP_HLSQ_DBG_ECO_CNTL_1,
 	GEN8_SP_HLSQ_DBG_ECO_CNTL_2,
 	GEN8_SP_HLSQ_DBG_ECO_CNTL_3,
@@ -518,6 +522,7 @@ static const struct gen8_pwrup_extlist gen8_2_0_pwrup_extlist[] = {
 	{ GEN8_RB_CMP_NC_MODE_CNTL, BIT(PIPE_BR) },
 	{ GEN8_RB_RBP_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, BIT(PIPE_BR) },
+	{ GEN8_RB_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, BIT(PIPE_BR) },
 	{ GEN8_VFD_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_VFD_CB_BV_THRESHOLD, BIT(PIPE_BV) | BIT(PIPE_BR) },
@@ -605,12 +610,13 @@ struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
 	{ GEN8_VPC_DBG_ECO_CNTL_2, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 3, },
 	{ GEN8_VPC_DBG_ECO_CNTL_3, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 3, },
 	{ GEN8_VPC_FLATSHADE_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_RBBM_SLICE_PERFCTR_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_DBG_ECO_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_NC_MODE_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_SP_CHICKEN_BITS, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_NC_MODE_CNTL_2, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_SS_CHICKEN_BITS_0, BIT(PIPE_NONE), 0, 0, 1, },
-	{ GEN8_SP_CHICKEN_BITS_1, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_SP_CHICKEN_BITS_1, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_CHICKEN_BITS_2, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_SP_CHICKEN_BITS_3, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_SP_CHICKEN_BITS_4, BIT(PIPE_NONE), 0, 0, 1, },
@@ -1001,7 +1007,7 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 		 * of bits set in the slice mask.
 		 */
 		adreno_dev->chipid |= FIELD_PREP(GENMASK(7, 4), hweight32(slice_mask));
-	} else if (adreno_is_gen8_3_0(adreno_dev) || adreno_is_gen8_8_0(adreno_dev))
+	} else if (adreno_is_gen8_3_0_family(adreno_dev))
 		slice_mask = GENMASK(GEN8_3_0_NUM_PHYSICAL_SLICES - 1, 0);
 	else if (adreno_is_gen8_6_0(adreno_dev))
 		slice_mask = GENMASK(GEN8_6_0_NUM_PHYSICAL_SLICES - 1, 0);
@@ -1316,7 +1322,7 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	u32 first_slice = gen8_first_slice(adreno_dev);
 
 	/* Static IFPC restore only registers */
-	if (adreno_is_gen8_3_0(adreno_dev) || adreno_is_gen8_8_0(adreno_dev)) {
+	if (adreno_is_gen8_3_0_family(adreno_dev)) {
 		reglist[items].regs = gen8_3_0_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_3_0_ifpc_pwrup_reglist);
 	} else if (adreno_is_gen8_2_x(adreno_dev)) {
@@ -1330,7 +1336,7 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	items++;
 
 	/* Static IFPC + preemption registers */
-	if (adreno_is_gen8_3_0(adreno_dev) || adreno_is_gen8_8_0(adreno_dev)) {
+	if (adreno_is_gen8_3_0_family(adreno_dev)) {
 		reglist[items].regs = gen8_3_0_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_3_0_pwrup_reglist);
 	} else if (adreno_is_gen8_2_x(adreno_dev)) {

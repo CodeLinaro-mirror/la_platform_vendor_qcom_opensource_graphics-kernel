@@ -2192,6 +2192,29 @@ struct kgsl_memdesc *kgsl_allocate_global(struct kgsl_device *device,
 	return kgsl_alloc_map_gpu_global(device, 0, size, padding, flags, priv, name);
 }
 
+int kgsl_free_global(struct kgsl_device *device, struct kgsl_memdesc **memdesc, u32 padding)
+{
+	struct kgsl_global_memdesc *md;
+
+	if (WARN_ON(!kgsl_mutex_is_locked(&device->mutex)))
+		return -EINVAL;
+
+	kgsl_trace_gpu_mem_total(device, -((*memdesc)->size));
+	kgsl_mmu_unmap_global(device, *memdesc, padding);
+
+	list_for_each_entry(md, &device->globals, node) {
+		if (&md->memdesc == *memdesc) {
+			list_del(&md->node);
+			kgsl_sharedmem_free(&md->memdesc);
+			kfree(md);
+			*memdesc = NULL;
+			break;
+		}
+	}
+
+	return 0;
+}
+
 void kgsl_free_globals(struct kgsl_device *device)
 {
 	struct kgsl_global_memdesc *md, *tmp;

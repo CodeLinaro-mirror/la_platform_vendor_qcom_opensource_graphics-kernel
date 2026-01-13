@@ -444,6 +444,28 @@ struct adreno_busy_data {
 };
 
 /**
+ * struct adreno_sp_profiling
+ * @enabled: True if SP profiling is enabled (from debugfs)
+ * @active: True if SP profiling is active
+ * @buf_sz_bytes: Size of the debug buffer in bytes
+ * @bus_sel_a: Config value to use for the GPU_DBGC_CFG_DBGBUS_SEL_A register
+ * @bus_sel_b: Config value to use for the GPU_DBGC_CFG_DBGBUS_SEL_B register
+ * @bus_sel_c: Config value to use for the GPU_DBGC_CFG_DBGBUS_SEL_C register
+ * @bus_sel_d: Config value to use for the GPU_DBGC_CFG_DBGBUS_SEL_D register
+ * @dbg_buf: Buffer containing SP-related data for analysis
+ */
+struct adreno_sp_profiling {
+	bool enabled;
+	bool active;
+	u32 buf_sz_bytes;
+	u32 bus_sel_a;
+	u32 bus_sel_b;
+	u32 bus_sel_c;
+	u32 bus_sel_d;
+	struct kgsl_memdesc *dbg_buf;
+};
+
+/**
  * struct adreno_firmware - Struct holding fw details
  * @fwvirt: Buffer which holds the ucode
  * @size: Size of ucode buffer
@@ -800,6 +822,10 @@ struct adreno_device {
 	u32 bcl_throttle_time_us;
 	/* @preemption_debugfs_dir: Debugfs directory node for preemption related nodes */
 	struct dentry *preemption_debugfs_dir;
+	/* @sp_profiling_dir: Debugfs directory node for SP profiling related nodes */
+	struct dentry *sp_profiling_dir;
+	/* @sp_profiling: Container for SP profiling information from debugfs */
+	struct adreno_sp_profiling sp_profiling;
 	/* @hwsched_enabled: If true, hwsched is enabled */
 	bool hwsched_enabled;
 	/* @fastblend_enabled: True if fastblend feature is enabled */
@@ -2170,6 +2196,25 @@ static inline int adreno_allocate_global(struct kgsl_device *device,
 
 	*memdesc = kgsl_allocate_global(device, size, padding, flags, priv, name);
 	return PTR_ERR_OR_ZERO(*memdesc);
+}
+
+/**
+ * adreno_free_global - Helper function to free a global GPU object
+ * @device: A GPU device handle
+ * @memdesc: A pointer to a kgsl_memdesc pointer
+ * @padding: Amount of extra padding added to the VA allocation
+ *
+ * Free a global object if it hasn't already been freed.
+ *
+ * Return: 0 on success or negative on error
+ */
+static inline int adreno_free_global(struct kgsl_device *device,
+	struct kgsl_memdesc **memdesc, u32 padding)
+{
+	if (IS_ERR_OR_NULL(*memdesc))
+		return 0;
+
+	return kgsl_free_global(device, memdesc, padding);
 }
 
 static inline void adreno_set_dispatch_ops(struct adreno_device *adreno_dev,

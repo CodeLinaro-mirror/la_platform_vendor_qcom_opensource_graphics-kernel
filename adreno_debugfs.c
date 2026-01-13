@@ -621,6 +621,239 @@ static int _preempt_level_show(void *data, u64 *val)
 
 DEFINE_DEBUGFS_ATTRIBUTE(preempt_level_fops, _preempt_level_show, _preempt_level_store, "%llu\n");
 
+static int sp_profiling_en_show(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	*val = (u64)sp_profiling->enabled;
+	return 0;
+}
+
+static int sp_profiling_en_store(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	if (val == sp_profiling->enabled)
+		return 0;
+
+	return adreno_power_cycle_bool(adreno_dev, &sp_profiling->enabled, val);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(sp_profiling_en_fops, sp_profiling_en_show, sp_profiling_en_store,
+				"%llu\n");
+
+static int sp_profiling_buf_sz_show(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	*val = (u64)sp_profiling->buf_sz_bytes;
+	return 0;
+}
+
+static int sp_profiling_buf_sz_store(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	/* Can only be updated when SP profiling is disabled */
+	if (sp_profiling->enabled)
+		return -EINVAL;
+
+	/*
+	 * DBGC_GBIF_DBG_BUFF_SIZE requires the buffer to be sized in 16-byte chunks.
+	 * However, in practice, it's useful to dump larger buffers. As such, use page
+	 * alignment to get a reasonably-sized buffer.
+	 */
+	val = ALIGN(val, PAGE_SIZE);
+
+	/* Limit the buffer size to prevent it from using too much global memory */
+	if (!val || val > SZ_128M)
+		return -EINVAL;
+
+	sp_profiling->buf_sz_bytes = (u32)val;
+
+	/* Make sure other CPUs can see the updated setting */
+	smp_wmb();
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(sp_profiling_buf_sz_fops, sp_profiling_buf_sz_show,
+				sp_profiling_buf_sz_store, "0x%08llx\n");
+
+static int sp_profiling_bus_sel_a_show(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	*val = (u64)sp_profiling->bus_sel_a;
+	return 0;
+}
+
+static int sp_profiling_bus_sel_a_store(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	/* Can only be updated when SP profiling is disabled */
+	if (sp_profiling->enabled)
+		return -EINVAL;
+
+	sp_profiling->bus_sel_a = (u32)val;
+
+	/* Make sure other CPUs can see the updated setting */
+	smp_wmb();
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(sp_profiling_bus_sel_a_fops, sp_profiling_bus_sel_a_show,
+				sp_profiling_bus_sel_a_store, "0x%08llx\n");
+
+static int sp_profiling_bus_sel_b_show(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	*val = (u64)sp_profiling->bus_sel_b;
+	return 0;
+}
+
+static int sp_profiling_bus_sel_b_store(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	/* Can only be updated when SP profiling is disabled */
+	if (sp_profiling->enabled)
+		return -EINVAL;
+
+	sp_profiling->bus_sel_b = (u32)val;
+
+	/* Make sure other CPUs can see the updated setting */
+	smp_wmb();
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(sp_profiling_bus_sel_b_fops, sp_profiling_bus_sel_b_show,
+				sp_profiling_bus_sel_b_store, "0x%08llx\n");
+
+static int sp_profiling_bus_sel_c_show(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	*val = (u64)sp_profiling->bus_sel_c;
+	return 0;
+}
+
+static int sp_profiling_bus_sel_c_store(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	/* Can only be updated when SP profiling is disabled */
+	if (sp_profiling->enabled)
+		return -EINVAL;
+
+	sp_profiling->bus_sel_c = (u32)val;
+
+	/* Make sure other CPUs can see the updated setting */
+	smp_wmb();
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(sp_profiling_bus_sel_c_fops, sp_profiling_bus_sel_c_show,
+				sp_profiling_bus_sel_c_store, "0x%08llx\n");
+
+static int sp_profiling_bus_sel_d_show(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	*val = (u64)sp_profiling->bus_sel_d;
+	return 0;
+}
+
+static int sp_profiling_bus_sel_d_store(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	/* Can only be updated when SP profiling is disabled */
+	if (sp_profiling->enabled)
+		return -EINVAL;
+
+	sp_profiling->bus_sel_d = (u32)val;
+
+	/* Make sure other CPUs can see the updated setting */
+	smp_wmb();
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(sp_profiling_bus_sel_d_fops, sp_profiling_bus_sel_d_show,
+				sp_profiling_bus_sel_d_store, "0x%08llx\n");
+
+static ssize_t sp_profiling_buf_read(struct file *file, char __user *buf, size_t len, loff_t *ppos)
+{
+	struct kgsl_device *device = (struct kgsl_device *)file->private_data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+	ssize_t ret;
+
+	kgsl_mutex_lock(&device->mutex);
+	if ((!sp_profiling->enabled) || (IS_ERR_OR_NULL(sp_profiling->dbg_buf))) {
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	ret = simple_read_from_buffer(buf, len, ppos, sp_profiling->dbg_buf->hostptr,
+		sp_profiling->dbg_buf->size);
+
+unlock:
+	kgsl_mutex_unlock(&device->mutex);
+	return ret;
+}
+
+static const struct file_operations sp_profiling_buf_fops = {
+	.owner = THIS_MODULE,
+	.open = simple_open,
+	.read = sp_profiling_buf_read,
+	.llseek = noop_llseek,
+};
+
+static void init_sp_profiling_config(struct adreno_device *adreno_dev)
+{
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	sp_profiling->enabled = false;
+	sp_profiling->active = false;
+	sp_profiling->buf_sz_bytes = SZ_16M;
+	sp_profiling->bus_sel_a = 0x00a60077;
+	sp_profiling->bus_sel_b = 0x00a60077;
+	sp_profiling->bus_sel_c = 0x00a60077;
+	sp_profiling->bus_sel_d = 0x00a60077;
+	sp_profiling->dbg_buf = NULL;
+}
+
 static int _warmboot_show(void *data, u64 *val)
 {
 	struct adreno_device *adreno_dev = data;
@@ -946,6 +1179,25 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 			&usesgmem_fops);
 		debugfs_create_file("skipsaverestore", 0644, adreno_dev->preemption_debugfs_dir,
 			device, &skipsaverestore_fops);
+	}
+
+	init_sp_profiling_config(adreno_dev);
+	adreno_dev->sp_profiling_dir = debugfs_create_dir("sp_profiling", device->d_debugfs);
+	if (!IS_ERR_OR_NULL(adreno_dev->sp_profiling_dir)) {
+		debugfs_create_file("enable", 0644, adreno_dev->sp_profiling_dir, device,
+			&sp_profiling_en_fops);
+		debugfs_create_file("buf_sz_bytes", 0644, adreno_dev->sp_profiling_dir, device,
+			&sp_profiling_buf_sz_fops);
+		debugfs_create_file("bus_sel_a", 0644, adreno_dev->sp_profiling_dir, device,
+			&sp_profiling_bus_sel_a_fops);
+		debugfs_create_file("bus_sel_b", 0644, adreno_dev->sp_profiling_dir, device,
+			&sp_profiling_bus_sel_b_fops);
+		debugfs_create_file("bus_sel_c", 0644, adreno_dev->sp_profiling_dir, device,
+			&sp_profiling_bus_sel_c_fops);
+		debugfs_create_file("bus_sel_d", 0644, adreno_dev->sp_profiling_dir, device,
+			&sp_profiling_bus_sel_d_fops);
+		debugfs_create_file("dbg_buf", 0444, adreno_dev->sp_profiling_dir, device,
+			&sp_profiling_buf_fops);
 	}
 
 	device->gmu_core.gmu_debugfs_dir = debugfs_create_dir("gmu", device->d_debugfs);

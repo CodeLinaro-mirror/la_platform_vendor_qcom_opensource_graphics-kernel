@@ -2861,6 +2861,9 @@ static void adreno_alloc_dcvs_profile_memory(struct kgsl_device *device,
 		sizebytes = md->size >> 1;
 		memset(md->hostptr, KGSL_DCVS_ATTR_UNUSED, sizebytes);
 		memset(md->hostptr + sizebytes, 0, sizebytes);
+	} else {
+		/* Clear memdesc if allocation fails */
+		memset(md, 0x0, sizeof(*md));
 	}
 }
 

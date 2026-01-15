@@ -1511,3 +1511,8 @@ int gmu_core_hwsched_memory_init(struct kgsl_device *device)
 
 	return 0;
 }
+
+bool gmu_core_is_hw_fencing_enabled(struct kgsl_device *device)
+{
+	return test_bit(GMU_HWSCHED_HW_FENCE, &device->gmu_core.flags);
+}

@@ -78,6 +78,8 @@ enum gmu_core_flags {
 	GMU_SOCCP_VOTE_ON,
 	/* GMU FW and KMD support RW buffer disabled carveout */
 	GMU_NON_BUFFERABLE_CARVEOUT,
+	/* Hardware fences are enabled */
+	GMU_HWSCHED_HW_FENCE,
 };
 
 /*
@@ -1101,5 +1103,13 @@ int gmu_core_set_max_pwrlevel(struct kgsl_device *device, u64 val);
  * Return: Negative error on failure and zero on success.
  */
 int gmu_core_list_frequencies(struct kgsl_device *device, struct seq_file *s);
+
+/**
+ * gmu_core_is_hw_fencing_enabled() - Check if hw fences is enabled
+ * @device: Pointer to the kgsl device
+
+ * Return: Boolean to indicate if hw fences are enabled or not
+ */
+bool gmu_core_is_hw_fencing_enabled(struct kgsl_device *device);
 
 #endif /* __KGSL_GMU_CORE_H */

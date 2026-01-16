@@ -2192,6 +2192,25 @@ static unsigned int _process_command_input(struct kgsl_device *device,
 	return 0;
 }
 
+static int _enable_hw_syncobj(struct kgsl_device *device, struct kgsl_drawobj_sync *syncobj)
+{
+	if (!test_bit(KGSL_SYNCOBJ_SW, &syncobj->flags)) {
+		set_bit(KGSL_SYNCOBJ_HW, &syncobj->flags);
+		return 0;
+	}
+
+	/*
+	 * If this sync object has a mix of unsignaled sw-only fences and hw fences, then
+	 * add sw callbacks to those hw fences, if not already added. This can happen if
+	 * any hardware fences were identified in the sync object prior to encountering an
+	 * unsignaled sw-only fence.
+	 */
+	if (syncobj->num_hw_fence != 0)
+		return kgsl_drawobj_sync_add_callbacks(device, syncobj);
+
+	return 0;
+}
+
 long kgsl_ioctl_submit_commands(struct kgsl_device_private *dev_priv,
 				      unsigned int cmd, void *data)
 {
@@ -2222,13 +2241,17 @@ long kgsl_ioctl_submit_commands(struct kgsl_device_private *dev_priv,
 
 		drawobj[i++] = DRAWOBJ(syncobj);
 
+		if (!gmu_core_is_hw_fencing_enabled(device))
+			set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
+
 		result = kgsl_drawobj_sync_add_syncpoints(device, syncobj,
 				param->synclist, param->numsyncs);
 		if (result)
 			goto done;
 
-		if (!test_bit(KGSL_SYNCOBJ_SW, &syncobj->flags))
-			set_bit(KGSL_SYNCOBJ_HW, &syncobj->flags);
+		result = _enable_hw_syncobj(device, syncobj);
+		if (result)
+			goto done;
 	}
 
 	if (type & (CMDOBJ_TYPE | MARKEROBJ_TYPE)) {
@@ -2308,14 +2331,19 @@ long kgsl_ioctl_gpu_command(struct kgsl_device_private *dev_priv,
 
 		drawobj[i++] = DRAWOBJ(syncobj);
 
+		if (!gmu_core_is_hw_fencing_enabled(device))
+			set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
+
 		result = kgsl_drawobj_sync_add_synclist(device, syncobj,
 				u64_to_user_ptr(param->synclist),
 				param->syncsize, param->numsyncs);
 		if (result)
 			goto done;
 
-		if (!test_bit(KGSL_SYNCOBJ_SW, &syncobj->flags))
-			set_bit(KGSL_SYNCOBJ_HW, &syncobj->flags);
+		result = _enable_hw_syncobj(device, syncobj);
+		if (result)
+			goto done;
+
 	}
 
 	if (type & (CMDOBJ_TYPE | MARKEROBJ_TYPE)) {

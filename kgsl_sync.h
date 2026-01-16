@@ -107,7 +107,12 @@ void kgsl_sync_timeline_put(struct kgsl_sync_timeline *ktimeline);
 
 void kgsl_sync_timeline_value_str(struct dma_fence *fence, char *str, int size);
 
+struct dma_fence *kgsl_sync_file_get_fence(int fd);
+
 struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait(int fd, bool (*func)(void *priv), void *priv);
+
+struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait_fence(struct dma_fence *fence,
+	bool (*func)(void *priv), void *priv);
 
 void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event);
 
@@ -163,7 +168,17 @@ static inline void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event)
 {
 }
 
+struct dma_fence *kgsl_sync_file_get_fence(int fd)
+{
+}
+
 static inline struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait(int fd,
+	bool (*func)(void *priv), void *priv)
+{
+	return NULL;
+}
+
+static inline struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait_fence(struct dma_fence *fence,
 	bool (*func)(void *priv), void *priv)
 {
 	return NULL;
@@ -253,6 +268,17 @@ void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size);
 
 int kgsl_hw_fence_soccp_vote(bool pwr_on);
 
+/*
+ * kgsl_populate_hw_fences - Populate hardware fences in a sync event
+ * event: Pointer to the sync event
+ *
+ * This function checks if the fences in the sync event are hardware fences.
+ * If so, it will allocate an array to keep track of all hardware fences
+ * in this sync event. If there is an unsignaled software fence, then it will
+ * set KGSL_SYNCOBJ_SW for this sync event.
+ */
+void kgsl_populate_hw_fences(struct kgsl_drawobj_sync_event *event);
+
 #else
 
 static inline int kgsl_hw_fence_soccp_vote(bool pwr_on)
@@ -308,6 +334,11 @@ static inline bool kgsl_hw_fence_signaled(struct dma_fence *fence)
 static inline bool kgsl_is_input_hw_fence(struct dma_fence *fence)
 {
 	return false;
+}
+
+void kgsl_populate_hw_fences(struct kgsl_drawobj_sync_event *event)
+{
+
 }
 
 #endif /* CONFIG_SYNC_FILE && (CONFIG_QTI_HW_FENCE || CONFIG_QCOM_KGSL_SYNX) */

@@ -948,21 +948,6 @@ void gen8_gmu_register_config(struct adreno_device *adreno_dev)
 
 	/* Configure power control and bring the GMU out of reset */
 	gen8_gmu_power_config(adreno_dev);
-
-	/*
-	 * Enable BCL throttling -
-	 * XOCLK1: countable: 0x13 (25% throttle)
-	 * XOCLK2: countable: 0x17 (58% throttle)
-	 * XOCLK3: countable: 0x19 (75% throttle)
-	 * POWER_CONTROL_SELECT_0 controls counters 0 - 3, each selector
-	 * is 8 bits wide.
-	 */
-	if (adreno_dev->bcl_enabled)
-		gmu_core_regrmw(device, GEN8_GMUCX_POWER_COUNTER_SELECT_XOCLK_0,
-			0xffffff00, FIELD_PREP(GENMASK(31, 24), 0x19) |
-			FIELD_PREP(GENMASK(23, 16), 0x17) |
-			FIELD_PREP(GENMASK(15, 8), 0x13));
-
 }
 
 static int gen8_gmu_process_caps(struct gen8_gmu_device *gmu,
@@ -2550,8 +2535,52 @@ static int gen8_boot(struct adreno_device *adreno_dev)
 	return ret;
 }
 
-#define CP_ALWAYS_COUNT 1
+int gen8_perfcounter_reserve(struct adreno_device *adreno_dev)
+{
+	int ret;
 
+	/* Reserve GMU power counter to count GPU busy */
+	ret = adreno_perfcounter_kernel_get(adreno_dev, KGSL_PERFCOUNTER_GROUP_GMU_XOCLK,
+			0x20, &adreno_dev->gpu_busy_lo, NULL);
+	if (ret) {
+		dev_err_ratelimited(KGSL_DEVICE(adreno_dev)->dev,
+				"Perfcounter allocation failed for gpu busy counter: %d", ret);
+		return ret;
+	}
+
+	/* Reserve GMU power counter to count IFPC */
+	ret = adreno_perfcounter_kernel_get(adreno_dev, KGSL_PERFCOUNTER_GROUP_GMU_XOCLK,
+			0x4, &adreno_dev->ifpc_lo, NULL);
+	if (ret) {
+		dev_warn_ratelimited(KGSL_DEVICE(adreno_dev)->dev,
+				"Perfcounter allocation failed for ifpc counter: %d", ret);
+	}
+
+	/*
+	 * Enable BCL throttling -
+	 * countable: 0x13 (25% throttle)
+	 * countable: 0x17 (58% throttle)
+	 * countable: 0x19 (75% throttle)
+	 * countable: 0x26 (throttling time)
+	 */
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_BCL)) {
+		ret = adreno_perfcounter_kernel_get(adreno_dev, KGSL_PERFCOUNTER_GROUP_GMU_XOCLK,
+				0x13, &adreno_dev->bcl_throttle_lo_0, NULL);
+		ret |= adreno_perfcounter_kernel_get(adreno_dev, KGSL_PERFCOUNTER_GROUP_GMU_XOCLK,
+				0x17, &adreno_dev->bcl_throttle_lo_1, NULL);
+		ret |= adreno_perfcounter_kernel_get(adreno_dev, KGSL_PERFCOUNTER_GROUP_GMU_XOCLK,
+				0x19, &adreno_dev->bcl_throttle_lo_2, NULL);
+		ret |= adreno_perfcounter_kernel_get(adreno_dev, KGSL_PERFCOUNTER_GROUP_GMU_XOCLK,
+				0x26, &adreno_dev->bcl_throttle_time_lo, NULL);
+		if (ret)
+			dev_warn_ratelimited(KGSL_DEVICE(adreno_dev)->dev,
+					"Perfcounter allocation failed for bcl feature: %d", ret);
+	}
+
+	return 0;
+}
+
+#define CP_ALWAYS_COUNT 1
 static int gen8_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2582,6 +2611,10 @@ static int gen8_first_boot(struct adreno_device *adreno_dev)
 		return ret;
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_ACTIVE);
+
+	ret = gen8_perfcounter_reserve(adreno_dev);
+	if (ret)
+		return ret;
 
 	ret = gen8_gmu_first_boot(adreno_dev);
 	if (ret)

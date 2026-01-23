@@ -538,7 +538,7 @@ static irqreturn_t adreno_freq_limiter_irq_handler(int irq, void *data)
 }
 
 irqreturn_t adreno_irq_callbacks(struct adreno_device *adreno_dev,
-		const struct adreno_irq_funcs *funcs, u32 status)
+		const struct adreno_irq_funcs *funcs, u32 status, u32 mask)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	irqreturn_t ret = IRQ_NONE;
@@ -548,7 +548,7 @@ irqreturn_t adreno_irq_callbacks(struct adreno_device *adreno_dev,
 		int i = fls(status) - 1;
 
 		if (funcs[i].func) {
-			if (adreno_dev->irq_mask & BIT(i))
+			if (mask & BIT(i))
 				funcs[i].func(adreno_dev, i);
 		} else
 			dev_crit_ratelimited(device->dev,

@@ -1622,6 +1622,9 @@ int gen8_hwsched_reset_replay(struct adreno_device *adreno_dev)
 	 */
 	gmu_core_mark_for_coldboot(KGSL_DEVICE(adreno_dev));
 
+	if (adreno_gpu_fault(adreno_dev) & ADRENO_AHB_TIMEOUT_FAULT)
+		gen8_ahb_timeout_reset(KGSL_DEVICE(adreno_dev));
+
 	ret = gen8_hwsched_boot(adreno_dev);
 	if (ret)
 		goto done;

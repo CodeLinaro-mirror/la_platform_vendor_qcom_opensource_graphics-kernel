@@ -261,12 +261,15 @@ static void CD_FINISH(u64 *ptr, u32 offset)
 
 static bool CD_SCRIPT_CHECK(struct kgsl_device *device)
 {
-	return (adreno_smmu_is_stalled(ADRENO_DEVICE(device)) ||
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+
+	return (adreno_smmu_is_stalled(adreno_dev) ||
 		(kgsl_mmu_ctx_terminated_on_fault(&device->mmu)) ||
 		(!device->snapshot_crashdumper) ||
 		IS_ERR_OR_NULL(gen8_capturescript) ||
 		IS_ERR_OR_NULL(gen8_crashdump_registers) ||
-		gen8_crashdump_timedout);
+		gen8_crashdump_timedout ||
+		(adreno_gpu_fault(adreno_dev) & ADRENO_AHB_TIMEOUT_FAULT));
 }
 
 static bool _gen8_do_crashdump(struct kgsl_device *device)

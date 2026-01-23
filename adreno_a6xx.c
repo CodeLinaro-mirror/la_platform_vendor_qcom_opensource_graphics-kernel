@@ -1892,7 +1892,8 @@ static irqreturn_t a6xx_hwsched_irq_handler(struct adreno_device *adreno_dev)
 
 	kgsl_regwrite(device, A6XX_RBBM_INT_CLEAR_CMD, status);
 
-	ret = adreno_irq_callbacks(adreno_dev, a6xx_irq_funcs, status);
+	ret = adreno_irq_callbacks(adreno_dev, a6xx_irq_funcs,
+		status, adreno_dev->irq_mask);
 
 	trace_kgsl_a5xx_irq_status(adreno_dev, status);
 
@@ -1925,7 +1926,8 @@ static irqreturn_t a6xx_irq_handler(struct adreno_device *adreno_dev)
 
 	kgsl_regwrite(device, A6XX_RBBM_INT_CLEAR_CMD, status);
 
-	ret = adreno_irq_callbacks(adreno_dev, a6xx_irq_funcs, status);
+	ret = adreno_irq_callbacks(adreno_dev, a6xx_irq_funcs,
+		status, adreno_dev->irq_mask);
 
 	trace_kgsl_a5xx_irq_status(adreno_dev, status);
 

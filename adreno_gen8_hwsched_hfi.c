@@ -2285,13 +2285,32 @@ static void warmboot_init_message_record_bitmask(struct adreno_device *adreno_de
 static int gen8_hfi_send_thermal_feature_ctrl(struct adreno_device *adreno_dev)
 {
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
-	const struct hfi_therm_profile_ctrl *therm = gen8_core->therm_profile;
+	struct hfi_therm_profile_ctrl *therm;
+	const struct therm_tsens_en_cfg *tsens_en_cfg;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	static struct hfi_thermaltable_cmd cmd = {0};
+	u32 tsens_en_bits;
 	int ret;
 
-	if (!test_bit(GMU_THERMAL_MITIGATION, &device->gmu_core.flags) || !therm)
+	if (!test_bit(GMU_THERMAL_MITIGATION, &device->gmu_core.flags) ||
+	    !gen8_core->therm_cfg || !gen8_core->therm_cfg->therm ||
+	    !gen8_core->therm_cfg->tsens_en_cfg)
 		return 0;
+
+	therm = gen8_core->therm_cfg->therm;
+	tsens_en_cfg = gen8_core->therm_cfg->tsens_en_cfg;
+
+	tsens_en_bits = (tsens_en_cfg->tsens_sl_cnt *
+				gen8_get_num_slices(adreno_dev)) + tsens_en_cfg->tsens_us_cnt;
+
+	/* Maximum temperature sensors supported */
+	if (tsens_en_bits >= 32) {
+		dev_crit_ratelimited(device->dev,
+				"Invalid temperature sensor count %u\n", tsens_en_bits);
+		return -EINVAL;
+	}
+	/* Set a bit for each temperature sensor */
+	therm->tsens_en = BIT(tsens_en_bits) - 1;
 
 	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_THERMAL, 1, 0);
 	if (ret)
@@ -2413,7 +2432,7 @@ static int gen8_hwsched_build_dcvs_table(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-static u32 gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev)
+static int gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gmu_core_device *gmu_core = &device->gmu_core;
@@ -2429,11 +2448,8 @@ static u32 gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev
 	u32 size_table_dwords = (sizeof(*cmd) >> 2) + size_first_entry_dwords +
 				size_second_entry_dwords;
 
-	/*
-	 * Return early if the scaling table is already generated or if the ddr threshold
-	 * to scale is not set for the target
-	 */
-	if (gmu->gmu_scaling_cmdbuf || !gmu_core->perf_ddr_bw[0])
+	/* Return early if the scaling table is already generated */
+	if (gmu->gmu_scaling_cmdbuf)
 		return 0;
 
 	/*
@@ -2516,6 +2532,7 @@ static int gen8_hfi_send_gmu_dcvs_req(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct hfi_table_cmd *cmd;
 	int ret;
 
@@ -2536,6 +2553,10 @@ static int gen8_hfi_send_gmu_dcvs_req(struct adreno_device *adreno_dev)
 	ret = gen8_hfi_send_generic_req(adreno_dev, cmd, MSG_HDR_GET_SIZE(cmd->hdr) << 2);
 	if (ret)
 		return ret;
+
+	/* Do not scale gmu if perf_ddr_bw is not configured */
+	if (!gmu_core->perf_ddr_bw[0])
+		return 0;
 
 	ret = gen8_hwsched_build_gmu_scaling_table(adreno_dev);
 	if (ret)
@@ -3099,10 +3120,13 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 		return ret;
 	}
 
-	/* Register DCVS profile after SLUMBER if UMD profile present */
+	/*
+	 * Register DCVS profile after each SLUMBER wake, or when the
+	 * profile IOCTL ran during SLUMBER.
+	 */
 	if ((adreno_dev->dcvs_profile_enabled) &&
 			(proc_priv->profile.user_profile_registered) &&
-			(proc_priv->profile.gmu_registered))
+			(!proc_priv->profile.gmu_registered))
 		gen8_hwsched_set_dcvs_profile(adreno_dev, proc_priv);
 
 	ret = send_context_pointers(adreno_dev, context);
@@ -3854,6 +3878,8 @@ int gen8_hwsched_submit_drawobj(struct adreno_device *adreno_dev, struct kgsl_dr
 	if (test_and_clear_bit(CMDOBJ_NOP_SUBMISSION, &cmdobj->priv))
 		cmd->flags |= CMDBATCH_NOP_SUBMISSION;
 
+	if (drawobj->flags & KGSL_DRAWOBJ_USES_MALU)
+		cmd->flags |= CMDBATCH_USES_MALU;
 skipib:
 	adreno_drawobj_set_constraint(KGSL_DEVICE(adreno_dev), drawobj);
 
@@ -4446,10 +4472,8 @@ int gen8_hwsched_set_dcvs_profile(struct adreno_device *adreno_dev,
 	cmd.attrs_addr = md.gmuaddr;
 
 	ret = gen8_hfi_send_cmd_async(adreno_dev, &cmd, sizeof(cmd));
-	if (!ret) {
+	if (!ret)
 		proc_priv->profile.gmu_registered = true;
-		proc_priv->profile.user_profile_registered = true;
-	}
 
 	return ret;
 }

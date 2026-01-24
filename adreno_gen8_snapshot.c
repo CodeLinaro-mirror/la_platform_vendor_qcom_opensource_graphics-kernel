@@ -482,7 +482,7 @@ static size_t gen8_snapshot_shader_memory(struct kgsl_device *device,
 	header->usptp = info->usptp;
 	header->pipe_id = block->pipeid;
 	header->location = block->location;
-	header->ctxt_id = 1;
+	header->ctxt_id = info->context_id;
 	header->size = block->size;
 
 	memcpy(data, gen8_crashdump_registers->hostptr + info->offset,
@@ -1053,7 +1053,7 @@ static size_t gen8_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 	header->usptp_id = info->usptp_id;
 	header->slice_id = HEADER_SLICE_ID(info->cluster->slice_region, info->slice_id);
 
-	read_sel = GEN8_SP_READ_SEL_VAL(0, info->slice_id, info->location_id,
+	read_sel = GEN8_SP_READ_SEL_VAL(info->context_id, info->slice_id, info->location_id,
 			info->pipe_id, info->statetype_id, info->usptp_id, info->sp_id);
 
 	kgsl_regwrite(device, GEN8_SP_READ_SEL, read_sel);
@@ -1186,8 +1186,8 @@ static bool gen8_snapshot_dbgahb_regs(struct kgsl_device *device,
 
 					/* Program the aperture */
 					ptr += CD_WRITE(ptr, GEN8_SP_READ_SEL, GEN8_SP_READ_SEL_VAL
-						(0, j, cluster->location_id, cluster->pipe_id,
-						cluster->statetype, usptp, sp));
+						(cluster->context_id, j, cluster->location_id,
+						cluster->pipe_id, cluster->statetype, usptp, sp));
 
 					for (; regs[0] != UINT_MAX; regs += 2) {
 						count = REG_COUNT(regs);

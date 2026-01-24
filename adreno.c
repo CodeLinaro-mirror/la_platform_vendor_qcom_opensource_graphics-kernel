@@ -2579,6 +2579,12 @@ static int adreno_prop_u32(struct kgsl_device *device,
 		val = adreno_dev->fastblend_enabled ? 1 : 0;
 	else if (param->type == KGSL_PROP_IS_AQE_ENABLED)
 		val = ADRENO_FEATURE(adreno_dev, ADRENO_AQE) ? 1 : 0;
+	else if (param->type == KGSL_PROP_MULTIDRAW_MODE)
+		val = adreno_dev->multidraw_mode;
+	else if (param->type == KGSL_PROP_VIZ_FLUSH_DRAW_COUNT)
+		val = adreno_dev->viz_flush_draw_count;
+	else if (param->type == KGSL_PROP_VIZ_FLUSH_PRIM_COUNT)
+		val = adreno_dev->viz_flush_prim_count;
 
 	return copy_prop(param, &val, sizeof(val));
 }
@@ -2624,6 +2630,9 @@ static const struct {
 	{ KGSL_PROP_IS_FASTBLEND_ENABLED, adreno_prop_u32},
 	{ KGSL_PROP_UCHE_TRAP_BASE, adreno_prop_uche_trap_base },
 	{ KGSL_PROP_IS_AQE_ENABLED, adreno_prop_u32 },
+	{ KGSL_PROP_MULTIDRAW_MODE, adreno_prop_u32 },
+	{ KGSL_PROP_VIZ_FLUSH_DRAW_COUNT, adreno_prop_u32 },
+	{ KGSL_PROP_VIZ_FLUSH_PRIM_COUNT, adreno_prop_u32 },
 };
 
 static int adreno_getproperty(struct kgsl_device *device,
@@ -2864,53 +2873,49 @@ static int adreno_set_dcvs_profile(struct kgsl_device_private *dev_priv,
 	const struct adreno_hwsched_ops *hwsched_ops = adreno_dev->hwsched.hwsched_ops;
 	struct kgsl_memdesc *md = &proc_priv->profile.md;
 	struct kgsl_dcvs_profile param = {0};
-	struct kgsl_dcvs_attrs attrs;
-	u32 size;
+	struct kgsl_dcvs_attrs temp_attrs;
+	size_t copy_sz;
 	int ret = 0;
 
-	if (!ADRENO_FEATURE(adreno_dev, ADRENO_DCVS_PROFILE))
+	if ((!hwsched_ops->set_dcvs_profile) ||
+		(!adreno_dev->dcvs_profile_enabled))
 		return -EOPNOTSUPP;
 
-	/* Restrict to one profile per process */
-	mutex_lock(&proc_priv->profile.profile_mutex);
-	if (proc_priv->profile.user_profile_registered) {
-		ret = -EINVAL;
-		goto done;
-	}
-
 	/* Not enough allocated GMU memory */
-	if ((!md->hostptr) || (sizeof(attrs) > (md->size >> 1))) {
-		ret = -ENOMEM;
-		goto done;
-	}
+	if ((!md->hostptr) || ((md->size >> 1) == 0))
+		return -ENOMEM;
 
-	size = min_t(u32, sizeof(param), sizebytes);
-	if (copy_from_user(&param, data, size)) {
-		ret = -EFAULT;
-		goto done;
-	}
+	copy_sz = min_t(size_t, sizeof(param), sizebytes);
+	if (copy_from_user(&param, data, copy_sz))
+		return -EFAULT;
+
+	if ((!param.attrs) || (!param.attrs_size))
+		return -EINVAL;
+
+	copy_sz = min_t(size_t, sizeof(temp_attrs), param.attrs_size);
+	if (copy_sz > (size_t)(md->size >> 1))
+		return -EINVAL;
 
 	/*
 	 * Divide shared buffer into two equal parts and first part addresses
 	 * should be reserved for KGSL to copy profile buffer and second
 	 * part addresses for GMU Internal usage.
 	 */
-	size = min_t(u32, sizeof(attrs), param.attrs_size);
+	if (copy_from_user(&temp_attrs, u64_to_user_ptr(param.attrs), copy_sz))
+		return -EFAULT;
 
-	if (copy_from_user(md->hostptr, u64_to_user_ptr(param.attrs), size)) {
-		memset(md->hostptr, KGSL_DCVS_ATTR_UNUSED, size);
-		ret = -EFAULT;
-		goto done;
-	}
+	/*
+	 * If the GPU is in SLUMBER, we do not immediately send an HFI update to GMU.
+	 * Instead, we mark the user profile as registered so it will be sent on the
+	 * next context submission when the GPU wakes up.
+	 */
+	kgsl_mutex_lock(&device->mutex);
+	memset(md->hostptr, 0xFF, (size_t)(md->size >> 1));
+	memcpy(md->hostptr, &temp_attrs, copy_sz);
+	ret = hwsched_ops->set_dcvs_profile(adreno_dev, proc_priv);
+	proc_priv->profile.user_profile_registered = true;
+	kgsl_mutex_unlock(&device->mutex);
 
-	if (hwsched_ops->set_dcvs_profile && adreno_dev->dcvs_profile_enabled) {
-		kgsl_mutex_lock(&device->mutex);
-		ret = hwsched_ops->set_dcvs_profile(adreno_dev, proc_priv);
-		kgsl_mutex_unlock(&device->mutex);
-	}
-
-done:
-	mutex_unlock(&proc_priv->profile.profile_mutex);
 	return ret;
 }
 
@@ -3518,6 +3523,7 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
 		uint32_t count)
 {
 	struct kgsl_device *device = dev_priv->device;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct kgsl_memobj_node *ib;
 	unsigned int i;
 
@@ -3525,6 +3531,13 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
 		/* Verify the IBs before they get queued */
 		if (drawobj[i]->type == CMDOBJ_TYPE) {
 			struct kgsl_drawobj_cmd *cmdobj = CMDOBJ(drawobj[i]);
+
+			/* Only allow mALU submissions if hardware supports mALU */
+			if ((drawobj[i]->flags & KGSL_DRAWOBJ_USES_MALU) &&
+				!test_bit(ADRENO_DEVICE_ALLOW_MALU_WORKLOAD, &adreno_dev->priv)) {
+				dev_err_once(device->dev, "mALU workload isn't supported\n");
+				return -EINVAL;
+			}
 
 			list_for_each_entry(ib, &cmdobj->cmdlist, node)
 				if (!_verify_ib(dev_priv,

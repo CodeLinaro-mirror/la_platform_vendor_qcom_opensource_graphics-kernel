@@ -296,6 +296,7 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN7_2_1 = ADRENO_GPUREV_VALUE(7, 2, 1),
 	ADRENO_REV_GEN7_3_0 = ADRENO_GPUREV_VALUE(7, 3, 0),
 	ADRENO_REV_GEN7_4_0 = ADRENO_GPUREV_VALUE(7, 4, 0),
+	ADRENO_REV_GEN7_5_0 = ADRENO_GPUREV_VALUE(7, 5, 0),
 	ADRENO_REV_GEN7_6_0 = ADRENO_GPUREV_VALUE(7, 6, 0),
 	ADRENO_REV_GEN7_9_0 = ADRENO_GPUREV_VALUE(7, 9, 0),
 	ADRENO_REV_GEN7_9_1 = ADRENO_GPUREV_VALUE(7, 9, 1),
@@ -309,10 +310,12 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN8_2_1 = ADRENO_GPUREV_VALUE(8, 2, 1),
 	ADRENO_REV_GEN8_3_0 = ADRENO_GPUREV_VALUE(8, 3, 0),
 	ADRENO_REV_GEN8_4_0 = ADRENO_GPUREV_VALUE(8, 4, 0),
+	ADRENO_REV_GEN8_5_0 = ADRENO_GPUREV_VALUE(8, 5, 0),
 	ADRENO_REV_GEN8_6_0 = ADRENO_GPUREV_VALUE(8, 6, 0),
 	ADRENO_REV_GEN8_8_0 = ADRENO_GPUREV_VALUE(8, 8, 0),
 	ADRENO_REV_GEN8_9_0 = ADRENO_GPUREV_VALUE(8, 9, 0),
 	ADRENO_REV_GEN8_11_0 = ADRENO_GPUREV_VALUE(8, 11, 0),
+	ADRENO_REV_GEN8_17_0 = ADRENO_GPUREV_VALUE(8, 17, 0),
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -856,6 +859,12 @@ struct adreno_device {
 	bool dcvs_profile_enabled;
 	/** @aqe_ctxt_record_sz: Size of the AQE section in preemption record in bytes */
 	u64 aqe_ctxt_record_sz;
+	/** @multidraw_mode: Whether PC unroll is enabled for multidraw **/
+	u32 multidraw_mode;
+	/** @viz_flush_draw_count: Draw count to flush visibility stream **/
+	u32 viz_flush_draw_count;
+	/** @viz_flush_prim_count: Prim count to flush visibility stream **/
+	u32 viz_flush_prim_count;
 };
 
 /* Time to wait for suspend recovery gate to complete */
@@ -904,6 +913,8 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_FIRST_BOOT_DONE = 19,
 	/** @ADRENO_DEVICE_FAST_CONTEXT_DESTROY: Set if fast context destroy is enabled on GMU */
 	ADRENO_DEVICE_FAST_CONTEXT_DESTROY = 20,
+	/** @ADRENO_DEVICE_ALLOW_MALU_WORKLOAD: mALU workload is supported by GMU and GPU */
+	ADRENO_DEVICE_ALLOW_MALU_WORKLOAD = 21,
 };
 
 /**
@@ -1357,6 +1368,12 @@ static inline int adreno_is_a619_holi(struct adreno_device *adreno_dev)
 		"qcom,adreno-gpu-a619-holi");
 }
 
+static inline int adreno_is_a619_malabar(struct adreno_device *adreno_dev)
+{
+	return of_device_is_compatible(adreno_dev->dev.pdev->dev.of_node,
+		"qcom,adreno-gpu-a619-malabar");
+}
+
 static inline int adreno_is_a620(struct adreno_device *adreno_dev)
 {
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
@@ -1403,6 +1420,7 @@ ADRENO_TARGET(gen7_2_0, ADRENO_REV_GEN7_2_0)
 ADRENO_TARGET(gen7_2_1, ADRENO_REV_GEN7_2_1)
 ADRENO_TARGET(gen7_3_0, ADRENO_REV_GEN7_3_0)
 ADRENO_TARGET(gen7_4_0, ADRENO_REV_GEN7_4_0)
+ADRENO_TARGET(gen7_5_0, ADRENO_REV_GEN7_5_0)
 ADRENO_TARGET(gen7_6_0, ADRENO_REV_GEN7_6_0)
 ADRENO_TARGET(gen7_9_0, ADRENO_REV_GEN7_9_0)
 ADRENO_TARGET(gen7_9_1, ADRENO_REV_GEN7_9_1)
@@ -1416,10 +1434,12 @@ ADRENO_TARGET(gen8_2_0, ADRENO_REV_GEN8_2_0)
 ADRENO_TARGET(gen8_2_1, ADRENO_REV_GEN8_2_1)
 ADRENO_TARGET(gen8_3_0, ADRENO_REV_GEN8_3_0)
 ADRENO_TARGET(gen8_4_0, ADRENO_REV_GEN8_4_0)
+ADRENO_TARGET(gen8_5_0, ADRENO_REV_GEN8_5_0)
 ADRENO_TARGET(gen8_6_0, ADRENO_REV_GEN8_6_0)
 ADRENO_TARGET(gen8_8_0, ADRENO_REV_GEN8_8_0)
 ADRENO_TARGET(gen8_9_0, ADRENO_REV_GEN8_9_0)
 ADRENO_TARGET(gen8_11_0, ADRENO_REV_GEN8_11_0)
+ADRENO_TARGET(gen8_17_0, ADRENO_REV_GEN8_17_0)
 
 static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
 {
@@ -1440,21 +1460,27 @@ static inline int adreno_is_gen7_14_0_family(struct adreno_device *adreno_dev)
 static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
-		adreno_is_gen7_6_0(adreno_dev) || adreno_is_gen7_9_x(adreno_dev) ||
-		adreno_is_gen7_14_0_family(adreno_dev) || adreno_is_gen7_11_0(adreno_dev) ||
-		adreno_is_gen7_15_0(adreno_dev);
+		adreno_is_gen7_5_0(adreno_dev) || adreno_is_gen7_6_0(adreno_dev) ||
+		adreno_is_gen7_9_x(adreno_dev) || adreno_is_gen7_14_0_family(adreno_dev) ||
+		adreno_is_gen7_11_0(adreno_dev) || adreno_is_gen7_15_0(adreno_dev);
 }
 
 static inline int adreno_is_gen8_2_x(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen8_2_0(adreno_dev) || adreno_is_gen8_2_1(adreno_dev) ||
-		adreno_is_gen8_9_0(adreno_dev);
+		adreno_is_gen8_5_0(adreno_dev) || adreno_is_gen8_9_0(adreno_dev);
 }
 
 static inline int adreno_is_gen8_0_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen8_0_0(adreno_dev) || adreno_is_gen8_0_1(adreno_dev) ||
 		adreno_is_gen8_4_0(adreno_dev) || adreno_is_gen8_6_0(adreno_dev);
+}
+
+static inline int adreno_is_gen8_3_0_family(struct adreno_device *adreno_dev)
+{
+	return adreno_is_gen8_3_0(adreno_dev) || adreno_is_gen8_8_0(adreno_dev) ||
+		adreno_is_gen8_17_0(adreno_dev);
 }
 
 /* Gen7 targets which does not support concurrent binning */
@@ -1902,7 +1928,7 @@ static inline void adreno_perfcntr_active_oob_put(
 static inline int adreno_wait_for_halt_ack(struct kgsl_device *device,
 	int ack_reg, unsigned int mask)
 {
-	u32 val;
+	u32 val = 0;
 	int ret = kgsl_regmap_read_poll_timeout(&device->regmap, ack_reg,
 		val, (val & mask) == mask, 100, 100 * 1000);
 

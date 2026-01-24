@@ -1544,7 +1544,7 @@ int kgsl_pwrctrl_probe_mx_gdsc(struct kgsl_device *device, struct platform_devic
 	if (!IS_ERR_OR_NULL(pwr->gmu_mx_pd))
 		return 0;
 
-	if (of_property_read_bool(pdev->dev.of_node, "power-domains")) {
+	if (of_find_property(pdev->dev.of_node, "power-domains", NULL)) {
 		pwr->gmu_mx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "gmu_mx");
 
 		if (IS_ERR_OR_NULL(pwr->gmu_mx_pd)) {
@@ -1561,7 +1561,7 @@ static int kgsl_pwrctrl_probe_cx_gdsc(struct kgsl_device *device, struct platfor
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	if (of_property_read_bool(pdev->dev.of_node, "power-domains")) {
+	if (of_find_property(pdev->dev.of_node, "power-domains", NULL)) {
 		/* Get virtual device handle for CX GDSC to control it */
 		struct device *cx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "cx");
 
@@ -1597,7 +1597,7 @@ static int kgsl_pwrctrl_probe_gx_gdsc(struct kgsl_device *device, struct platfor
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	if (of_property_read_bool(pdev->dev.of_node, "power-domains")) {
+	if (of_find_property(pdev->dev.of_node, "power-domains", NULL)) {
 		/* Get virtual device handle for GX GDSC to control it */
 		struct device *gx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "gx");
 
@@ -1653,7 +1653,7 @@ static int kgsl_cx_gdsc_event(struct notifier_block *nb,
 {
 	struct kgsl_pwrctrl *pwr = container_of(nb, struct kgsl_pwrctrl, cx_gdsc_nb);
 	struct kgsl_device *device = container_of(pwr, struct kgsl_device, pwrctrl);
-	u32 val;
+	u32 val = 0;
 
 	if (!pwr->cx_gdsc_wait)
 		return 0;
@@ -2057,15 +2057,15 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 
 	_isense_clk_set_rate(pwr, pwr->num_pwrlevels - 1);
 
-	if (of_property_read_bool(pdev->dev.of_node, "vddcx-supply") ||
+	if (of_find_property(pdev->dev.of_node, "vddcx-supply", NULL) ||
 		(of_property_match_string(pdev->dev.of_node, "power-domain-names", "cx") >= 0))
 		kgsl_pwrctrl_probe_cx_gdsc(device, pdev);
 
-	if (of_property_read_bool(pdev->dev.of_node, "vdd-supply") ||
+	if (of_find_property(pdev->dev.of_node, "vdd-supply", NULL) ||
 		(of_property_match_string(pdev->dev.of_node, "power-domain-names", "gx") >= 0))
 		kgsl_pwrctrl_probe_gx_gdsc(device, pdev);
 
-	if (of_property_read_bool(pdev->dev.of_node, "vdd-parent-supply")) {
+	if (of_find_property(pdev->dev.of_node, "vdd-parent-supply", NULL)) {
 		pwr->gx_regulator_parent = devm_regulator_get(&pdev->dev,
 				"vdd-parent");
 		if (IS_ERR(pwr->gx_regulator_parent)) {

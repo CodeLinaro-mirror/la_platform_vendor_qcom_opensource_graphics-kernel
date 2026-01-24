@@ -158,6 +158,17 @@ int kgsl_clk_set_rate(struct clk_bulk_data *clks, int num_clks,
 		const char *id, unsigned long rate);
 
 /**
+ * kgsl_clk_get_rate - Get current clock rate in Hz of given clock
+ * @clks: Pointer to an array of bulk clk data
+ * @count: Number of entries in the array
+ * @id: Name of the clock to search for
+ *
+ * Return: clock rate of the given clock
+ */
+unsigned long kgsl_clk_get_rate(struct clk_bulk_data *clks, int num_clks,
+		const char *id);
+
+/**
  * kgsl_scm_gpu_init_regs - Load secure registers through tz
  * @dev: Pointer to the GPU platform device
  * @gpu_req: Bit mask of requests to enable
@@ -279,4 +290,15 @@ void isdb_write(void __iomem *base, u32 offset);
 #else
 #define kgsl_timer_container_of from_timer
 #endif
+
+#if (KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE)
+/**
+ * When using kgsl_nth_page, user has to make sure the pages are contiguous.
+ * It can be checked with help of page_range_contiguous().
+ */
+#define kgsl_nth_page(page, n) ((page) + (n))
+#else
+#define kgsl_nth_page(page, n) nth_page((page), (n))
+#endif
+
 #endif

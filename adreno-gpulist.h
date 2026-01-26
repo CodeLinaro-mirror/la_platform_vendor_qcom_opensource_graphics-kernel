@@ -937,6 +937,15 @@ static const struct adreno_a6xx_core adreno_gpu_core_a619_variant = {
 	.highest_bank_bit = 14,
 };
 
+/* a619_malabar, a620, a621, a622 and a650 */
+static const struct kgsl_regmap_list a650_gbif_regs[] = {
+	{A6XX_GBIF_QSB_SIDE0, 0x00071620},
+	{A6XX_GBIF_QSB_SIDE1, 0x00071620},
+	{A6XX_GBIF_QSB_SIDE2, 0x00071620},
+	{A6XX_GBIF_QSB_SIDE3, 0x00071620},
+	{A6XX_RBBM_GBIF_CLIENT_QOS_CNTL, 0x3},
+};
+
 static const struct adreno_a6xx_core adreno_gpu_core_a619_malabar = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_A619, 6, 1, 9, ANY_ID),
@@ -954,8 +963,8 @@ static const struct adreno_a6xx_core adreno_gpu_core_a619_malabar = {
 	.zap_name = "gen6_3_25_0_zap.mbn",
 	.hwcg = a615_hwcg_regs,
 	.hwcg_count = ARRAY_SIZE(a615_hwcg_regs),
-	.vbif = a615_gbif_regs,
-	.vbif_count = ARRAY_SIZE(a615_gbif_regs),
+	.vbif = a650_gbif_regs,
+	.vbif_count = ARRAY_SIZE(a650_gbif_regs),
 	.hang_detect_cycles = 0x3fffff,
 	.protected_regs = a630_protected_regs,
 	.gx_cpr_toggle = true,
@@ -1012,15 +1021,6 @@ static const struct kgsl_regmap_list a620_hwcg_regs[] = {
 	{A6XX_RBBM_CLOCK_CNTL_GMU_GX, 0x00000222},
 	{A6XX_RBBM_CLOCK_DELAY_GMU_GX, 0x00000111},
 	{A6XX_RBBM_CLOCK_HYST_GMU_GX, 0x00000555},
-};
-
-/* a620, a621, a622 and a650 */
-static const struct kgsl_regmap_list a650_gbif_regs[] = {
-	{A6XX_GBIF_QSB_SIDE0, 0x00071620},
-	{A6XX_GBIF_QSB_SIDE1, 0x00071620},
-	{A6XX_GBIF_QSB_SIDE2, 0x00071620},
-	{A6XX_GBIF_QSB_SIDE3, 0x00071620},
-	{A6XX_RBBM_GBIF_CLIENT_QOS_CNTL, 0x3},
 };
 
 /* These are for a620, a621, a622 and a650 */

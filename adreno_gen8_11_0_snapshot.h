@@ -2268,13 +2268,6 @@ static struct gen8_reg_list gen8_11_0_ahb_registers[] = {
 	{ UNSLICE, gen8_11_0_gbif_registers },
 };
 
-static struct gen8_reg_list gen8_11_0_gmu_registers[] = {
-	{ UNSLICE, gen8_11_0_gmugx_registers },
-	{ SLICE, gen8_11_0_gmugx_slice_registers },
-	{ UNSLICE, gen8_11_0_gmuao_registers },
-	{ UNSLICE, gen8_11_0_gmucx_registers },
-};
-
 /*
  * Block   : ['GDPM_LKG']
  * REGION  : UNSLICE
@@ -2518,14 +2511,19 @@ static const u32 *gen8_11_0_external_core_regs[] = {
 	gen8_11_0_gpu_cc_ahb2phy_swman_registers,
 	gen8_11_0_gpu_cc_gpu_cc_reg_registers,
 	gen8_11_0_gpu_cc_pll0_cm_pll_taycan_common_registers,
-	gen8_11_0_acd_acd_mnd_registers,
 	gen8_11_0_cpr_registers,
-	gen8_11_0_gx_clkctl_ahb2phy_broadcast_swman_registers,
-	gen8_11_0_gx_clkctl_ahb2phy_swman_registers,
-	gen8_11_0_gx_clkctl_gx_clkctl_reg_registers,
-	gen8_11_0_gx_clkctl_pll0_cm_pll_taycan_common_registers,
 	gen8_11_0_cpr_gmxc_registers,
-	gen8_11_0_rscc_rsc_registers,
 };
 
+static struct gen8_reg_list gen8_11_0_gmu_gx_registers[] = {
+	{ UNSLICE, gen8_11_0_gmugx_registers },
+	{ SLICE, gen8_11_0_gmugx_slice_registers },
+	{ UNSLICE, gen8_11_0_gmuao_registers },
+	{ UNSLICE, gen8_11_0_gmucx_registers },
+	{ UNSLICE, gen8_11_0_gx_clkctl_ahb2phy_broadcast_swman_registers },
+	{ UNSLICE, gen8_11_0_gx_clkctl_ahb2phy_swman_registers },
+	{ UNSLICE, gen8_11_0_gx_clkctl_gx_clkctl_reg_registers },
+	{ UNSLICE, gen8_11_0_gx_clkctl_pll0_cm_pll_taycan_common_registers },
+	{ UNSLICE, gen8_11_0_acd_acd_mnd_registers },
+};
 #endif /* __ADRENO_GEN8_11_0_SNAPSHOT_H */

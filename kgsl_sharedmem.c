@@ -1122,8 +1122,9 @@ static int kgsl_shmem_alloc_pages(struct kgsl_memdesc *memdesc)
 	return count;
 }
 
-#if ((KERNEL_VERSION(6, 12, 18) <= LINUX_VERSION_CODE) && \
-	(KERNEL_VERSION(6, 13, 0) > LINUX_VERSION_CODE))
+#if (((KERNEL_VERSION(6, 12, 18) <= LINUX_VERSION_CODE) && \
+	(KERNEL_VERSION(6, 13, 0) > LINUX_VERSION_CODE)) || \
+	(KERNEL_VERSION(6, 18, 7) <= LINUX_VERSION_CODE))
 static void kgsl_shmem_fill_page(void *ptr,
 	struct shmem_inode_info *inode, struct folio **folio, int order)
 {

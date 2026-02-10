@@ -795,6 +795,16 @@ static void _gmu_trace_dcvs_pwrlevel(struct kgsl_device *device, struct gmu_trac
 	if (data->prev_pwrlvl == pwr->num_pwrlevels)
 		data->prev_pwrlvl = pwr->active_pwrlevel;
 
+	if (data->prev_pwrlvl != data->new_pwrlvl) {
+		unsigned long flags;
+
+		/* Track GPU frequency transitions for GMU-based DCVS */
+		spin_lock_irqsave(&pwr->trans_stats.lock, flags);
+		pwr->trans_stats.trans_table[data->prev_pwrlvl][data->new_pwrlvl]++;
+		pwr->trans_stats.total_trans++;
+		spin_unlock_irqrestore(&pwr->trans_stats.lock, flags);
+	}
+
 	if (pwr->active_pwrlevel != data->new_pwrlvl) {
 		u32 penalty = FIELD_PREP(GENMASK(31, 16), data->penalty_down) |
 				FIELD_PREP(GENMASK(15, 0), data->penalty_up);
@@ -850,6 +860,9 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 
 	pwr->clock_times[pwr->active_pwrlevel] += data->gpu_time;
 	pwr->time_in_pwrlevel[pwr->active_pwrlevel] += data->total_time;
+	pwr->trans_stats.time_in_pwrlevel[pwr->active_pwrlevel] += data->total_time;
+	pwr->trans_stats.last_time_updated = ktime_get();
+
 	if (pwr->thermal_pwrlevel)
 		pwr->thermal_time += data->gpu_time;
 

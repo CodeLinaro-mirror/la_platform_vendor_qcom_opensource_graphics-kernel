@@ -632,6 +632,8 @@ struct kgsl_sharedmem_bind_op {
 	void (*callback)(struct kgsl_sharedmem_bind_op *op);
 	void *data;
 	struct work_struct work;
+	/* @defer_free_work: Work structure to defer freeing of the bind op resources */
+	struct work_struct defer_free_work;
 	struct completion comp;
 	struct kref ref;
 };

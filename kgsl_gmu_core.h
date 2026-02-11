@@ -39,6 +39,7 @@
 
 enum gmu_common_capabilities {
 	FCC_VERSION_INFO = 0,
+	FCC_MPU_NON_BUFFERABLE_CARVEOUT = 2,
 };
 
 enum gmu_platform_capabilities {
@@ -75,6 +76,8 @@ enum gmu_core_flags {
 	GMU_THERMAL_MITIGATION,
 	GMU_FORCE_COLDBOOT,
 	GMU_SOCCP_VOTE_ON,
+	/* GMU FW and KMD support RW buffer disabled carveout */
+	GMU_NON_BUFFERABLE_CARVEOUT,
 };
 
 /*
@@ -233,6 +236,10 @@ enum gmu_vrb_idx {
 	VRB_CTXRECORD_GMEM_SZ = 12,
 	/* Contains whether to enable fault on DBGC interrupts */
 	VRB_DBGC_FAULT_ENABLE = 17,
+	/* Contains the GMU base VA of noncached region non bufferable carveout */
+	VRB_NON_BUFFERABLE_CARVEOUT_BASE = 19,
+	/* Contains the size (bytes) of noncached region non bufferable carveout */
+	VRB_NON_BUFFERABLE_CARVEOUT_SIZE = 20,
 };
 
 /* For GMU Trace */
@@ -429,6 +436,7 @@ enum gmu_mem_type {
 	GMU_DTCM,
 	GMU_DCACHE,
 	GMU_NONCACHED_KERNEL, /* GMU VBIF3 uncached VA range: 0x60000000 - 0x7fffffff */
+	GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT, /* Carved out from GMU_NONCACHED_KERNEL */
 	GMU_NONCACHED_KERNEL_EXTENDED, /* GMU VBIF3 uncached VA range: 0xc0000000 - 0xdfffffff */
 	GMU_NONCACHED_USER,
 	GMU_MEM_TYPE_MAX,

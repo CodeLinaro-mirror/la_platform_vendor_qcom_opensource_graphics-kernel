@@ -24,6 +24,9 @@
 #include "kgsl_gmu_core.h"
 #include "kgsl_util.h"
 
+#define GMU_NON_BUFFERABLE_CARVEOUT_SIZE	SZ_128M
+#define GMU_NONCACHED_KERNEL_SIZE	(SZ_512M - GMU_NON_BUFFERABLE_CARVEOUT_SIZE)
+
 static struct gmu_vma_entry gen8_gmu_vma[] = {
 	[GMU_ITCM] = {
 			.start = 0x00000000,
@@ -42,15 +45,33 @@ static struct gmu_vma_entry gen8_gmu_vma[] = {
 			.start = 0x0,
 			.size = 0x0,
 		},
+	/* GMU_NONCACHED_KERNEL: 0x60000000 - 0x77ffffff */
 	[GMU_NONCACHED_KERNEL] = {
 			.start = 0x60000000,
-			.size = SZ_512M,
+			.size = GMU_NONCACHED_KERNEL_SIZE,
 			.next_va = 0x60000000,
+		},
+	/*
+	 * GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT: 0x78000000 - 0x7fffffff
+	 * This is a carveout region that has RW buffer disabled. The base and size of
+	 * this carveout is entirely configurable in kgsl. Keep this VMA as static as
+	 * we don't yet have a usecase that would need dynamic allocations/free from
+	 * this carveout.
+	 */
+	[GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT] = {
+			.start = 0x60000000 + GMU_NONCACHED_KERNEL_SIZE,
+			.size = GMU_NON_BUFFERABLE_CARVEOUT_SIZE,
+			.next_va = 0x60000000 + GMU_NONCACHED_KERNEL_SIZE,
 		},
 	[GMU_NONCACHED_KERNEL_EXTENDED] = {
 			.start = 0xc0000000,
 			.size = SZ_512M,
 			.next_va = 0xc0000000,
+		},
+	[GMU_MEM_TYPE_MAX] = {
+			.start = UINT_MAX,
+			.size = UINT_MAX,
+			.next_va = UINT_MAX,
 		},
 };
 
@@ -1766,6 +1787,62 @@ cx_gdsc_off:
 	gmu_core_rdpm_cx_freq_update(device, 0);
 
 	return ret;
+}
+
+int gen8_gmu_set_non_bufferable_carveout(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int ret;
+
+	if (test_bit(GMU_NON_BUFFERABLE_CARVEOUT, &device->gmu_core.flags))
+		return 0;
+
+	if (!gmu_core_capabilities_enabled(&device->gmu_core.common_caps,
+		FCC_MPU_NON_BUFFERABLE_CARVEOUT))
+		return 0;
+
+	if (!gen8_gmu_vma[GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT].start ||
+		!gen8_gmu_vma[GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT].size) {
+		dev_err(GMU_PDEV_DEV(device),
+			"Non bufferable carveout base:%x and size:%x are not initialized\n",
+			gen8_gmu_vma[GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT].start,
+			gen8_gmu_vma[GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT].size);
+		return -EINVAL;
+	}
+
+	if (!IS_ALIGNED(gen8_gmu_vma[GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT].start,
+		gen8_gmu_vma[GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT].size)) {
+		dev_err(GMU_PDEV_DEV(device),
+			"Non bufferable carveout base:%x and size:%x are not aligned\n",
+			gen8_gmu_vma[GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT].start,
+			gen8_gmu_vma[GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT].size);
+		return -EINVAL;
+	}
+
+	/*
+	 * Setting these values in the VRB allows GMU to disable RW buffer for this carveout range.
+	 * As GMU only has a limited number of entries in the MPU table, this helps because GMU
+	 * ends up using a single MPU table entry for all mem alloc mappings that need RW buffer
+	 * disabled.
+	 */
+	ret = gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_NON_BUFFERABLE_CARVEOUT_BASE,
+		gen8_gmu_vma[GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT].start);
+	if (ret)
+		return ret;
+
+	ret = gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_NON_BUFFERABLE_CARVEOUT_SIZE,
+		gen8_gmu_vma[GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT].size);
+	if (ret)
+		return ret;
+
+	/*
+	 * Both kgsl and GMU FW support the carveout so set this flag to allow mem alloc mappings
+	 * which have HFI_MEMFLAG_GMU_NON_BUFFERABLE flag get mapped to
+	 * GMU_NONCACHED_KERNEL_NON_BUFFERABLE_CARVEOUT region
+	 */
+	set_bit(GMU_NON_BUFFERABLE_CARVEOUT, &device->gmu_core.flags);
+
+	return 0;
 }
 
 static int gen8_gmu_boot(struct adreno_device *adreno_dev)

@@ -53,6 +53,11 @@ static struct gmu_vma_entry gen7_gmu_vma[] = {
 			.size = SZ_512M,
 			.next_va = 0xc0000000,
 		},
+	[GMU_MEM_TYPE_MAX] = {
+			.start = UINT_MAX,
+			.size = UINT_MAX,
+			.next_va = UINT_MAX
+		},
 };
 
 /**

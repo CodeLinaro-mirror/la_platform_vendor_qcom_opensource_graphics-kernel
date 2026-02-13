@@ -985,7 +985,6 @@ static void kgsl_destroy_process_private(struct kref *kref)
 			struct kgsl_process_private, refcount);
 	struct kgsl_device *device = KGSL_MMU_DEVICE(private->pagetable->mmu);
 
-	kgsl_put_work_period(private->period);
 	/*
 	 * While removing sysfs entries, kernfs_mutex is held by sysfs apis. Since
 	 * it is a global fs mutex, sometimes it takes longer for kgsl to get hold
@@ -1008,6 +1007,7 @@ static void kgsl_destroy_process_private(struct kref *kref)
 	write_unlock(&kgsl_driver.proclist_lock);
 	mutex_unlock(&kgsl_driver.process_mutex);
 
+	kgsl_put_work_period(private->period);
 	kfree(private->cmdline);
 	put_pid(private->pid);
 	idr_destroy(&private->mem_idr);
@@ -3068,16 +3068,15 @@ static int kgsl_setup_anon_useraddr(struct kgsl_device *device, struct kgsl_page
 	entry->memdesc.ops = &kgsl_usermem_ops;
 
 	if (kgsl_memdesc_use_cpu_map(&entry->memdesc)) {
-
 		/* Register the address in the database */
 		ret = kgsl_mmu_set_svm_region(pagetable,
-			(uint64_t) hostptr, (uint64_t) size);
+			&entry->memdesc, (uint64_t) hostptr, (uint64_t) size);
 
 		/* if OOM, retry once after flushing lockless_workqueue */
 		if (ret == -ENOMEM) {
 			flush_workqueue(kgsl_driver.lockless_workqueue);
 			ret = kgsl_mmu_set_svm_region(pagetable,
-				(uint64_t) hostptr, (uint64_t) size);
+				&entry->memdesc, (uint64_t) hostptr, (uint64_t) size);
 		}
 
 		if (ret)
@@ -4774,29 +4773,11 @@ static unsigned long _gpu_set_svm_region(struct kgsl_process_private *private,
 {
 	int ret;
 
-	/*
-	 * Protect access to the gpuaddr here to prevent multiple vmas from
-	 * trying to map a SVM region at the same time
-	 */
-	spin_lock(&entry->memdesc.lock);
+	ret = kgsl_mmu_set_svm_region(private->pagetable,  &entry->memdesc,
+		(uint64_t) addr, (uint64_t) size);
 
-	if (entry->memdesc.gpuaddr) {
-		spin_unlock(&entry->memdesc.lock);
-		return (unsigned long) -EBUSY;
-	}
-
-	ret = kgsl_mmu_set_svm_region(private->pagetable, (uint64_t) addr,
-		(uint64_t) size);
-
-	if (ret != 0) {
-		spin_unlock(&entry->memdesc.lock);
+	if (ret != 0)
 		return (unsigned long) ret;
-	}
-
-	entry->memdesc.gpuaddr = (uint64_t) addr;
-	spin_unlock(&entry->memdesc.lock);
-
-	entry->memdesc.pagetable = private->pagetable;
 
 	ret = kgsl_mmu_map(private->pagetable, &entry->memdesc);
 	if (ret) {
@@ -5301,10 +5282,14 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 	if (status)
 		return status;
 
+	status = gmu_core_init(device);
+	if (status)
+		goto error_gmu_core;
+
 	/* Can return -EPROBE_DEFER */
 	status = kgsl_pwrctrl_init(device);
 	if (status)
-		goto error;
+		goto error_pwrctrl;
 
 	device->events_worker = kthread_create_worker(0, "kgsl-events");
 
@@ -5348,7 +5333,9 @@ error_pwrctrl_close:
 		kthread_destroy_worker(device->events_worker);
 
 	kgsl_pwrctrl_close(device);
-error:
+error_pwrctrl:
+	gmu_core_close(device);
+error_gmu_core:
 	_unregister_device(device);
 	return status;
 }
@@ -5369,6 +5356,7 @@ void kgsl_device_platform_remove(struct kgsl_device *device)
 	kgsl_free_globals(device);
 
 	kgsl_pwrctrl_close(device);
+	gmu_core_close(device);
 
 	kgsl_device_debugfs_close(device);
 	_unregister_device(device);

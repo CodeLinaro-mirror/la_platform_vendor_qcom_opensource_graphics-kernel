@@ -1,6 +1,6 @@
 load("//build/kernel/kleaf:kernel.bzl", "ddk_module", "ddk_headers")
 load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
-load(":build/target_variants.bzl", "get_all_la_variants")
+load(":build/target_variants.bzl", "get_all_variants")
 
 msm_kgsl_includes = [
     "include/linux/msm_kgsl.h",
@@ -106,7 +106,17 @@ def external_deps(target, variant):
             "//vendor/qcom/opensource/synx-kernel:synx_headers"
             ]
 
-    if target in [ "monaco", "parrot", "vienna", "lahaina", "bengal" ]:
+    if target in [
+        "monaco",
+        "parrot",
+        "vienna",
+        "vienna-le",
+        "lahaina",
+        "art",
+        "bengal",
+        "chora",
+        "malabar"
+        ]:
         deplist = deplist + [
             "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers"
             ]
@@ -159,7 +169,7 @@ def define_target_variant_module(target, variant):
                   "//soc-repo:{}/drivers/soc/qcom/secure_buffer".format(tv),
                   "//soc-repo:{}/drivers/soc/qcom/socinfo".format(tv),
                   "//soc-repo:{}/kernel/msm_sysstats".format(tv),
-                  "//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
+                  #"//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
                 ],
                 "//build/kernel/kleaf:socrepo_false": [ "//msm-kernel:all_headers" ],
         })
@@ -210,5 +220,5 @@ def define_target_modules():
             visibility = ["//visibility:public"]
         )
 
-        for target, variant in get_all_la_variants():
+        for target, variant in get_all_variants():
                 define_target_variant_module(target, variant)

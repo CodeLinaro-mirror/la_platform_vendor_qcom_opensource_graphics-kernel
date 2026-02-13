@@ -2596,6 +2596,35 @@ static int gen8_allocate_pwr_proto_trace_buf(struct adreno_device *adreno_dev)
 			device->gmu_core.pwr_proto_trace.md->gmuaddr);
 }
 
+static int gen8_allocate_pwr_limits_trace_buf(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
+	int ret;
+
+	if (device->gmu_core.pwr_limits_trace.md || !device->gmu_core.gmu_pwr_limits_trace_buf_size)
+		return 0;
+
+	device->gmu_core.pwr_limits_trace.md = gmu_core_reserve_kernel_block(device, 0,
+				device->gmu_core.gmu_pwr_limits_trace_buf_size,
+				GMU_NONCACHED_KERNEL, 0);
+
+	if (IS_ERR_OR_NULL(device->gmu_core.pwr_limits_trace.md)) {
+		ret = PTR_ERR(device->gmu_core.pwr_limits_trace.md);
+		if (!ret)
+			ret = -ENOMEM;
+		dev_err(gmu_pdev_dev, "GMU power proto buf allocation failed: %d\n", ret);
+		device->gmu_core.pwr_limits_trace.md = NULL;
+		return ret;
+	}
+
+	gmu_core_trace_header_init(&device->gmu_core.pwr_limits_trace,
+		TRACE_LOGTYPE_POWER_BUDGETING, TRACE_MODE_FREERUN);
+
+	return gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_PWR_LIMITS_TRACE_BUF,
+			device->gmu_core.pwr_limits_trace.md->gmuaddr);
+}
+
 static int gen8_hwsched_feature_ctrl(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -2737,6 +2766,10 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 		goto err;
 
 	ret = gen8_allocate_pwr_proto_trace_buf(adreno_dev);
+	if (ret)
+		goto err;
+
+	ret = gen8_allocate_pwr_limits_trace_buf(adreno_dev);
 	if (ret)
 		goto err;
 

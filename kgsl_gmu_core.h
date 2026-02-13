@@ -550,6 +550,8 @@ struct gmu_dev_ops {
 	void (*send_nmi)(struct kgsl_device *device, bool force,
 		enum gmu_fault_panic_policy gf_policy);
 	void (*minbw_idle_level_set)(struct kgsl_device *device, u32 val);
+	u32 (*gmu_pwr_trace_trigger_set)(struct kgsl_device *device, u32 val);
+	u32 (*gmu_pwr_trace_trigger_get)(struct kgsl_device *device);
 };
 
 struct firmware_capabilities {
@@ -646,6 +648,10 @@ struct gmu_core_device {
 	struct kgsl_gmu_trace pwr_proto_trace;
 	/** @gmu_pwr_proto_trace_buf_size: Size of trace buf for GMU pwr prototype events */
 	u32 gmu_pwr_proto_trace_buf_size;
+	/** @pwr_limits_trace: gmu trace container for power limits events */
+	struct kgsl_gmu_trace pwr_limits_trace;
+	/** @gmu_pwr_limits_trace_buf_size: Size of trace buf for GMU pwr limits events */
+	u32 gmu_pwr_limits_trace_buf_size;
 };
 
 extern struct platform_driver a6xx_gmu_driver;

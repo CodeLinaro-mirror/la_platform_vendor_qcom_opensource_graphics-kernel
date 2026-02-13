@@ -667,13 +667,39 @@ static ssize_t gmu_proto_buf_read(struct file *file, char __user *buf, size_t le
 
 	/* We do not need a synchronization/device mutex here since resizing is not allowed */
 	return simple_read_from_buffer(buf, len, ppos, hostptr, md->size);
-
 }
 
 static const struct file_operations gmu_pwr_proto_trace_buf_out_fops = {
 	.owner = THIS_MODULE,
 	.open = simple_open,
 	.read = gmu_proto_buf_read,
+	.llseek = noop_llseek,
+};
+
+static ssize_t gmu_pwr_limits_buf_read(struct file *file, char __user *buf, size_t len,
+					loff_t *ppos)
+{
+	struct kgsl_device *device = (struct kgsl_device *)file->private_data;
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_memdesc *md = READ_ONCE(gmu->pwr_limits_trace.md);
+	void *hostptr = NULL;
+
+	if (IS_ERR_OR_NULL(md))
+		return -EINVAL;
+
+	hostptr = READ_ONCE(md->hostptr);
+
+	if (!hostptr)
+		return -EINVAL;
+
+	/* We do not need a synchronization/device mutex here since resizing is not allowed */
+	return simple_read_from_buffer(buf, len, ppos, hostptr, md->size);
+}
+
+static const struct file_operations gmu_pwr_limits_trace_buf_out_fops = {
+	.owner = THIS_MODULE,
+	.open = simple_open,
+	.read = gmu_pwr_limits_buf_read,
 	.llseek = noop_llseek,
 };
 
@@ -708,6 +734,65 @@ static int _gmu_pwr_proto_trace_buf_size_store(void *data, u64 val)
 
 DEFINE_DEBUGFS_ATTRIBUTE(gmu_pwr_proto_trace_buf_size_fops, _gmu_pwr_proto_trace_buf_size_show,
 				_gmu_pwr_proto_trace_buf_size_store, "%llu\n");
+
+static int _gmu_pwr_limits_trace_buf_size_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
+
+	*val = ((u64)gmu->gmu_pwr_limits_trace_buf_size / SZ_1M);
+	return 0;
+}
+
+static int _gmu_pwr_limits_trace_buf_size_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
+
+	/* Do not overwrite a value once buffer is allocated */
+	if (gmu->gmu_pwr_limits_trace_buf_size)
+		return 0;
+
+	if (val > (SZ_256M / SZ_1M)) {
+		dev_err(device->dev, "Max allocation allowed is 256MB\n");
+		return 0;
+	}
+
+	return adreno_power_cycle_u32(adreno_dev, &gmu->gmu_pwr_limits_trace_buf_size,
+			(val * SZ_1M));
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(gmu_pwr_limits_trace_buf_size_fops, _gmu_pwr_limits_trace_buf_size_show,
+				_gmu_pwr_limits_trace_buf_size_store, "%llu\n");
+
+static int _gmu_pwr_trace_trigger_get(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct gmu_dev_ops *ops = GMU_DEVICE_OPS(device);
+
+	if (ops && ops->gmu_pwr_trace_trigger_get)
+		*val = ops->gmu_pwr_trace_trigger_get(device);
+
+	return 0;
+}
+
+static int _gmu_pwr_trace_trigger_set(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct gmu_dev_ops *ops = GMU_DEVICE_OPS(device);
+
+	if (ops && ops->gmu_pwr_trace_trigger_set)
+		return ops->gmu_pwr_trace_trigger_set(device, (u32)val);
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(gmu_pwr_trace_trigger_fops, _gmu_pwr_trace_trigger_get,
+				_gmu_pwr_trace_trigger_set, "0x%08llx\n");
 
 static int _ifpc_hyst_store(void *data, u64 val)
 {
@@ -1025,6 +1110,14 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 		debugfs_create_file("gmu_pwr_proto_trace_buf_out", 0444,
 			device->gmu_core.gmu_debugfs_dir, device,
 			&gmu_pwr_proto_trace_buf_out_fops);
+		debugfs_create_file("gmu_pwr_limits_trace_buf_size", 0644,
+			device->gmu_core.gmu_debugfs_dir, device,
+			&gmu_pwr_limits_trace_buf_size_fops);
+		debugfs_create_file("gmu_pwr_limits_trace_buf_out", 0444,
+			device->gmu_core.gmu_debugfs_dir, device,
+			&gmu_pwr_limits_trace_buf_out_fops);
+		debugfs_create_file("gmu_pwr_trace_trigger", 0644, device->gmu_core.gmu_debugfs_dir,
+			device, &gmu_pwr_trace_trigger_fops);
 	}
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS))

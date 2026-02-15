@@ -1457,6 +1457,33 @@ static int kgsl_iommu_secure_fault_handler(struct iommu_domain *domain,
 		addr, flags);
 }
 
+static int kgsl_iommu_proxy_fault_handler(struct iommu_domain *domain,
+	struct device *dev, unsigned long addr, int flags, void *token)
+{
+	struct kgsl_mmu *mmu = token;
+	struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const char *fault_type = NULL;
+
+	if (flags & IOMMU_FAULT_TRANSLATION)
+		fault_type = "translation";
+	else if (flags & IOMMU_FAULT_PERMISSION)
+		fault_type = "permission";
+	else if (flags & IOMMU_FAULT_EXTERNAL)
+		fault_type = "external";
+	else if (flags & IOMMU_FAULT_TRANSACTION_STALLED)
+		fault_type = "transaction stalled";
+	else
+		fault_type = "unknown";
+
+	dev_crit(KGSL_MMU_DEVICE(mmu)->dev,
+		"SECURE PAGE FAULT iova=0x%16lx, type=%s\n", addr, fault_type);
+
+	/* Stall on fault is always enabled in case of Proxy smmu device */
+	adreno_scheduler_fault(adreno_dev, ADRENO_IOMMU_STALL_ON_PAGE_FAULT);
+	return 0;
+}
+
 /*
  * kgsl_iommu_disable_clk() - Disable iommu clocks
  * Disable IOMMU clocks
@@ -1533,6 +1560,9 @@ static int kgsl_iommu_get_context_bank(struct kgsl_pagetable *pt, struct kgsl_co
 	struct kgsl_iommu *iommu = to_kgsl_iommu(pt);
 	struct iommu_domain *domain;
 
+	if (WARN_ON_ONCE(iommu->secure_context.is_proxy_device))
+		return -EINVAL;
+
 	if (kgsl_context_is_lpac(context))
 		domain = to_iommu_domain(&iommu->lpac_context);
 	else
@@ -1545,6 +1575,9 @@ static int kgsl_iommu_get_asid(struct kgsl_pagetable *pt, struct kgsl_context *c
 {
 	struct kgsl_iommu *iommu = to_kgsl_iommu(pt);
 	struct iommu_domain *domain;
+
+	if (WARN_ON_ONCE(iommu->secure_context.is_proxy_device))
+		return -EINVAL;
 
 	if (kgsl_context_is_lpac(context))
 		domain = to_iommu_domain(&iommu->lpac_context);
@@ -1612,6 +1645,12 @@ int kgsl_set_smmu_aperture(struct kgsl_device *device,
 
 static void kgsl_iommu_enable_ptwalk(struct kgsl_iommu_context *context)
 {
+	/* Since there is no stage 1 CB in case of a proxy secure device,
+	 * we can't configure any CB registers
+	 */
+	if (WARN_ON_ONCE(context->is_proxy_device))
+		return;
+
 	u32 tcr = KGSL_IOMMU_GET_CTX_REG(context, KGSL_IOMMU_CTX_TCR_LPAE);
 
 	tcr &= ~(KGSL_IOMMU_TCR_LPAE_EPD0 | KGSL_IOMMU_TCR_LPAE_EPD1);
@@ -1906,6 +1945,15 @@ static void _iommu_context_set_prr(struct kgsl_mmu *mmu,
 	struct page *page = kgsl_vbo_zero_page;
 	u32 val;
 
+	/*
+	 * There is nothing to be done for proxy smmu device. The TZ SMMU driver
+	 * enables the PRR bit in the ACTLR register. The PRR_CFG_* registers
+	 * are global registers and they are already configured for the
+	 * non-secure kgsl context.
+	 */
+	if (ctx->is_proxy_device)
+		return;
+
 	if (ctx->cb_num < 0)
 		return;
 
@@ -1935,6 +1983,12 @@ static void kgsl_iommu_configure_gpu_sctlr(struct kgsl_mmu *mmu,
 		struct kgsl_iommu_context *ctx)
 {
 	u32 sctlr_val;
+
+	/* Since there is no stage 1 CB in case of a proxy secure device,
+	 * we can't configure any CB registers
+	 */
+	if (WARN_ON_ONCE(ctx->is_proxy_device))
+		return;
 
 	/*
 	 * If pagefault policy is GPUHALT_ENABLE,
@@ -2057,6 +2111,12 @@ static int kgsl_iommu_start(struct kgsl_mmu *mmu)
 static void kgsl_iommu_context_clear_fsr(struct kgsl_mmu *mmu, struct kgsl_iommu_context *ctx)
 {
 	unsigned int sctlr_val;
+
+	/* Since there is no stage 1 CB in case of a proxy secure device,
+	 * we can't configure any CB registers
+	 */
+	if (WARN_ON_ONCE(ctx->is_proxy_device))
+		return;
 
 	if (ctx->stalled_on_fault || _ctx_terminated_on_fault(mmu, ctx)) {
 		struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
@@ -2864,6 +2924,7 @@ static int iommu_probe_secure_context(struct kgsl_device *device,
 	struct kgsl_mmu *mmu = &device->mmu;
 	struct kgsl_iommu_context *context = &iommu->secure_context;
 	int secure_vmid = VMID_CP_PIXEL;
+	struct device_node *phandle;
 
 	if (!mmu->secured)
 		return -EPERM;
@@ -2873,6 +2934,17 @@ static int iommu_probe_secure_context(struct kgsl_device *device,
 		ret = -ENOENT;
 		goto err;
 	}
+
+	phandle = of_parse_phandle(node, "iommus", 0);
+	if (IS_ERR_OR_NULL(phandle)) {
+		ret = -EINVAL;
+		goto err_node_put;
+	}
+
+	if (of_device_is_compatible(phandle, "qcom,dpd-smmu"))
+		context->is_proxy_device = true;
+
+	of_node_put(phandle);
 
 	pdev = of_find_device_by_node(node);
 	if (!pdev) {
@@ -2899,26 +2971,34 @@ static int iommu_probe_secure_context(struct kgsl_device *device,
 		goto err_device_put;
 	}
 
-	ret = qcom_iommu_set_secure_vmid(context->domain, secure_vmid);
-	if (ret) {
-		dev_err(&device->pdev->dev, "Unable to set the secure VMID: %d\n", ret);
-		goto err_domain_free;
-	}
+	if (!context->is_proxy_device) {
+		ret = qcom_iommu_set_secure_vmid(context->domain, secure_vmid);
+		if (ret) {
+			dev_err(&device->pdev->dev, "Unable to set the secure VMID: %d\n", ret);
+			goto err_domain_free;
+		}
 
-	_enable_gpuhtw_llc(mmu, context->domain);
+		_enable_gpuhtw_llc(mmu, context->domain);
+	}
 
 	ret = iommu_attach_device(context->domain, &context->pdev->dev);
 	if (ret)
 		goto err_domain_free;
 
-	iommu_set_fault_handler(context->domain,
-		kgsl_iommu_secure_fault_handler, mmu);
+	/* We cannot do any register operations if the CB is managed by the secure world */
+	if (context->is_proxy_device) {
+		iommu_set_fault_handler(context->domain,
+			kgsl_iommu_proxy_fault_handler, mmu);
+	} else {
+		iommu_set_fault_handler(context->domain,
+			kgsl_iommu_secure_fault_handler, mmu);
 
-	context->cb_num = qcom_iommu_get_context_bank_nr(context->domain);
+		context->cb_num = qcom_iommu_get_context_bank_nr(context->domain);
 
-	if (context->cb_num < 0) {
-		ret = context->cb_num;
-		goto err_detach_device;
+		if (context->cb_num < 0) {
+			ret = context->cb_num;
+			goto err_detach_device;
+		}
 	}
 
 	mmu->securepagetable = kgsl_iommu_secure_pagetable(mmu);

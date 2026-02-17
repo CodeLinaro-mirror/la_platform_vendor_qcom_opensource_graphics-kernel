@@ -270,7 +270,8 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
 
 	/* Return false for non fatal errors */
-	if (adreno_hwsched_log_nonfatal_gpu_fault(adreno_dev, gmu_pdev_dev, cmd->error))
+	if ((cmd->error != GMU_UCHE_OOB_ACCESS) &&
+		adreno_hwsched_log_nonfatal_gpu_fault(adreno_dev, gmu_pdev_dev, cmd->error))
 		return false;
 
 	switch (cmd->error) {
@@ -531,6 +532,9 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 		break;
 	case GMU_DBGC_INTR_ERROR:
 		dev_crit_ratelimited(gmu_pdev_dev, "DBGC error interrupt\n");
+		break;
+	case GMU_UCHE_OOB_ACCESS:
+		dev_crit_ratelimited(gmu_pdev_dev, "UCHE: Out of bounds access\n");
 		break;
 	case GMU_CP_UNKNOWN_ERROR:
 		fallthrough;
@@ -3507,8 +3511,6 @@ static struct adreno_hw_fence_entry *allocate_hw_fence_entry(struct adreno_devic
 		return NULL;
 	}
 
-	dma_fence_get(&kfence->fence);
-
 	drawctxt->hw_fence_count++;
 	hwsched->hw_fence.pending_count++;
 
@@ -3677,7 +3679,6 @@ void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 			dev_err(GMU_PDEV_DEV(device),
 				"hw fence for ctx:%d ts:%d ret:%d may not be destroyed\n",
 				kfence->context_id, kfence->timestamp, ret);
-		kgsl_hw_fence_destroy(kfence);
 		destroy = true;
 		drawctxt->hw_fence_last_ts = hw_fence_last_ts;
 		goto done;

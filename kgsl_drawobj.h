@@ -103,6 +103,8 @@ struct kgsl_drawobj_sync_hw_fence {
 	 * context: Pointer to kgsl context if this hardware fence is owned by a kgsl context
 	 */
 	struct kgsl_context *context;
+	/** @list: list node for this hardware fence */
+	struct list_head node;
 };
 
 /**
@@ -128,9 +130,10 @@ struct kgsl_drawobj_sync {
 	/** @num_hw_fence: number of hw fences in this syncobj */
 	u32 num_hw_fence;
 	/**
-	 * @hw_fences: Array to hold information regarding hardware fences that are in this syncobj
+	 * @hw_fence_list: List to hold information regarding hardware fences that are in this sync
+	 * object
 	 */
-	struct kgsl_drawobj_sync_hw_fence *hw_fences;
+	struct list_head hw_fence_list;
 };
 
 #define KGSL_BINDOBJ_STATE_START 0

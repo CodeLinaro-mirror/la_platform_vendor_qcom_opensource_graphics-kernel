@@ -837,6 +837,7 @@ void kgsl_hw_fence_put(struct kgsl_sync_fence *kfence)
 static void _kgsl_populate_hw_fence(struct kgsl_drawobj_sync_event *event, struct dma_fence *fence)
 {
 	struct kgsl_drawobj_sync *syncobj = event->syncobj;
+	struct kgsl_drawobj_sync_hw_fence *hw_fence;
 	u32 max_hw_fence = event->device->max_syncobj_hw_fence_count;
 
 	if (test_bit(KGSL_SYNCOBJ_SW, &syncobj->flags))
@@ -852,18 +853,21 @@ static void _kgsl_populate_hw_fence(struct kgsl_drawobj_sync_event *event, struc
 		return;
 	}
 
-	if (!syncobj->hw_fences) {
-		syncobj->hw_fences = kcalloc(max_hw_fence, sizeof(*syncobj->hw_fences), GFP_KERNEL);
-		if (!syncobj->hw_fences) {
-			set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
-			return;
-		}
+	if (syncobj->num_hw_fence >= max_hw_fence) {
+		set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
+		return;
 	}
 
-	if (syncobj->num_hw_fence < max_hw_fence)
-		syncobj->hw_fences[syncobj->num_hw_fence++].fence = fence;
-	else
+	hw_fence = kzalloc(sizeof(*hw_fence), GFP_KERNEL);
+	if (!hw_fence) {
 		set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
+		return;
+	}
+
+	syncobj->num_hw_fence++;
+	hw_fence->fence = fence;
+	INIT_LIST_HEAD(&hw_fence->node);
+	list_add_tail(&hw_fence->node, &syncobj->hw_fence_list);
 }
 
 static void kgsl_syncsource_fence_value_str(struct dma_fence *fence, char *str, int size)

@@ -41,6 +41,7 @@ static struct kmem_cache *memobjs_cache;
 static void syncobj_destroy_object(struct kgsl_drawobj *drawobj)
 {
 	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
+	struct kgsl_drawobj_sync_hw_fence *hw_fence, *tmp;
 	int i;
 
 	for (i = 0; i < syncobj->numsyncs; i++) {
@@ -71,10 +72,12 @@ static void syncobj_destroy_object(struct kgsl_drawobj *drawobj)
 		}
 	}
 
-	for (i = 0; i < syncobj->num_hw_fence; i++)
-		kgsl_context_put(syncobj->hw_fences[i].context);
+	list_for_each_entry_safe(hw_fence, tmp, &syncobj->hw_fence_list, node) {
+		kgsl_context_put(hw_fence->context);
+		list_del_init(&hw_fence->node);
+		kfree(hw_fence);
+	}
 
-	kfree(syncobj->hw_fences);
 	kfree(syncobj->synclist);
 	kfree(syncobj);
 }
@@ -1255,6 +1258,7 @@ struct kgsl_drawobj_sync *kgsl_drawobj_sync_create(struct kgsl_device *device,
 
 	syncobj->base.destroy = syncobj_destroy;
 	syncobj->base.destroy_object = syncobj_destroy_object;
+	INIT_LIST_HEAD(&syncobj->hw_fence_list);
 
 	timer_setup(&syncobj->timer, syncobj_timer, 0);
 

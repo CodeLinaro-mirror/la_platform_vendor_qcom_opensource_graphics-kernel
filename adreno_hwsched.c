@@ -2181,12 +2181,13 @@ static bool context_is_throttled(struct kgsl_device *device,
 
 static void _print_syncobj(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj)
 {
-	int i;
+	int i = 0;
 	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_drawobj_sync_hw_fence *hw_fence;
 
-	for (i = 0; i < syncobj->num_hw_fence; i++) {
-		struct dma_fence *fence = syncobj->hw_fences[i].fence;
+	list_for_each_entry(hw_fence, &syncobj->hw_fence_list, node) {
+		struct dma_fence *fence = hw_fence->fence;
 		bool kgsl = is_kgsl_fence(fence);
 		bool signaled = test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
 		char value[32] = "unknown";
@@ -2195,7 +2196,7 @@ static void _print_syncobj(struct adreno_device *adreno_dev, struct kgsl_drawobj
 
 		dev_err(device->dev,
 			"dma fence[%d] signaled:%d kgsl:%d ctx:%llu seqno:%llu value:%s\n",
-			i, signaled, kgsl, fence->context, fence->seqno, value);
+			i++, signaled, kgsl, fence->context, fence->seqno, value);
 	}
 
 }

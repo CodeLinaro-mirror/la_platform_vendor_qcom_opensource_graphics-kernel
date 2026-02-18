@@ -205,10 +205,11 @@ static void kgsl_memfree_purge(struct kgsl_pagetable *pagetable,
 			entry->size = gpuaddr - entry->gpuaddr;
 		} else if (gpuaddr <= entry->gpuaddr) {
 			if (gpuaddr + size > entry->gpuaddr &&
-				gpuaddr + size < entry->gpuaddr + entry->size)
+				gpuaddr + size < entry->gpuaddr + entry->size) {
 				/* Truncate the beginning of the entry */
+				entry->size -= (gpuaddr + size - entry->gpuaddr);
 				entry->gpuaddr = gpuaddr + size;
-			else if (gpuaddr + size >= entry->gpuaddr + entry->size)
+			} else if (gpuaddr + size >= entry->gpuaddr + entry->size)
 				/* Remove the entire entry */
 				entry->size = 0;
 		}

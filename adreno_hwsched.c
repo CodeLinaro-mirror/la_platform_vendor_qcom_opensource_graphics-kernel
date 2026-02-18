@@ -1859,6 +1859,7 @@ static void adreno_hwsched_dispatcher_close(struct adreno_device *adreno_dev)
 	kfree(hwsched->ctxt_bad);
 
 	adreno_hwsched_deregister_hw_fence(adreno_dev);
+	kmem_cache_destroy(device->syncobj_hw_fence_cache);
 
 	if (hwsched->global_ctxtq.hostptr)
 		kgsl_sharedmem_free(&hwsched->global_ctxtq);
@@ -2884,6 +2885,7 @@ void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev)
 	}
 
 	hwsched->hw_fence_cache = KMEM_CACHE(adreno_hw_fence_entry, 0);
+	device->syncobj_hw_fence_cache = KMEM_CACHE(kgsl_drawobj_sync_hw_fence, 0);
 
 	set_bit(GMU_HWSCHED_HW_FENCE, &device->gmu_core.flags);
 }

@@ -408,6 +408,8 @@ struct kgsl_device {
 	struct mutex file_mutex;
 	/** @host_based_dcvs: Set when KGSL is in charge of DCVS */
 	bool host_based_dcvs;
+	/** @syncobj_hw_fence_cache: Kmem cache for hardware fences in a sync object */
+	struct kmem_cache *syncobj_hw_fence_cache;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \

@@ -355,13 +355,6 @@ void adreno_hwsched_log_remove_pending_hw_fences(struct adreno_device *adreno_de
 	struct device *dev);
 
 /**
- * adreno_hwsched_syncobj_kfence_put - Put back kfence context refcounts for this sync object
- * @syncobj: Pointer to the sync object
- *
- */
-void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj);
-
-/**
  * adreno_hwsched_log_nonfatal_gpu_fault - Logs non fatal GPU error from context bad hfi packet
  * @adreno_dev: pointer to the adreno device
  * @dev: Pointer to the struct device for the GMU platform device

@@ -3480,7 +3480,6 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 				&obj->hash_index);
 
 			if (ret) {
-				adreno_hwsched_syncobj_kfence_put(syncobj);
 				clear_bit(KGSL_SYNCOBJ_HW, &syncobj->flags);
 				drawobj->timestamp = 0;
 				clear_bit(KGSL_SYNCOBJ_HW_TS, &syncobj->flags);

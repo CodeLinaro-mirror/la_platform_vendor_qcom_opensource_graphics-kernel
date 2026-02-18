@@ -71,6 +71,9 @@ static void syncobj_destroy_object(struct kgsl_drawobj *drawobj)
 		}
 	}
 
+	for (i = 0; i < syncobj->num_hw_fence; i++)
+		kgsl_context_put(syncobj->hw_fences[i].context);
+
 	kfree(syncobj->hw_fences);
 	kfree(syncobj->synclist);
 	kfree(syncobj);

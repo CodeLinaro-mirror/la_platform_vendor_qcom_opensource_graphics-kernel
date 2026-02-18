@@ -1658,26 +1658,6 @@ void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	kgsl_drawobj_destroy(drawobj);
 }
 
-void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj)
-{
-	int i;
-
-	for (i = 0; i < syncobj->num_hw_fence; i++) {
-		kgsl_context_put(syncobj->hw_fences[i].context);
-		syncobj->hw_fences[i].context = NULL;
-	}
-}
-
-static void adreno_hwsched_hw_syncobj_destroy(struct kgsl_drawobj *drawobj)
-{
-	adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
-	/*
-	 * It is safe to destroy the hw sync object as it is guaranteed to have no dm-fence
-	 * callbacks
-	 */
-	kgsl_drawobj_destroy(drawobj);
-}
-
 static bool adreno_hwsched_hw_syncobj_retired(struct kgsl_drawobj *drawobj)
 {
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
@@ -1698,7 +1678,7 @@ static bool drawobj_retired(struct adreno_device *adreno_dev,
 
 	if ((drawobj->type & SYNCOBJ_TYPE) != 0) {
 		if (adreno_hwsched_hw_syncobj_retired(drawobj)) {
-			adreno_hwsched_hw_syncobj_destroy(drawobj);
+			kgsl_drawobj_destroy(drawobj);
 			return true;
 		}
 
@@ -1919,7 +1899,7 @@ bool adreno_hwsched_drawobj_replay(struct adreno_device *adreno_dev,
 	if ((drawobj->type & SYNCOBJ_TYPE) != 0) {
 		if (kgsl_context_is_bad(drawobj->context) ||
 			adreno_hwsched_hw_syncobj_retired(drawobj)) {
-			adreno_hwsched_hw_syncobj_destroy(drawobj);
+			kgsl_drawobj_destroy(drawobj);
 			return false;
 		}
 

@@ -231,8 +231,6 @@ static int a6xx_nogmu_init(struct adreno_device *adreno_dev)
 	if (ret && ret != -ENODEV)
 		dev_err(device->dev, "Couldn't map the GMU wrapper registers\n");
 
-	adreno_create_profile_buffer(adreno_dev);
-
 	return a6xx_init(adreno_dev);
 }
 

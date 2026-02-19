@@ -2417,6 +2417,8 @@ static int gen7_boot(struct adreno_device *adreno_dev)
 	return ret;
 }
 
+#define CP_ALWAYS_COUNT 0
+
 static int gen7_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2458,10 +2460,14 @@ static int gen7_first_boot(struct adreno_device *adreno_dev)
 
 	adreno_get_bus_counters(adreno_dev);
 
+	ret = adreno_perfcounter_kernel_get(adreno_dev,
+		KGSL_PERFCOUNTER_GROUP_CP, CP_ALWAYS_COUNT,
+		&adreno_dev->cp_cycles_lo, NULL);
+	if (ret)
+		return ret;
+
 	adreno_dev->cooperative_reset = ADRENO_FEATURE(adreno_dev,
 						 ADRENO_COOP_RESET);
-
-	adreno_create_profile_buffer(adreno_dev);
 
 	set_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags);
 	set_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);

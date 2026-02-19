@@ -629,6 +629,7 @@ struct adreno_fault_proc {
  * @starved_ram_lo: Number of cycles VBIF/GBIF is stalled by DDR (Only channel 0
  * stall cycles in case of GBIF)
  * @starved_ram_lo_ch1: Number of cycles GBIF is stalled by DDR channel 1
+ * @cp_cycles_lo: Number of CP cycles spent on a context
  * @halt: Atomic variable to check whether the GPU is currently halted
  * @pending_irq_refcnt: Atomic variable to keep track of running IRQ handlers
  * @ctx_d_debugfs: Context debugfs node
@@ -686,6 +687,7 @@ struct adreno_device {
 	unsigned int ram_cycles_lo_ch1_write;
 	unsigned int starved_ram_lo;
 	unsigned int starved_ram_lo_ch1;
+	unsigned int cp_cycles_lo;
 	atomic_t halt;
 	atomic_t pending_irq_refcnt;
 	struct dentry *ctx_d_debugfs;
@@ -924,12 +926,16 @@ enum adreno_device_flags {
  * @retired: Number of GPU ticks at the end of the drawobj
  * @ctx_start: CP_ALWAYS_ON_CONTEXT tick at start of the drawobj
  * @ctx_end: CP_ALWAYS_ON_CONTEXT tick at end of the drawobj
+ * @cycles_start: CP cycles count at start of the drawobj
+ * @cycles_end: CP cycles count at end of the drawobj
  */
 struct adreno_drawobj_profile_entry {
 	uint64_t started;
 	uint64_t retired;
 	uint64_t ctx_start;
 	uint64_t ctx_end;
+	uint64_t cycles_start;
+	uint64_t cycles_end;
 };
 
 #define ADRENO_DRAWOBJ_PROFILE_OFFSET(_index, _member) \
@@ -2136,8 +2142,10 @@ void adreno_preemption_timer(struct timer_list *t);
 /**
  * adreno_create_profile_buffer - Create a buffer to store profiling data
  * @adreno_dev: Adreno GPU device handle
+ *
+ * Return: 0 on success or negative on failure
  */
-void adreno_create_profile_buffer(struct adreno_device *adreno_dev);
+int adreno_create_profile_buffer(struct adreno_device *adreno_dev);
 
 /**
  * adreno_isidle - return true if the hardware is idle

@@ -1600,17 +1600,23 @@ int adreno_device_probe(struct platform_device *pdev,
 		priv |= KGSL_MEMDESC_PRIVILEGED;
 
 	kgsl_mutex_lock(&device->mutex);
-	device->memstore = kgsl_allocate_global(device,
-		KGSL_MEMSTORE_SIZE, 0, 0, priv, "memstore");
+
+	device->memstore = kgsl_allocate_global(device, KGSL_MEMSTORE_SIZE, 0, 0, priv, "memstore");
+	if (PTR_ERR_OR_ZERO(device->memstore)) {
+		kgsl_mutex_unlock(&device->mutex);
+		status = PTR_ERR(device->memstore);
+		goto dev_platform_remove;
+	}
+
+	/* Allocate the kernel profiling buffer for FDINFO */
+	status = adreno_create_profile_buffer(adreno_dev);
+	if (status) {
+		kgsl_mutex_unlock(&device->mutex);
+		goto dev_platform_remove;
+	}
+
 	adreno_profile_init(adreno_dev);
 	kgsl_mutex_unlock(&device->mutex);
-
-	status = PTR_ERR_OR_ZERO(device->memstore);
-	if (status) {
-		trace_array_put(device->fence_trace_array);
-		kgsl_device_platform_remove(device);
-		goto err_unbind;
-	}
 
 	/* Initialize the snapshot engine */
 	size = adreno_dev->gpucore->snapshot_size;
@@ -1675,6 +1681,11 @@ int adreno_device_probe(struct platform_device *pdev,
 	KGSL_BOOT_MARKER("GPU Ready");
 
 	return 0;
+
+dev_platform_remove:
+	device->memstore = NULL;
+	trace_array_put(device->fence_trace_array);
+	kgsl_device_platform_remove(device);
 
 err_unbind:
 	component_unbind_all(dev, NULL);
@@ -1899,22 +1910,23 @@ static int adreno_pm_suspend(struct device *dev)
 	return status;
 }
 
-void adreno_create_profile_buffer(struct adreno_device *adreno_dev)
+int adreno_create_profile_buffer(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	unsigned int priv = 0;
+	int ret;
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_APRIV))
 		priv = KGSL_MEMDESC_PRIVILEGED;
 
-	adreno_allocate_global(device, &adreno_dev->profile_buffer,
+	ret = adreno_allocate_global(device, &adreno_dev->profile_buffer,
 		PAGE_SIZE, 0, 0, priv, "alwayson");
 
-	adreno_dev->profile_index = 0;
+	if (ret)
+		return ret;
 
-	if (!IS_ERR(adreno_dev->profile_buffer))
-		set_bit(ADRENO_DEVICE_DRAWOBJ_PROFILE,
-			&adreno_dev->priv);
+	adreno_dev->profile_index = 0;
+	return 0;
 }
 
 static int adreno_init(struct kgsl_device *device)

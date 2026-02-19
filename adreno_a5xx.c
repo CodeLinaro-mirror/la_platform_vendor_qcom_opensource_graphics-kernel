@@ -205,7 +205,6 @@ static int a5xx_init(struct adreno_device *adreno_dev)
 	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CRITICAL_PACKETS))
 		a5xx_critical_packet_construct(adreno_dev);
 
-	adreno_create_profile_buffer(adreno_dev);
 	a5xx_crashdump_init(adreno_dev);
 
 	return 0;

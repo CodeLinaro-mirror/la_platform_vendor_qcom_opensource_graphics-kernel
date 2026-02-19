@@ -190,6 +190,8 @@
 #define ADRENO_GMU_AB BIT(28)
 /* Enable GMU Fast Context Destroy optimization */
 #define ADRENO_GMU_FAST_CONTEXT_DESTROY BIT(29)
+/* Enable AHB timeout recovery */
+#define ADRENO_AHB_TIMEOUT_RECOVERY BIT(30)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -326,16 +328,20 @@ enum adreno_gpurev {
 #define ADRENO_GMU_FAULT BIT(5)
 #define ADRENO_CTX_DETATCH_TIMEOUT_FAULT BIT(6)
 #define ADRENO_GMU_FAULT_SKIP_SNAPSHOT BIT(7)
-#define ADRENO_FAULT_TYPES 8
+#define ADRENO_AHB_TIMEOUT_FAULT BIT(8)
+#define ADRENO_FAULT_TYPES 9
 
 /**
  * Bit fields for GPU_CX_MISC_CX_AHB_*_CNTL registers
  * AHB_TXFRTIMEOUTRELEASE	[8:8]
  * AHB_TXFRTIMEOUTENABLE	[9:9]
+ * AHB_TXFRTIMEOUTRESET		[10:10]
  * AHB_RESPONDERROR		[11:11]
  * AHB_ERRORSTATUSENABLE	[12:12]
+ * AHB_ERRORSTATUSRESET		[13:13]
  */
-#define ADRENO_AHB_CNTL_DEFAULT (BIT(12) | BIT(11) | BIT(9) | BIT(8))
+#define ADRENO_AHB_CNTL_DEFAULT (BIT(12) | BIT(9) | BIT(8))
+#define ADRENO_AHB_CNTL_RESET (BIT(13) | BIT(10))
 
 enum adreno_pipe_type {
 	PIPE_NONE = 0,
@@ -2018,12 +2024,13 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
  * @adreno_dev: Adreno GPU device handle
  * @funcs: List of callback functions
  * @status: Interrupt status
+ * @mask: IRQ mask
  *
  * Walk the bits in the interrupt status and call any applicable callbacks.
  * Return: IRQ_HANDLED if one or more interrupt callbacks were called.
  */
 irqreturn_t adreno_irq_callbacks(struct adreno_device *adreno_dev,
-		const struct adreno_irq_funcs *funcs, u32 status);
+		const struct adreno_irq_funcs *funcs, u32 status, u32 mask);
 
 
 /**

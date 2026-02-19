@@ -508,8 +508,8 @@ kgsl_sharedmem_create_bind_op(struct kgsl_process_private *private,
 		 * Make sure that only secure children are mapped in secure VBOs
 		 * and vice versa
 		 */
-		if ((target->memdesc.flags & KGSL_MEMFLAGS_SECURE) !=
-		    (entry->memdesc.flags & KGSL_MEMFLAGS_SECURE)) {
+		if (kgsl_memdesc_is_secured(&target->memdesc) !=
+		    kgsl_memdesc_is_secured(&entry->memdesc)) {
 			ret = -EPERM;
 			goto err;
 		}

@@ -338,8 +338,8 @@ static const char * const hfi_memkind_strings[] = {
 /* Buffer is read-write for GMU PTEs. A 0 indicates read-only */
 #define HFI_MEMFLAG_GMU_WRITEABLE	BIT(5)
 
-/* Buffer is located in GMU's non-cached bufferable VA range */
-#define HFI_MEMFLAG_GMU_BUFFERABLE	BIT(6)
+/* Buffer needs to be mapped to GMU's non-cached non bufferable VA range */
+#define HFI_MEMFLAG_GMU_NON_BUFFERABLE	BIT(6)
 
 /* Buffer is located in GMU's cacheable VA range */
 #define HFI_MEMFLAG_GMU_CACHEABLE	BIT(7)

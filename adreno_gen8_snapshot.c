@@ -191,9 +191,9 @@ const struct gen8_snapshot_block_list gen8_11_0_snapshot_block_list = {
 	.external_core_regs = gen8_11_0_external_core_regs,
 	.num_external_core_regs = ARRAY_SIZE(gen8_11_0_external_core_regs),
 	.gmu_cx_unsliced_regs = gen8_11_0_gmucx_registers,
-	.gmu_gx_regs = gen8_2_0_gmu_gx_registers,
-	.num_gmu_gx_regs = ARRAY_SIZE(gen8_2_0_gmu_gx_registers),
-	.rscc_regs = gen8_2_0_rscc_rsc_registers,
+	.gmu_gx_regs = gen8_11_0_gmu_gx_registers,
+	.num_gmu_gx_regs = ARRAY_SIZE(gen8_11_0_gmu_gx_registers),
+	.rscc_regs = gen8_11_0_rscc_rsc_registers,
 	.reg_list = gen8_11_0_misc_registers,
 	.cx_misc_regs = gen8_11_0_cx_misc_registers,
 	.shader_blocks = gen8_11_0_shader_blocks,
@@ -1658,7 +1658,7 @@ static void gen8_snapshot_cx_debugbus(struct adreno_device *adreno_dev,
 	u32 i;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (device->debug_bus_bin)
+	if (device->debug_bus_bin && !device->debugbus_en && !device->gpu_niden_en)
 		return;
 
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_CNTLT,
@@ -1717,7 +1717,7 @@ static void gen8_snapshot_debugbus(struct adreno_device *adreno_dev,
 	u32 i;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (device->debug_bus_bin)
+	if (device->debug_bus_bin && !device->debugbus_en && !device->gpu_niden_en)
 		return;
 
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_CNTLT,

@@ -2625,6 +2625,29 @@ static int gen8_allocate_pwr_limits_trace_buf(struct adreno_device *adreno_dev)
 			device->gmu_core.pwr_limits_trace.md->gmuaddr);
 }
 
+static int gen8_hfi_send_spel_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_gmu_spel *spel = &gmu->spel;
+	struct hfi_pwr_budget_cmd cmd;
+	struct hfi_msg_platform msg;
+	int ret;
+
+	if (!spel->enabled)
+		return 0;
+
+	ret = CMD_MSG_HDR(msg, H2F_MSG_PLATFORM_LA);
+	if (ret)
+		return ret;
+
+	msg.sub_type = H2F_ST_MSG_PWR_BUDGET;
+	cmd.header = msg;
+	cmd.revision = 1;
+	memcpy(cmd.data, spel->config, sizeof(spel->config));
+	return gen8_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
+}
+
 static int gen8_hwsched_feature_ctrl(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -2690,6 +2713,10 @@ static int gen8_hwsched_feature_ctrl(struct adreno_device *adreno_dev)
 	if (gmu->log_group_mask)
 		gen8_hfi_send_set_value(adreno_dev,
 			HFI_VALUE_LOG_GROUP, 0, gmu->log_group_mask);
+
+	ret = gen8_hfi_send_spel_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
 
 	ret = gen8_hfi_send_core_fw_start(adreno_dev);
 	if (ret)

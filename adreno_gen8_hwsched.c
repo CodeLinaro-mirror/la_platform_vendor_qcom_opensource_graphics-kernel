@@ -242,6 +242,74 @@ static void _enable_malu_submissions(struct adreno_device *adreno_dev)
 		dev_err_once(GMU_PDEV_DEV(device), "FW doesn't support mALU\n");
 }
 
+static void gen8_hwsched_init_spel_config(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_gmu_spel *spel = &gmu->spel;
+
+	memset(spel->config, 0, sizeof(spel->config));
+	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_DYN_EN, 1);
+	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_LKG_EN, 1);
+	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_SHORT_EN, 1);
+	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_LONG_EN, 1);
+	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_LONG_PWR_BUDGET_ENFORCE, 1);
+	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_TELEMETRY_EN, 1);
+	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_SHORT_DESIRED_PWR_EN, 1);
+	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_LONG_DESIRED_PWR_EN, 1);
+	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_CDYN_HIST_EN, 1);
+	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_MIN_PERF_LEVEL, 1);
+}
+
+/* Register offsets within the SPEL_APPS_CONFIG region */
+#define SPEL_GPU_COLDBOOT_REQ 0x280
+#define SPEL_GPU_COLDBOOT_ACK 0x284
+static void gen8_hwsched_spel_handshake(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_gmu_spel *spel = &gmu->spel;
+	struct resource *res;
+	__iomem void *spel_virt;
+	u32 value;
+	int ret;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_SPEL))
+		return;
+
+	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM, "spel_gfx");
+	if (res == NULL) {
+		dev_err(device->dev, "spel_gfx resource not found\n");
+		return;
+	}
+
+	spel_virt = ioremap(res->start, resource_size(res));
+	if (!spel_virt) {
+		dev_err(device->dev, "spel_gfx ioremap failed\n");
+		return;
+	}
+
+	/* Trigger an interrupt to AOP, causing it to configure limits-related registers in GPU */
+	writel_relaxed(0x1, spel_virt + SPEL_GPU_COLDBOOT_REQ);
+
+	/* Make sure the write goes through before polling */
+	mb();
+
+	/* Poll for an ACK (indicating AOP has completed its config) with a timeout of 1 msec */
+	ret = readl_poll_timeout(spel_virt + SPEL_GPU_COLDBOOT_ACK,
+				value, (value == 0x1), 10, 1000);
+
+	iounmap(spel_virt);
+
+	if (ret) {
+		dev_err(device->dev, "SPEL handshake failed: %d\n", ret);
+		return;
+	}
+
+	gen8_hwsched_init_spel_config(adreno_dev);
+	spel->enabled = true;
+}
+
 static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -340,6 +408,9 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto err;
 
 	gen8_get_gpu_feature_info(adreno_dev);
+
+	/* Set up SPEL handshake with AOP */
+	gen8_hwsched_spel_handshake(adreno_dev);
 
 	ret = gen8_hwsched_hfi_start(adreno_dev);
 	if (ret)

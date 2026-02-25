@@ -406,6 +406,7 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret;
 	unsigned int local;
+	u32 min_priority;
 
 	local = *flags & (KGSL_CONTEXT_PREAMBLE |
 		KGSL_CONTEXT_NO_GMEM_ALLOC |
@@ -484,6 +485,18 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 	drawctxt->base.priority =
 		(drawctxt->base.flags & KGSL_CONTEXT_PRIORITY_MASK) >>
 		KGSL_CONTEXT_PRIORITY_SHIFT;
+
+	/*
+	 * Check if the requested priority level is allowed for the process.
+	 * Processes without appropriate privileges are restricted from RB 0, so
+	 * clamp to the minimum priority level allowed for this task.
+	 */
+	min_priority = adreno_context_min_priority(adreno_dev);
+	if (drawctxt->base.priority < min_priority) {
+		drawctxt->base.priority = min_priority;
+		drawctxt->base.flags = u32_replace_bits(drawctxt->base.flags,
+			drawctxt->base.priority, KGSL_CONTEXT_PRIORITY_MASK);
+	}
 
 	/*
 	 * Now initialize the common part of the context. This allocates the

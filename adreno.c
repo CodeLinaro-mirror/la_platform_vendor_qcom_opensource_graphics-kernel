@@ -2730,6 +2730,19 @@ static int adreno_prop_uche_trap_base(struct kgsl_device *device,
 	return copy_prop(param, &val, sizeof(val));
 }
 
+static int adreno_prop_min_context_priority(struct kgsl_device *device,
+		struct kgsl_device_getproperty *param)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	/*
+	 * Retrieve the minimum context priority allowed for the calling
+	 * process based on its privileges and Kconfig settings.
+	 */
+	u32 min_priority = adreno_context_min_priority(adreno_dev);
+
+	return copy_prop(param, &min_priority, sizeof(min_priority));
+}
+
 static const struct {
 	int type;
 	int (*func)(struct kgsl_device *device,
@@ -2760,6 +2773,7 @@ static const struct {
 	{ KGSL_PROP_VIZ_FLUSH_DRAW_COUNT, adreno_prop_u32 },
 	{ KGSL_PROP_VIZ_FLUSH_PRIM_COUNT, adreno_prop_u32 },
 	{ KGSL_PROP_SW_CALIBRATED_TIMER, adreno_prop_calibrated_timer},
+	{ KGSL_PROP_MIN_CONTEXT_PRIORITY, adreno_prop_min_context_priority },
 };
 
 static int adreno_getproperty(struct kgsl_device *device,

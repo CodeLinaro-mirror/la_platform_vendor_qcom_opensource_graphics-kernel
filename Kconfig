@@ -152,3 +152,13 @@ config QCOM_KGSL_DEVCOREDUMP
 	  instead of the custom sysfs interface. Snapshot data will be
 	  accessible through /sys/class/devcoredump/ interface. If enabled,
 	  the snapshot/dump sysfs node will not be set up.
+
+config QCOM_KGSL_RESTRICT_CONTEXT_PRIORITY
+	bool "Limit priority context creation based on CAP_SYS_NICE"
+	help
+	  Say 'Y' to restrict KGSL context priority levels that map to ringbuffer 0
+	  to processes only with the CAP_SYS_NICE capability. Unprivileged
+	  processes requesting these levels will be clamped to the minimum
+	  non-RB0 level, limiting those to lower priority levels. This reserves
+	  the highest priority levels for critical system tasks such as
+	  compositors like SurfaceFlinger.

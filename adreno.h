@@ -6,6 +6,7 @@
 #ifndef __ADRENO_H
 #define __ADRENO_H
 
+#include <linux/capability.h>
 #include <linux/iopoll.h>
 #include <linux/of.h>
 #include <linux/soc/qcom/llcc-qcom.h>
@@ -1867,6 +1868,30 @@ static inline bool adreno_is_preemption_enabled(
 				struct adreno_device *adreno_dev)
 {
 	return test_bit(ADRENO_DEVICE_PREEMPTION, &adreno_dev->priv);
+}
+
+/* Return the minimum context priority allowed for a user process */
+static inline u32 adreno_context_min_priority(struct adreno_device *adreno_dev)
+{
+	u32 max_priority_levels = (KGSL_CONTEXT_PRIORITY_MASK >>
+			KGSL_CONTEXT_PRIORITY_SHIFT) + 1;
+
+	/*
+	 * Restrictions apply only for unprivileged callers when preemption
+	 * is enabled and more than one ringbuffer is available.
+	 */
+	if (!IS_ENABLED(CONFIG_QCOM_KGSL_RESTRICT_CONTEXT_PRIORITY) ||
+			capable(CAP_SYS_NICE) ||
+			!adreno_is_preemption_enabled(adreno_dev) ||
+			(adreno_dev->num_ringbuffers <= 1)) {
+		return 0;
+	}
+
+	/*
+	 * Unprivileged processes are restricted from using RB 0.
+	 * Return the lowest numerical priority level that maps to RB 1.
+	 */
+	return (max_priority_levels / adreno_dev->num_ringbuffers);
 }
 
 /**

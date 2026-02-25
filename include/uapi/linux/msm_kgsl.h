@@ -369,6 +369,7 @@ enum kgsl_timestamp_type {
 #define KGSL_PROP_VIZ_FLUSH_PRIM_COUNT	0x36
 #define KGSL_PROP_SW_CALIBRATED_TIMER	0x37
 #define KGSL_PROP_IS_MALU_ENABLED	0x38
+#define KGSL_PROP_MIN_CONTEXT_PRIORITY	0x39
 
 /*
  * kgsl_capabilities_properties returns a list of supported properties.

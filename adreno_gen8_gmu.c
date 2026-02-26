@@ -684,7 +684,7 @@ bool gen8_gmu_gx_is_on(struct adreno_device *adreno_dev)
 	return is_on(val);
 }
 
-bool gen8_gmu_malu_is_on(struct adreno_device *adreno_dev)
+static bool gen8_gmu_malu_is_on(struct adreno_device *adreno_dev)
 {
 	u32 val;
 

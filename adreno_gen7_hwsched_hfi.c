@@ -3732,6 +3732,7 @@ void gen7_hwsched_context_detach(struct adreno_context *drawctxt)
 	struct kgsl_device *device = context->device;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret = 0;
+	struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
 
 	kgsl_mutex_lock(&device->mutex);
 
@@ -3749,6 +3750,16 @@ void gen7_hwsched_context_detach(struct adreno_context *drawctxt)
 
 	adreno_profile_process_results(adreno_dev);
 	context->gmu_registered = false;
+
+	/*
+	 * Update the sync object timestamp so that pending sync objects from this context can be
+	 * released
+	 */
+	if (hdr)
+		hdr->sync_obj_ts = drawctxt->syncobj_timestamp;
+
+	/* Trigger scheduler to retire draw objects from this detached context */
+	adreno_scheduler_queue(adreno_dev);
 
 out:
 	WARN_RATELIMIT(!list_empty(&drawctxt->hw_fence_list) ||

@@ -388,7 +388,7 @@ void kgsl_page_sync(struct device *dev, struct page *page,
  *
  * Returns the alignment requested, as power of 2 exponent.
  */
-static inline u32
+static inline int
 kgsl_memdesc_get_align(const struct kgsl_memdesc *memdesc)
 {
 	return FIELD_GET(KGSL_MEMALIGN_MASK, memdesc->flags);

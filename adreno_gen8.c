@@ -1700,6 +1700,29 @@ static void _llc_gpuhtw_slice_activate(struct adreno_device *adreno_dev)
 	llcc_slice_activate(adreno_dev->gpuhtw_llc_slice);
 }
 
+/*
+ * _llc_configure_gpulayers_scid - Program the sub-cache ID for CCU block
+ * @adreno_dev: The adreno device pointer
+ */
+static void _llc_configure_gpulayers_scid(struct adreno_device *adreno_dev)
+{
+	u32 scid = 0;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_mmu *mmu = &device->mmu;
+
+	if (IS_ERR_OR_NULL(adreno_dev->gpulayers_llc_slice) ||
+		!adreno_dev->gpulayers_llc_slice_enable ||
+		mmu->subtype != KGSL_IOMMU_SMMU_V500)
+		return;
+
+	if (llcc_slice_activate(adreno_dev->gpulayers_llc_slice))
+		return;
+
+	scid = llcc_get_slice_id(adreno_dev->gpulayers_llc_slice);
+	kgsl_regrmw(device, GEN8_GBIF_SCACHE_CNTL1,
+		GENMASK(23, 18), FIELD_PREP(GENMASK(23, 18), scid));
+}
+
 static void _set_secvid(struct kgsl_device *device)
 {
 	kgsl_regwrite(device, GEN8_RBBM_SECVID_TSB_CNTL, 0x0);
@@ -2006,6 +2029,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 	/* Configure LLCC */
 	_llc_configure_gpu_scid(adreno_dev);
 	_llc_gpuhtw_slice_activate(adreno_dev);
+	_llc_configure_gpulayers_scid(adreno_dev);
 
 	for (pipe_id = PIPE_BR; pipe_id <= PIPE_DDE_BV; pipe_id++) {
 		u32 val = CP_SW_FAULT_STATUS_MASK_PIPE;

@@ -411,9 +411,7 @@ static void kgsl_destroy_anon(struct kgsl_memdesc *memdesc)
 		}
 	}
 
-	sg_free_table(memdesc->sgt);
-	kfree(memdesc->sgt);
-	memdesc->sgt = NULL;
+	kgsl_memdesc_free_sgt(memdesc);
 }
 
 void

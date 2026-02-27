@@ -114,7 +114,7 @@ struct kgsl_mmu_ops {
 	int (*mmu_init_pt)(struct kgsl_mmu *mmu, struct kgsl_pagetable *pt);
 	struct kgsl_pagetable * (*mmu_getpagetable)(struct kgsl_mmu *mmu,
 			unsigned long name);
-	void (*mmu_map_global)(struct kgsl_mmu *mmu,
+	int (*mmu_map_global)(struct kgsl_mmu *mmu,
 		struct kgsl_memdesc *memdesc, u32 padding);
 	int (*mmu_reserve_global_gpuaddr)(struct kgsl_mmu *mmu, struct kgsl_memdesc *memdesc,
 			u32 padding);
@@ -397,8 +397,10 @@ int kgsl_mmu_reserve_global_gpuaddr(struct kgsl_device *device,
  * @padding: Any padding to add to the end of the VA allotment (in bytes)
  *
  * Map a buffer as globally accessible in all pagetable contexts
+ *
+ * Return: 0 on success and negative error on failure
  */
-void kgsl_mmu_map_global(struct kgsl_device *device,
+int kgsl_mmu_map_global(struct kgsl_device *device,
 		struct kgsl_memdesc *memdesc, u32 padding);
 
 /**

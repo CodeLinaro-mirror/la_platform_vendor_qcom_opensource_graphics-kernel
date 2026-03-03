@@ -1386,9 +1386,10 @@ struct payload_section {
 #define GMU_CP_AHB_ERROR 650
 #define GMU_ATB_ASYNC_FIFO_OVERFLOW 651
 #define GMU_RBBM_ATB_BUF_OVERFLOW 652
-#define GMU_UCHE_OOB_ACCESS 653
 #define GMU_UCHE_TRAP_INTR  654
 #define GMU_TSB_WRITE_ERROR 655
+/* GPU encountered a Uche OOB Access fault error */
+#define GMU_UCHE_OOB_ACCESS 653
 /* DBGC interrupt */
 #define GMU_DBGC_INTR_ERROR 656
 

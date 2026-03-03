@@ -682,6 +682,10 @@ static void gen8_process_syncobj_query_work(struct kthread_work *work)
 	mutex_lock(&hwsched->mutex);
 	kgsl_mutex_lock(&device->mutex);
 
+	/* If context is bad, we don't care about the sync object query */
+	if (kgsl_context_is_bad(context))
+		goto unlock;
+
 	list_for_each_entry(obj, &hwsched->cmd_list, node) {
 		struct kgsl_drawobj *drawobj = obj->drawobj;
 
@@ -714,6 +718,7 @@ static void gen8_process_syncobj_query_work(struct kthread_work *work)
 		}
 	}
 
+unlock:
 	kgsl_mutex_unlock(&device->mutex);
 	mutex_unlock(&hwsched->mutex);
 

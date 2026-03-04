@@ -5041,6 +5041,30 @@ static int kgsl_mmap(struct file *file, struct vm_area_struct *vma)
 	return 0;
 }
 
+static void kgsl_show_fdinfo(struct seq_file *m, struct file *f)
+{
+	struct kgsl_device_private *dev_priv = f->private_data;
+	struct kgsl_process_private *private;
+	struct kgsl_device *device;
+	struct kgsl_pwrctrl *pwr;
+
+	if (!dev_priv)
+		return;
+
+	private = dev_priv->process_priv;
+	device = dev_priv->device;
+
+	if (!private || !device)
+		return;
+
+	pwr = &device->pwrctrl;
+
+	seq_printf(m, "kgsl-client-id:\t%d\n", pid_nr(private->pid));
+	seq_printf(m, "kgsl-elapsed:\t%llu ns\n", private->elapsed_ns);
+	seq_printf(m, "kgsl-cycles:\t%llu\n", private->cycles);
+	seq_printf(m, "kgsl-maxfreq:\t%d\n", pwr->pwrlevels[0].gpu_freq);
+}
+
 #define KGSL_READ_MESSAGE "OH HAI GPU\n"
 
 static ssize_t kgsl_read(struct file *filep, char __user *buf, size_t count,
@@ -5059,6 +5083,7 @@ static const struct file_operations kgsl_fops = {
 	.get_unmapped_area = kgsl_get_unmapped_area,
 	.unlocked_ioctl = kgsl_ioctl,
 	.compat_ioctl = kgsl_compat_ioctl,
+	.show_fdinfo = kgsl_show_fdinfo,
 };
 
 struct kgsl_driver kgsl_driver  = {

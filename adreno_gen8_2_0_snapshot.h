@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __ADRENO_GEN8_2_0_SNAPSHOT_H
@@ -2172,9 +2172,9 @@ static struct gen8_cp_indexed_reg gen8_2_0_cp_indexed_reg_list[] = {
 		PIPE_NONE, 0x04100},
 	{ GEN8_CP_FIFO_DBG_ADDR_LPAC, GEN8_CP_FIFO_DBG_DATA_LPAC, UNSLICE, PIPE_NONE, 0x00040},
 	{ GEN8_CP_FIFO_DBG_ADDR_DDE_PIPE, GEN8_CP_FIFO_DBG_DATA_DDE_PIPE, UNSLICE,
-		PIPE_DDE_BR, 0x01100},
+		PIPE_DDE_BR, 0x01101},
 	{ GEN8_CP_FIFO_DBG_ADDR_DDE_PIPE, GEN8_CP_FIFO_DBG_DATA_DDE_PIPE, UNSLICE,
-		PIPE_DDE_BV, 0x01100},
+		PIPE_DDE_BV, 0x01101},
 };
 
 

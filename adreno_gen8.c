@@ -791,9 +791,11 @@ struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
 	{ GEN8_SP_CHICKEN_BITS_2, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_SP_CHICKEN_BITS_3, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_SP_CHICKEN_BITS_4, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_SP_CHICKEN_BITS_5, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_DISPATCH_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_HLSQ_DBG_ECO_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_HLSQ_DBG_ECO_CNTL_2, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_SP_HLSQ_DBG_ECO_CNTL_3, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_DBG_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_TPL1_NC_MODE_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_TPL1_DBG_ECO_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
@@ -954,6 +956,144 @@ static const struct file_operations nc_override_fops = {
 	.write = nc_override_set,
 	.llseek = noop_llseek,
 };
+
+static struct kgsl_regmap_restore_list sp_profiling_regs[] = {
+	/* Dynamic regs */
+	{ GEN8_DBGC_GBIF_DBG_BASE_LO },
+	{ GEN8_DBGC_GBIF_DBG_BASE_HI },
+	{ GEN8_DBGC_GBIF_DBG_BUFF_SIZE },
+	{ GEN8_DBGC_CFG_DBGBUS_SEL_A },
+	{ GEN8_DBGC_CFG_DBGBUS_SEL_B },
+	{ GEN8_DBGC_CFG_DBGBUS_SEL_C },
+	{ GEN8_DBGC_CFG_DBGBUS_SEL_D },
+	/* Constant regs */
+	{ GEN8_DBGC_CFG_DBGBUS_MISC_MODE, 0x80000000 },
+	{ GEN8_DBGC_GBIF_DBG_CNTL, 0x00000003 },
+	{ GEN8_RBBM_CLOCK_CNTL_GLOBAL, 0x00000001 },
+	{ GEN8_DBGC_CFG_DBGBUS_CNTLM, 0xf0000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_OPL, 0x00000004 },
+	{ GEN8_DBGC_CFG_DBGBUS_OPE, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_IVTL_0, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_IVTL_1, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_IVTL_2, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_IVTL_3, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_MASKL_0, 0x00f00000 },
+	{ GEN8_DBGC_CFG_DBGBUS_MASKL_1, 0x10000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_MASKL_2, 0x00004020 },
+	{ GEN8_DBGC_CFG_DBGBUS_MASKL_3, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_BYTEL_0, 0xb0000c00 },
+	{ GEN8_DBGC_CFG_DBGBUS_BYTEL_1, 0x000000bb },
+	{ GEN8_DBGC_CFG_DBGBUS_IVTE_0, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_IVTE_1, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_IVTE_2, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_IVTE_3, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_MASKE_0, 0x00040200 },
+	{ GEN8_DBGC_CFG_DBGBUS_MASKE_1, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_MASKE_2, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_MASKE_3, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_NIBBLEE, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_PTRC0, 0xc6000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_PTRC1, 0x00002481 },
+	{ GEN8_DBGC_CFG_DBGBUS_CLRC, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_LOADIVT, 0x00000000 },
+	{ GEN8_DBGC_CFG_DBGBUS_IDX, 0x0e0d0c07 },
+	{ GEN8_DBGC_AHB_DBG_CNTL, 0x00000012 },
+	{ GEN8_DBGC_EVT_CFG, 0x00000000 },
+	{ GEN8_DBGC_EVT_INTF_SEL_0, 0x00000000 },
+	{ GEN8_DBGC_EVT_INTF_SEL_1, 0x00000000 },
+	{ GEN8_DBGC_EXT_TRACE_BUS_CNTL, 0x00000083 },
+	{ GEN8_DBGC_CFG_DBGBUS_CNTLT, 0xf0000032 },
+};
+
+static void sp_profiling_set_dynamic_regs(struct adreno_device *adreno_dev,
+		struct kgsl_regmap_restore_list *list, size_t count)
+{
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+	int i;
+
+	for (i = 0; i < count; i++) {
+		switch (list[i].offset) {
+		case GEN8_DBGC_GBIF_DBG_BASE_LO:
+			list[i].val = lower_32_bits(sp_profiling->dbg_buf->gpuaddr);
+			break;
+		case GEN8_DBGC_GBIF_DBG_BASE_HI:
+			list[i].val = upper_32_bits(sp_profiling->dbg_buf->gpuaddr);
+			break;
+		case GEN8_DBGC_GBIF_DBG_BUFF_SIZE:
+			list[i].val = sp_profiling->dbg_buf->size >> 4;
+			break;
+		case GEN8_DBGC_CFG_DBGBUS_SEL_A:
+			list[i].val = sp_profiling->bus_sel_a;
+			break;
+		case GEN8_DBGC_CFG_DBGBUS_SEL_B:
+			list[i].val = sp_profiling->bus_sel_b;
+			break;
+		case GEN8_DBGC_CFG_DBGBUS_SEL_C:
+			list[i].val = sp_profiling->bus_sel_c;
+			break;
+		case GEN8_DBGC_CFG_DBGBUS_SEL_D:
+			list[i].val = sp_profiling->bus_sel_d;
+			break;
+		default:
+			continue;
+		}
+	}
+}
+
+static void sp_profiling_enable(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+	int ret;
+
+	/* Only enable if inactive */
+	if (sp_profiling->active)
+		return;
+
+	sp_profiling->active = true;
+
+	/* Make sure we're reading the latest settings from debugfs */
+	smp_rmb();
+
+	/* Allocate debug buffer if it's not already allocated */
+	ret = adreno_allocate_global(device, &sp_profiling->dbg_buf, sp_profiling->buf_sz_bytes, 0,
+		0, KGSL_MEMDESC_PRIVILEGED, "sp_profiling_dbg_buf");
+	if (ret || (sp_profiling->dbg_buf->gpuaddr == 0)) {
+		dev_err_ratelimited(device->dev, "Failed to allocate SP profiling debug buffer\n");
+		return;
+	}
+
+	/* Set up debugfs-controlled registers */
+	sp_profiling_set_dynamic_regs(adreno_dev, sp_profiling_regs,
+		ARRAY_SIZE(sp_profiling_regs));
+
+	/* Program registers after saving original values */
+	kgsl_regmap_multi_save_write(&device->regmap, sp_profiling_regs,
+		ARRAY_SIZE(sp_profiling_regs));
+
+	/* Enable data collection */
+	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_CNTLM, 0x07000031);
+}
+
+static void sp_profiling_disable(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_sp_profiling *sp_profiling = &adreno_dev->sp_profiling;
+
+	/* Only disable if active */
+	if (!sp_profiling->active)
+		return;
+
+	sp_profiling->active = false;
+
+	/* Restore all registers to their original values */
+	kgsl_regmap_multi_restore(&device->regmap, sp_profiling_regs,
+		ARRAY_SIZE(sp_profiling_regs));
+
+	/* Free debug buffer if it's not already freed */
+	if (adreno_free_global(device, &sp_profiling->dbg_buf, 0))
+		dev_err_ratelimited(device->dev, "Failed to free SP profiling debug buffer\n");
+}
 
 void gen8_cp_init_cmds(struct adreno_device *adreno_dev, u32 *cmds)
 {
@@ -1874,6 +2014,11 @@ int gen8_start(struct adreno_device *adreno_dev)
 			lower_32_bits(adreno_dev->uche_gmem_base));
 	kgsl_regwrite(device, GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_HI,
 			upper_32_bits(adreno_dev->uche_gmem_base));
+
+	if (adreno_dev->sp_profiling.enabled)
+		sp_profiling_enable(adreno_dev);
+	else
+		sp_profiling_disable(adreno_dev);
 
 	if (adreno_dev->lpac_enabled) {
 

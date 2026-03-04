@@ -33,7 +33,9 @@
 #include "kgsl_sharedmem.h"
 #include "kgsl_trace.h"
 
+/* These defines control the base / size of the global memory region when using split pagetables */
 #define KGSL_IOMMU_SPLIT_TABLE_BASE 0x0001ff8000000000ULL
+#define KGSL_IOMMU_SPLIT_TABLE_SIZE SZ_512M
 
 #define KGSL_IOMMU_IDR1_OFFSET 0x24
 #define IDR1_NUMPAGENDXB GENMASK(30, 28)
@@ -791,32 +793,31 @@ static int kgsl_iommu_get_gpuaddr(struct kgsl_pagetable *pagetable,
 
 static void kgsl_iommu_put_gpuaddr(struct kgsl_memdesc *memdesc);
 
-#define KGSL_GLOBAL_MEM_PAGES (KGSL_IOMMU_GLOBAL_MEM_SIZE >> PAGE_SHIFT)
-
-static u64 global_get_offset(struct kgsl_device *device, u64 size,
-		atomic_t *priv)
+static u64 global_get_offset(struct kgsl_mmu *mmu, u64 size, atomic_t *priv)
 {
+	struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
+	u64 global_mem_pages = mmu->defaultpagetable->global_size >> PAGE_SHIFT;
 	int start = 0, bit;
 
 	if (!device->global_map) {
 		device->global_map =
-			kcalloc(BITS_TO_LONGS(KGSL_GLOBAL_MEM_PAGES),
+			kcalloc(BITS_TO_LONGS(global_mem_pages),
 			sizeof(unsigned long), GFP_KERNEL);
 		if (!device->global_map)
 			return (unsigned long) -ENOMEM;
 	}
 
 	if (TEST_FLAG(KGSL_MEMDESC_RANDOM, priv)) {
-		u32 offset = KGSL_GLOBAL_MEM_PAGES - (size >> PAGE_SHIFT);
+		u32 offset = global_mem_pages - (size >> PAGE_SHIFT);
 
 		start = get_random_u32() % offset;
 	}
 
 	while (start >= 0) {
 		bit = bitmap_find_next_zero_area(device->global_map,
-			KGSL_GLOBAL_MEM_PAGES, start, size >> PAGE_SHIFT, 0);
+			global_mem_pages, start, size >> PAGE_SHIFT, 0);
 
-		if (bit < KGSL_GLOBAL_MEM_PAGES)
+		if (bit < global_mem_pages)
 			break;
 
 		/*
@@ -837,7 +838,6 @@ static u64 global_get_offset(struct kgsl_device *device, u64 size,
 static int kgsl_iommu_reserve_global_gpuaddr(struct kgsl_mmu *mmu,
 	struct kgsl_memdesc *memdesc, u32 padding)
 {
-	struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
 	u64 offset;
 
 	if (memdesc->gpuaddr)
@@ -857,7 +857,7 @@ static int kgsl_iommu_reserve_global_gpuaddr(struct kgsl_mmu *mmu,
 		return -EINVAL;
 	}
 
-	offset = global_get_offset(device, memdesc->size + padding, &memdesc->priv);
+	offset = global_get_offset(mmu, memdesc->size + padding, &memdesc->priv);
 
 	if (IS_ERR_VALUE(offset))
 		return -ENOSPC;
@@ -865,6 +865,17 @@ static int kgsl_iommu_reserve_global_gpuaddr(struct kgsl_mmu *mmu,
 	memdesc->gpuaddr = mmu->defaultpagetable->global_base + offset;
 
 	return 0;
+}
+
+static void global_put_offset(struct kgsl_device *device, u64 offset, u64 size)
+{
+	unsigned long bit;
+
+	if (IS_ERR_OR_NULL(device->global_map))
+		return;
+
+	bit = offset >> PAGE_SHIFT;
+	bitmap_clear(device->global_map, bit, size >> PAGE_SHIFT);
 }
 
 static void kgsl_iommu_unreserve_global_gpuaddr(struct kgsl_mmu *mmu,
@@ -889,9 +900,7 @@ static void kgsl_iommu_unreserve_global_gpuaddr(struct kgsl_mmu *mmu,
 		return;
 
 	offset = memdesc->gpuaddr - mmu->defaultpagetable->global_base;
-	bitmap_clear(device->global_map, offset >> PAGE_SHIFT,
-		(memdesc->size + padding) >> PAGE_SHIFT);
-
+	global_put_offset(device, offset, memdesc->size + padding);
 	memdesc->gpuaddr = 0;
 }
 
@@ -918,6 +927,17 @@ static int kgsl_iommu_map_global(struct kgsl_mmu *mmu,
 		kgsl_iommu_unreserve_global_gpuaddr(mmu, memdesc, padding);
 
 	return ret;
+}
+
+static void kgsl_iommu_unmap_global(struct kgsl_mmu *mmu,
+		struct kgsl_memdesc *memdesc, u32 padding)
+{
+	if (kgsl_memdesc_is_secured(memdesc))
+		kgsl_iommu_secure_unmap(mmu->securepagetable, memdesc);
+	else
+		kgsl_iommu_default_unmap(mmu->defaultpagetable, memdesc);
+
+	kgsl_iommu_unreserve_global_gpuaddr(mmu, memdesc, padding);
 }
 
 /* Print the mem entry for the pagefault debugging */
@@ -1593,12 +1613,14 @@ static struct kgsl_pagetable *kgsl_iommu_default_pagetable(struct kgsl_mmu *mmu)
 
 	if (!test_bit(KGSL_MMU_IOPGTABLE, &mmu->features)) {
 		iommu_pt->base.global_base = KGSL_IOMMU_GLOBAL_MEM_BASE(mmu);
+		iommu_pt->base.global_size = KGSL_IOMMU_GLOBAL_MEM_SIZE;
 
 		kgsl_mmu_pagetable_add(mmu, &iommu_pt->base);
 		return &iommu_pt->base;
 	}
 
 	iommu_pt->base.global_base = KGSL_IOMMU_SPLIT_TABLE_BASE;
+	iommu_pt->base.global_size = KGSL_IOMMU_SPLIT_TABLE_SIZE;
 
 	/*
 	 * Set up a "default' TTBR0 for the pagetable - this would only be used
@@ -3117,6 +3139,7 @@ static const struct kgsl_mmu_ops kgsl_iommu_ops = {
 	.mmu_pagefault_resume = kgsl_iommu_pagefault_resume,
 	.mmu_getpagetable = kgsl_iommu_getpagetable,
 	.mmu_map_global = kgsl_iommu_map_global,
+	.mmu_unmap_global = kgsl_iommu_unmap_global,
 	.mmu_reserve_global_gpuaddr = kgsl_iommu_reserve_global_gpuaddr,
 	.mmu_send_tlb_hint = kgsl_iommu_send_tlb_hint,
 	.mmu_sysfs_init = kgsl_iommu_sysfs_init,

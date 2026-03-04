@@ -759,4 +759,9 @@ void kgsl_memdesc_pagelist_cleanup(struct file *shmem_filp, struct kgsl_memdesc 
  */
 void kgsl_memdesc_free_sgt(struct kgsl_memdesc *md);
 
+/**
+ * kgsl_register_shmem_mthp_callback - Register shmem mthp vendor hook callback with shmem driver
+ */
+void kgsl_register_shmem_mthp_callback(void);
+
 #endif /* __KGSL_SHAREDMEM_H */

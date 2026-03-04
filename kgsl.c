@@ -5519,6 +5519,7 @@ int __init kgsl_core_init(void)
 	kgsl_probe_page_pools();
 
 	kgsl_register_shmem_callback();
+	kgsl_register_shmem_mthp_callback();
 
 	INIT_LIST_HEAD(&kgsl_driver.process_list);
 

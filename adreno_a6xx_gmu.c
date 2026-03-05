@@ -3364,6 +3364,10 @@ static void a6xx_gmu_touch_wakeup(struct adreno_device *adreno_dev)
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	int ret;
 
+	/* If device is already in SUSPEND state, don't act on touch wakeup */
+	if (device->state == KGSL_STATE_SUSPEND)
+		return;
+
 	/*
 	 * Do not wake up a suspended device or until the first boot sequence
 	 * has been completed.

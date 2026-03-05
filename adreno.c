@@ -286,6 +286,10 @@ static void adreno_touch_wakeup(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
+	/* If device is already in SUSPEND state, don't act on touch wakeup */
+	if (device->state == KGSL_STATE_SUSPEND)
+		return;
+
 	/*
 	 * Don't schedule adreno_start in a high priority workqueue, we are
 	 * already in a workqueue which should be sufficient
@@ -1902,6 +1906,8 @@ static int adreno_pm_suspend(struct device *dev)
 	/* Return early if fault recovery is in progress */
 	if (!mutex_trylock(&adreno_dev->fault_recovery_mutex))
 		return -EDEADLK;
+
+	cancel_work_sync(&adreno_dev->input_work);
 
 	kgsl_mutex_lock(&device->mutex);
 	status = ops->pm_suspend(adreno_dev);

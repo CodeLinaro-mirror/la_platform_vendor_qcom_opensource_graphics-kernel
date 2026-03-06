@@ -922,6 +922,12 @@ static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packe
 		trace_adreno_gpu_dcvs_profile(data, pkt->ticks);
 		break;
 		}
+	case GMU_TRACE_PREEMPT_INFO: {
+		struct trace_preempt_info *data =
+			(struct trace_preempt_info *)pkt->payload;
+		trace_adreno_gpu_preempt_info(data, pkt->ticks);
+		break;
+		}
 	default: {
 		char str[64];
 

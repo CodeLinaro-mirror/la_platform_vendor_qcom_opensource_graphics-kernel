@@ -234,10 +234,7 @@ static int dispatch_retire_syncobj(struct kgsl_drawobj *drawobj,
 	 * If we got here, there are pending events for sync object.
 	 * Start the canary timer if it hasnt been started already.
 	 */
-	if (!syncobj->timeout_jiffies) {
-		syncobj->timeout_jiffies = jiffies + msecs_to_jiffies(5000);
-			mod_timer(&syncobj->timer, syncobj->timeout_jiffies);
-	}
+	kgsl_drawobj_start_syncobj_timer(syncobj);
 
 	return -EAGAIN;
 }

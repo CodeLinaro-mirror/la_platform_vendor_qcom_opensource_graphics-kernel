@@ -376,4 +376,18 @@ int kgsl_drawobj_add_timeline(struct kgsl_device_private *dev_priv,
  */
 int kgsl_drawobj_sync_add_callbacks(struct kgsl_device *device,
 	struct kgsl_drawobj_sync *syncobj);
+
+/**
+ * kgsl_drawobj_log_hw_syncobj - Log dma fence details of hardware fences in a sync object
+ * @device: Pointer to kgsl device
+ * @syncobj: Pointer to the sync object
+ */
+void kgsl_drawobj_log_hw_syncobj(struct kgsl_device *device, struct kgsl_drawobj_sync *syncobj);
+
+/**
+ * kgsl_drawobj_start_syncobj_timer- Start the sync object canary timer
+ * @syncobj: Pointer to the sync object
+ */
+void kgsl_drawobj_start_syncobj_timer(struct kgsl_drawobj_sync *syncobj);
+
 #endif /* __KGSL_DRAWOBJ_H */

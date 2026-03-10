@@ -599,8 +599,11 @@ static int _retire_syncobj(struct adreno_device *adreno_dev,
 		 * If hardware fences are enabled, and this SYNCOBJ is backed by hardware fences,
 		 * send it to the GMU
 		 */
-		if (gmu_core_is_hw_fencing_enabled(device))
+		if (gmu_core_is_hw_fencing_enabled(device)) {
+			/* Start the canary timer for hardware sync object */
+			kgsl_drawobj_start_syncobj_timer(syncobj);
 			return 1;
+		}
 
 		/*
 		 * If hardware fencing got disabled after setting up the sync object (as
@@ -625,10 +628,7 @@ static int _retire_syncobj(struct adreno_device *adreno_dev,
 	 * If we got here, there are pending events for sync object.
 	 * Start the canary timer if it hasnt been started already.
 	 */
-	if (!syncobj->timeout_jiffies) {
-		syncobj->timeout_jiffies = jiffies + msecs_to_jiffies(5000);
-			mod_timer(&syncobj->timer, syncobj->timeout_jiffies);
-	}
+	kgsl_drawobj_start_syncobj_timer(syncobj);
 
 	return -EAGAIN;
 }
@@ -2180,28 +2180,6 @@ static bool context_is_throttled(struct kgsl_device *device,
 	return false;
 }
 
-static void _print_syncobj(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj)
-{
-	int i = 0;
-	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct kgsl_drawobj_sync_hw_fence *hw_fence;
-
-	list_for_each_entry(hw_fence, &syncobj->hw_fence_list, node) {
-		struct dma_fence *fence = hw_fence->fence;
-		bool kgsl = is_kgsl_fence(fence);
-		bool signaled = test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
-		char value[32] = "unknown";
-
-		kgsl_fence_timeline_value_str(fence, value, sizeof(value));
-
-		dev_err(device->dev,
-			"dma fence[%d] signaled:%d kgsl:%d ctx:%llu seqno:%llu value:%s\n",
-			i++, signaled, kgsl, fence->context, fence->seqno, value);
-	}
-
-}
-
 static void print_fault_syncobj(struct adreno_device *adreno_dev,
 				u32 ctxt_id, u32 ts)
 {
@@ -2214,7 +2192,8 @@ static void print_fault_syncobj(struct adreno_device *adreno_dev,
 		if (drawobj->type == SYNCOBJ_TYPE) {
 			if ((ctxt_id == drawobj->context->id) &&
 			(ts == drawobj->timestamp))
-				_print_syncobj(adreno_dev, drawobj);
+				kgsl_drawobj_log_hw_syncobj(KGSL_DEVICE(adreno_dev),
+					SYNCOBJ(drawobj));
 		}
 	}
 }

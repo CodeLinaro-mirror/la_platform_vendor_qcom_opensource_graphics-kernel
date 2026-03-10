@@ -154,38 +154,38 @@ void kgsl_dump_syncpoints(struct kgsl_device *device,
 	}
 }
 
-static void syncobj_timer(struct timer_list *t)
+void kgsl_drawobj_log_hw_syncobj(struct kgsl_device *device, struct kgsl_drawobj_sync *syncobj)
 {
-	struct kgsl_device *device;
-	struct kgsl_drawobj_sync *syncobj = kgsl_timer_container_of(syncobj, t, timer);
-	struct kgsl_drawobj *drawobj;
-	struct kgsl_drawobj_sync_event *event;
-	unsigned int i;
+	struct kgsl_drawobj_sync_hw_fence *hw_fence;
+	int i = 0;
 
-	if (syncobj == NULL)
-		return;
+	list_for_each_entry(hw_fence, &syncobj->hw_fence_list, node) {
+		struct dma_fence *fence = hw_fence->fence;
+		bool kgsl = is_kgsl_fence(fence);
+		bool signaled = test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
+		char value[32] = "unknown";
 
-	drawobj = DRAWOBJ(syncobj);
+		kgsl_fence_timeline_value_str(fence, value, sizeof(value));
 
-	if (!kref_get_unless_zero(&drawobj->refcount))
-		return;
-
-	if (drawobj->context == NULL) {
-		kgsl_drawobj_put(drawobj);
-		return;
+		dev_err(device->dev,
+			"dma fence[%d] signaled:%d kgsl:%d ctx:%llu seqno:%llu value:%s\n",
+			i++, signaled, kgsl, fence->context, fence->seqno, value);
 	}
+}
 
-	device = drawobj->context->device;
+void kgsl_drawobj_start_syncobj_timer(struct kgsl_drawobj_sync *syncobj)
+{
+	if (syncobj->timeout_jiffies)
+		return;
 
-	dev_err(device->dev,
-		"kgsl: possible gpu syncpoint deadlock for context %u timestamp %u\n",
-		drawobj->context->id, drawobj->timestamp);
+	syncobj->timeout_jiffies = jiffies + msecs_to_jiffies(5000);
+	mod_timer(&syncobj->timer, syncobj->timeout_jiffies);
+}
 
-	set_bit(ADRENO_CONTEXT_FENCE_LOG, &drawobj->context->priv);
-	kgsl_context_dump(drawobj->context);
-	clear_bit(ADRENO_CONTEXT_FENCE_LOG, &drawobj->context->priv);
-
-	dev_err(device->dev, "      pending events:\n");
+static void _log_sw_syncobj(struct kgsl_device *device, struct kgsl_drawobj_sync *syncobj)
+{
+	struct kgsl_drawobj_sync_event *event;
+	int i;
 
 	for (i = 0; i < syncobj->numsyncs; i++) {
 		event = &syncobj->synclist[i];
@@ -234,6 +234,43 @@ static void syncobj_timer(struct timer_list *t)
 		}
 		}
 	}
+}
+
+static void syncobj_timer(struct timer_list *t)
+{
+	struct kgsl_device *device;
+	struct kgsl_drawobj_sync *syncobj = kgsl_timer_container_of(syncobj, t, timer);
+	struct kgsl_drawobj *drawobj;
+
+	if (syncobj == NULL)
+		return;
+
+	drawobj = DRAWOBJ(syncobj);
+
+	if (!kref_get_unless_zero(&drawobj->refcount))
+		return;
+
+	if (drawobj->context == NULL) {
+		kgsl_drawobj_put(drawobj);
+		return;
+	}
+
+	device = drawobj->context->device;
+
+	dev_err(device->dev,
+		"kgsl: possible gpu syncpoint deadlock for context %u timestamp %u\n",
+		drawobj->context->id, drawobj->timestamp);
+
+	set_bit(ADRENO_CONTEXT_FENCE_LOG, &drawobj->context->priv);
+	kgsl_context_dump(drawobj->context);
+	clear_bit(ADRENO_CONTEXT_FENCE_LOG, &drawobj->context->priv);
+
+	dev_err(device->dev, "      pending events:\n");
+
+	if (test_bit(KGSL_SYNCOBJ_SW, &syncobj->flags))
+		_log_sw_syncobj(device, syncobj);
+	else
+		kgsl_drawobj_log_hw_syncobj(device, syncobj);
 
 	kgsl_drawobj_put(drawobj);
 	dev_err(device->dev, "--gpu syncpoint deadlock print end--\n");

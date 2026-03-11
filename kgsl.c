@@ -3116,6 +3116,7 @@ static long _gpuobj_map_useraddr(struct kgsl_device *device,
 		struct kgsl_gpuobj_import *param)
 {
 	struct kgsl_gpuobj_import_useraddr useraddr;
+	u64 virtaddr;
 
 	param->flags &= KGSL_MEMFLAGS_GPUREADONLY
 		| KGSL_CACHEMODE_MASK
@@ -3134,12 +3135,14 @@ static long _gpuobj_map_useraddr(struct kgsl_device *device,
 		u64_to_user_ptr(param->priv), sizeof(useraddr)))
 		return -EINVAL;
 
+	virtaddr = untagged_addr(useraddr.virtaddr);
+
 	/* Verify that the virtaddr and len are within bounds */
-	if (useraddr.virtaddr > ULONG_MAX)
+	if (virtaddr > ULONG_MAX)
 		return -EINVAL;
 
 	return kgsl_setup_useraddr(device, pagetable, entry,
-		(unsigned long) useraddr.virtaddr, 0, param->priv_len);
+		(unsigned long)virtaddr, 0, param->priv_len);
 }
 
 static bool check_and_warn_secured(struct kgsl_device *device)
@@ -3340,7 +3343,7 @@ static long _map_usermem_addr(struct kgsl_device *device,
 	if (entry->memdesc.flags & KGSL_MEMFLAGS_SECURE)
 		return -EINVAL;
 
-	return kgsl_setup_useraddr(device, pagetable, entry, hostptr,
+	return kgsl_setup_useraddr(device, pagetable, entry, untagged_addr(hostptr),
 		offset, size);
 }
 

@@ -1430,6 +1430,31 @@ static const struct file_operations spel_config_fops = {
 	.release = single_release,
 };
 
+static int spel_en_show(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_gmu_spel *spel = &gmu->spel;
+
+	*val = (u64)spel->enabled;
+	return 0;
+}
+
+static int spel_en_store(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_gmu_spel *spel = &gmu->spel;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+
+	if (val == spel->enabled)
+		return 0;
+
+	return adreno_power_cycle_bool(adreno_dev, &spel->enabled, val);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(spel_en_fops, spel_en_show, spel_en_store, "%llu\n");
+
 static int _ifpc_hyst_store(void *data, u64 val)
 {
 	struct adreno_device *adreno_dev = data;
@@ -1956,9 +1981,12 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 		debugfs_create_file("gmu_pwr_trace_trigger", 0644, device->gmu_core.gmu_debugfs_dir,
 			device, &gmu_pwr_trace_trigger_fops);
 
-		if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_SPEL))
+		if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_SPEL)) {
 			debugfs_create_file("spel_config", 0644, device->gmu_core.gmu_debugfs_dir,
 				device, &spel_config_fops);
+			debugfs_create_file("spel_enable", 0644,
+				device->gmu_core.gmu_debugfs_dir, device, &spel_en_fops);
+		}
 	}
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS)) {

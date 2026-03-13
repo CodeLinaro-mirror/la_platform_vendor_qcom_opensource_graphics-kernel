@@ -485,7 +485,9 @@ struct kgsl_gmu_trace {
  * struct kgsl_gmu_spel - Struct for SPEL status / configuration details
  */
 struct kgsl_gmu_spel {
-	/** @enabled: True if SPEL is enabled */
+	/** @handshake_done: True if the SPEL handshake succeeded */
+	bool handshake_done;
+	/** @enabled: True if SPEL is enabled (controllable via debugfs) */
 	bool enabled;
 	/** @config: Power budget configuration */
 	u32 config[GMU_PWR_BUDGET_DWORDS];

@@ -2741,7 +2741,7 @@ static int gen8_hfi_send_spel_feature_ctrl(struct adreno_device *adreno_dev)
 	struct hfi_msg_platform msg;
 	int ret;
 
-	if (!spel->enabled)
+	if (!spel->handshake_done || !spel->enabled)
 		return 0;
 
 	ret = CMD_MSG_HDR(msg, H2F_MSG_PLATFORM_LA);

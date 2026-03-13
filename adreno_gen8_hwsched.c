@@ -255,6 +255,7 @@ static void gen8_hwsched_init_spel_config(struct adreno_device *adreno_dev)
 	struct gmu_core_device *gmu = &device->gmu_core;
 	struct kgsl_gmu_spel *spel = &gmu->spel;
 
+	spel->enabled = false;
 	memset(spel->config, 0, sizeof(spel->config));
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_DYN_EN, 1);
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_LKG_EN, 1);
@@ -314,7 +315,7 @@ static void gen8_hwsched_spel_handshake(struct adreno_device *adreno_dev)
 	}
 
 	gen8_hwsched_init_spel_config(adreno_dev);
-	spel->enabled = true;
+	spel->handshake_done = true;
 }
 
 static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)

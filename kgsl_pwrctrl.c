@@ -16,6 +16,7 @@
 #include <linux/msm_kgsl.h>
 #include <linux/units.h>
 #include <soc/qcom/dcvs.h>
+#include <linux/version.h>
 
 #include "kgsl_device.h"
 #include "kgsl_bus.h"
@@ -1436,6 +1437,9 @@ int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 			qcom_clk_dump(NULL, pwr->cx_regulator, false);
 		} else {
 			dev_err(device->dev, "GPU CX wait timeout\n");
+#if (KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE)
+			qcom_gdsc_genpd_dump(pwr->cx_pd);
+#endif
 		}
 		KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
 			GMU_PDEV(device), 0ULL, GMU_FAULT_CX_WAIT_TIMEOUT);
@@ -1668,6 +1672,9 @@ static int kgsl_cx_gdsc_event(struct notifier_block *nb,
 		if (kgsl_regmap_read_poll_timeout(&device->regmap, pwr->cx_cfg_gdsc_offset,
 			val, (val & BIT(15)), 100, 100 * 1000)) {
 			dev_err(device->dev, "GPU CX GDSC power down timed out\n");
+#if (KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE)
+			qcom_gdsc_genpd_dump(pwr->cx_pd);
+#endif
 			log_kgsl_cx_wait_timeout_event(NONHLOS_CX_WAIT_TIMEOUT);
 			KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
 				GMU_PDEV(device), 0ULL, GMU_FAULT_WAIT_FOR_CX);

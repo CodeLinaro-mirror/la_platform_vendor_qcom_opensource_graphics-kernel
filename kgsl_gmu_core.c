@@ -1007,20 +1007,20 @@ bool gmu_core_is_trace_empty(struct gmu_trace_header *hdr)
 	return (readl(&hdr->read_index) == readl(&hdr->write_index)) ? true : false;
 }
 
-void gmu_core_trace_header_init(struct kgsl_gmu_trace *trace)
+void gmu_core_trace_header_init(struct kgsl_gmu_trace *trace, u32 log_type, u32 mode)
 {
 	struct gmu_trace_header *hdr = trace->md->hostptr;
 
 	hdr->threshold = TRACE_BUFFER_THRESHOLD;
 	hdr->timeout = TRACE_TIMEOUT_MSEC;
-	hdr->metadata = FIELD_PREP(GENMASK(31, 30), TRACE_MODE_DROP) |
+	hdr->metadata = FIELD_PREP(GENMASK(31, 30), mode) |
 			FIELD_PREP(GENMASK(3, 0), TRACE_HEADER_VERSION_1);
 	hdr->cookie = trace->md->gmuaddr;
 	hdr->size = trace->md->size;
-	hdr->log_type = TRACE_LOGTYPE_HWSCHED;
+	hdr->log_type = log_type;
 }
 
-void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace)
+void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace, u32 log_type, u32 mode)
 {
 	struct gmu_trace_header *hdr = trace->md->hostptr;
 
@@ -1030,7 +1030,7 @@ void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace)
 	memset(hdr, 0, sizeof(struct gmu_trace_header));
 	/* Reset sequence number to detect trace packet loss */
 	trace->seq_num = 0;
-	gmu_core_trace_header_init(trace);
+	gmu_core_trace_header_init(trace, log_type, mode);
 	trace->reset_hdr = false;
 }
 
@@ -1505,8 +1505,14 @@ int gmu_core_hwsched_memory_init(struct kgsl_device *device)
 			return ret;
 
 		/* Initialize the GMU trace buffer header */
-		gmu_core_trace_header_init(&device->gmu_core.trace);
+		gmu_core_trace_header_init(&device->gmu_core.trace,
+			TRACE_LOGTYPE_HWSCHED, TRACE_MODE_DROP);
 	}
 
 	return 0;
+}
+
+bool gmu_core_is_hw_fencing_enabled(struct kgsl_device *device)
+{
+	return test_bit(GMU_HWSCHED_HW_FENCE, &device->gmu_core.flags);
 }

@@ -690,7 +690,7 @@ static int gmu_core_iommu_fault_handler(struct iommu_domain *domain,
 	return 0;
 }
 
-#if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(6, 11, 0) <= LINUX_VERSION_CODE)
 static struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
 {
 	return iommu_paging_domain_alloc(dev);

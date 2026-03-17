@@ -3296,12 +3296,15 @@ static void _retire_inflight_hw_fences(struct adreno_device *adreno_dev,
 	spin_unlock(&drawctxt->lock);
 }
 
+#define HFI_TS_RETIRE_VERSION_HAS_FLAGS 2
+
 void adreno_hwsched_log_profiling_info(struct adreno_device *adreno_dev, u32 *rcvd)
 {
 	struct hfi_ts_retire_cmd *cmd = (struct hfi_ts_retire_cmd *)rcvd;
 	struct kgsl_context *context;
 	struct retire_info info = {0};
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 flags;
 
 	context = kgsl_context_get(device, cmd->ctxt_id);
 	if (context == NULL)
@@ -3324,7 +3327,12 @@ void adreno_hwsched_log_profiling_info(struct adreno_device *adreno_dev, u32 *rc
 		kgsl_work_period_update(device, context->proc_priv->period,
 					     info.active);
 
-	trace_adreno_cmdbatch_retired(context, &info, 0, 0, 0);
+	if (cmd->version < HFI_TS_RETIRE_VERSION_HAS_FLAGS)
+		flags = 0;
+	else
+		flags = cmd->flags;
+
+	trace_adreno_cmdbatch_retired(context, &info, flags, 0, 0);
 
 	log_kgsl_cmdbatch_retired_event(context->id, cmd->ts,
 		context->priority, 0, cmd->sop, cmd->eop);

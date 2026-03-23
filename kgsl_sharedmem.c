@@ -1119,10 +1119,7 @@ static int kgsl_shmem_alloc_pages(struct kgsl_memdesc *memdesc)
 	return count;
 }
 
-#if (((KERNEL_VERSION(6, 12, 18) <= LINUX_VERSION_CODE) && \
-	(KERNEL_VERSION(6, 13, 0) > LINUX_VERSION_CODE)) || \
-	(KERNEL_VERSION(6, 18, 7) <= LINUX_VERSION_CODE))
-static void kgsl_shmem_fill_page(void *ptr,
+static void __maybe_unused kgsl_shmem_fill_page_order(void *ptr,
 	struct shmem_inode_info *inode, struct folio **folio, int order)
 {
 	struct kgsl_memdesc *memdesc = (struct kgsl_memdesc *)inode->android_vendor_data1;
@@ -1140,8 +1137,8 @@ static void kgsl_shmem_fill_page(void *ptr,
 	*folio = list_first_entry(&memdesc->shmem_page_list, struct folio, lru);
 	list_del(&(*folio)->lru);
 }
-#else
-static void kgsl_shmem_fill_page(void *ptr,
+
+static void __maybe_unused kgsl_shmem_fill_page(void *ptr,
 	struct shmem_inode_info *inode, struct folio **folio)
 {
 	struct kgsl_memdesc *memdesc = (struct kgsl_memdesc *)inode->android_vendor_data1;
@@ -1159,11 +1156,20 @@ static void kgsl_shmem_fill_page(void *ptr,
 	*folio = list_first_entry(&memdesc->shmem_page_list, struct folio, lru);
 	list_del(&(*folio)->lru);
 }
-#endif
+
+/*
+ * Select the kgsl_shmem_fill_page function based on the signature of
+ * register_trace_android_rvh_shmem_get_folio
+ */
+#define kgsl_shmem_fill_page_fn \
+	__builtin_choose_expr( \
+		__builtin_types_compatible_p(typeof(register_trace_android_rvh_shmem_get_folio), \
+			typeof(int (typeof(kgsl_shmem_fill_page) *, void *))), \
+		kgsl_shmem_fill_page, kgsl_shmem_fill_page_order)
 
 void kgsl_register_shmem_callback(void)
 {
-	register_trace_android_rvh_shmem_get_folio(kgsl_shmem_fill_page, NULL);
+	register_trace_android_rvh_shmem_get_folio(kgsl_shmem_fill_page_fn, NULL);
 }
 
 #ifdef CONFIG_QCOM_KGSL_POOL

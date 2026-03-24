@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2015,2017,2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __ADRENO_PERFCOUNTER_H
 #define __ADRENO_PERFCOUNTER_H
@@ -63,6 +63,9 @@ struct adreno_perfcount_group {
 		unsigned int counter);
 	void (*load)(struct adreno_device *adreno_dev,
 		struct adreno_perfcount_register *reg);
+	void (*disable)(struct adreno_device *adreno_dev,
+		const struct adreno_perfcount_group *group,
+		unsigned int counter, unsigned int countable);
 };
 
 /*

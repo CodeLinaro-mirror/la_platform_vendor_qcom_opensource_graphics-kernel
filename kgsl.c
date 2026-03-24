@@ -37,6 +37,7 @@
 #include "kgsl_sync.h"
 #include "kgsl_sysfs.h"
 #include "kgsl_trace.h"
+#include "kgsl_util.h"
 /* Instantiate tracepoints */
 #define CREATE_TRACE_POINTS
 #include "kgsl_power_trace.h"
@@ -1113,7 +1114,7 @@ static void _log_gpu_work_events(struct work_struct *work)
 
 static void kgsl_work_period_timer(struct timer_list *t)
 {
-	struct kgsl_device *device = from_timer(device, t, work_period_timer);
+	struct kgsl_device *device = kgsl_timer_container_of(device, t, work_period_timer);
 
 	queue_work(kgsl_driver.lockless_workqueue, &device->work_period_ws);
 }

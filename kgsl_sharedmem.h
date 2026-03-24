@@ -331,6 +331,20 @@ struct kgsl_memdesc *kgsl_allocate_global(struct kgsl_device *device,
 		u64 size, u32 padding, u64 flags, u32 priv, const char *name);
 
 /**
+ * kgsl_free_global - Free a global GPU memory object
+ * @device: A GPU device handle
+ * @memdesc: A pointer to a kgsl_memdesc pointer
+ * @padding: Amount of extra padding added to the VA allocation
+ *
+ * Free a global GPU object by unmapping it from the kernel address space
+ * and removing it from the list of global buffers. Nullify the pointer
+ * provided in @memdesc.
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int kgsl_free_global(struct kgsl_device *device, struct kgsl_memdesc **memdesc, u32 padding);
+
+/**
  * kgsl_allocate_global_fixed - Allocate a global GPU memory object from a fixed
  * region defined in the device tree
  * @device: A GPU device handle
@@ -738,5 +752,11 @@ int kgsl_alloc_shmem_page(struct kgsl_memdesc *memdesc, struct file *shmem_file,
  * @memdesc: Pointer to the memdesc
  */
 void kgsl_memdesc_pagelist_cleanup(struct file *shmem_filp, struct kgsl_memdesc *memdesc);
+
+/**
+ * kgsl_memdesc_free_sgt - Clean up the memdesc's sg table
+ * @memdesc: Pointer to the memdesc
+ */
+void kgsl_memdesc_free_sgt(struct kgsl_memdesc *md);
 
 #endif /* __KGSL_SHAREDMEM_H */

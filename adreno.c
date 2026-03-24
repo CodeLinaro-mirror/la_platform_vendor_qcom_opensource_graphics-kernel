@@ -538,7 +538,7 @@ static irqreturn_t adreno_freq_limiter_irq_handler(int irq, void *data)
 }
 
 irqreturn_t adreno_irq_callbacks(struct adreno_device *adreno_dev,
-		const struct adreno_irq_funcs *funcs, u32 status)
+		const struct adreno_irq_funcs *funcs, u32 status, u32 mask)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	irqreturn_t ret = IRQ_NONE;
@@ -548,7 +548,7 @@ irqreturn_t adreno_irq_callbacks(struct adreno_device *adreno_dev,
 		int i = fls(status) - 1;
 
 		if (funcs[i].func) {
-			if (adreno_dev->irq_mask & BIT(i))
+			if (mask & BIT(i))
 				funcs[i].func(adreno_dev, i);
 		} else
 			dev_crit_ratelimited(device->dev,
@@ -1238,6 +1238,23 @@ static int adreno_probe_llcc(struct adreno_device *adreno_dev,
 		} else {
 			adreno_dev->gpumv_llc_slice_enable = true;
 		}
+	} else if (adreno_is_gen8_8_0(adreno_dev)) {
+#ifdef LLCC_GPU_LAYERS
+		adreno_dev->gpulayers_llc_slice = llcc_slice_getd(LLCC_GPU_LAYERS);
+		ret = PTR_ERR_OR_ZERO(adreno_dev->gpulayers_llc_slice);
+		if (ret) {
+			if (ret == -EPROBE_DEFER) {
+				llcc_slice_putd(adreno_dev->gpu_llc_slice);
+				llcc_slice_putd(adreno_dev->gpuhtw_llc_slice);
+				return ret;
+			}
+			if (ret != -ENOENT)
+				dev_warn(&pdev->dev,
+					"Unable to get GPU_LAYERS buffer slice: %d\n", ret);
+			} else {
+				adreno_dev->gpulayers_llc_slice_enable = true;
+			}
+#endif
 	}
 #endif
 
@@ -1600,17 +1617,23 @@ int adreno_device_probe(struct platform_device *pdev,
 		priv |= KGSL_MEMDESC_PRIVILEGED;
 
 	kgsl_mutex_lock(&device->mutex);
-	device->memstore = kgsl_allocate_global(device,
-		KGSL_MEMSTORE_SIZE, 0, 0, priv, "memstore");
+
+	device->memstore = kgsl_allocate_global(device, KGSL_MEMSTORE_SIZE, 0, 0, priv, "memstore");
+	if (PTR_ERR_OR_ZERO(device->memstore)) {
+		kgsl_mutex_unlock(&device->mutex);
+		status = PTR_ERR(device->memstore);
+		goto dev_platform_remove;
+	}
+
+	/* Allocate the kernel profiling buffer for FDINFO */
+	status = adreno_create_profile_buffer(adreno_dev);
+	if (status) {
+		kgsl_mutex_unlock(&device->mutex);
+		goto dev_platform_remove;
+	}
+
 	adreno_profile_init(adreno_dev);
 	kgsl_mutex_unlock(&device->mutex);
-
-	status = PTR_ERR_OR_ZERO(device->memstore);
-	if (status) {
-		trace_array_put(device->fence_trace_array);
-		kgsl_device_platform_remove(device);
-		goto err_unbind;
-	}
 
 	/* Initialize the snapshot engine */
 	size = adreno_dev->gpucore->snapshot_size;
@@ -1675,6 +1698,11 @@ int adreno_device_probe(struct platform_device *pdev,
 	KGSL_BOOT_MARKER("GPU Ready");
 
 	return 0;
+
+dev_platform_remove:
+	device->memstore = NULL;
+	trace_array_put(device->fence_trace_array);
+	kgsl_device_platform_remove(device);
 
 err_unbind:
 	component_unbind_all(dev, NULL);
@@ -1769,6 +1797,9 @@ static void adreno_unbind(struct device *dev)
 
 	if (!IS_ERR_OR_NULL(adreno_dev->gpumv_llc_slice))
 		llcc_slice_putd(adreno_dev->gpumv_llc_slice);
+
+	if (!IS_ERR_OR_NULL(adreno_dev->gpulayers_llc_slice))
+		llcc_slice_putd(adreno_dev->gpulayers_llc_slice);
 
 	kgsl_pwrscale_close(device);
 
@@ -1899,22 +1930,23 @@ static int adreno_pm_suspend(struct device *dev)
 	return status;
 }
 
-void adreno_create_profile_buffer(struct adreno_device *adreno_dev)
+int adreno_create_profile_buffer(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	unsigned int priv = 0;
+	int ret;
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_APRIV))
 		priv = KGSL_MEMDESC_PRIVILEGED;
 
-	adreno_allocate_global(device, &adreno_dev->profile_buffer,
+	ret = adreno_allocate_global(device, &adreno_dev->profile_buffer,
 		PAGE_SIZE, 0, 0, priv, "alwayson");
 
-	adreno_dev->profile_index = 0;
+	if (ret)
+		return ret;
 
-	if (!IS_ERR(adreno_dev->profile_buffer))
-		set_bit(ADRENO_DEVICE_DRAWOBJ_PROFILE,
-			&adreno_dev->priv);
+	adreno_dev->profile_index = 0;
+	return 0;
 }
 
 static int adreno_init(struct kgsl_device *device)

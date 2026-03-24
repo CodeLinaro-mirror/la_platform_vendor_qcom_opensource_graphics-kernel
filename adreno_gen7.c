@@ -474,7 +474,7 @@ static inline void gen7_regwrite_aperture(struct kgsl_device *device,
 	mb();
 }
 
-void gen7_regread_aperture(struct kgsl_device *device,
+static void gen7_regread_aperture(struct kgsl_device *device,
 	u32 offsetwords, u32 *value, u32 pipe)
 {
 	gen7_host_aperture_set(ADRENO_DEVICE(device), pipe);
@@ -826,18 +826,32 @@ static u64 gen7_get_uche_trap_base(void)
 void gen7_enable_ahb_timeout_detection(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	u32 val;
+	u32 cntl_val = 0, host_cntl_val = 0;
 
+	/*
+	 * When the timeout value is not configured, there is no need to
+	 * program the remaining fields.
+	 */
 	if (!adreno_dev->ahb_timeout_val)
 		return;
 
-	val = (ADRENO_AHB_CNTL_DEFAULT | FIELD_PREP(GENMASK(4, 0),
+	/* HOST timeout should be greater than other AHB slaves */
+	cntl_val = (ADRENO_AHB_CNTL_DEFAULT | FIELD_PREP(GENMASK(4, 0),
+			adreno_dev->ahb_timeout_val - 1));
+	host_cntl_val = (ADRENO_AHB_CNTL_DEFAULT | FIELD_PREP(GENMASK(4, 0),
 			adreno_dev->ahb_timeout_val));
-	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_AON_CNTL, val);
-	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_GMU_CNTL, val);
-	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_CP_CNTL, val);
-	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, val);
-	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_HOST_CNTL, val);
+
+	/* Enable error response when recovery is not supported */
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_AHB_TIMEOUT_RECOVERY)) {
+		cntl_val |= BIT(11);
+		host_cntl_val |= BIT(11);
+	}
+
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_AON_CNTL, cntl_val);
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_GMU_CNTL, cntl_val);
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_CP_CNTL, cntl_val);
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, cntl_val);
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_HOST_CNTL, host_cntl_val);
 }
 
 int gen7_start(struct adreno_device *adreno_dev)
@@ -1325,7 +1339,7 @@ static void gen7_gpu_keepalive(struct adreno_device *adreno_dev,
 			GEN7_GMU_GMU_PWR_COL_KEEPALIVE, state);
 }
 
-bool gen7_hw_isidle(struct adreno_device *adreno_dev)
+static bool gen7_hw_isidle(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	unsigned int reg;
@@ -1756,7 +1770,8 @@ static irqreturn_t gen7_hwsched_irq_handler(struct adreno_device *adreno_dev)
 
 	kgsl_regwrite(device, GEN7_RBBM_INT_CLEAR_CMD, status);
 
-	ret = adreno_irq_callbacks(adreno_dev, gen7_irq_funcs, status);
+	ret = adreno_irq_callbacks(adreno_dev, gen7_irq_funcs,
+		status, adreno_dev->irq_mask);
 
 	trace_kgsl_gen7_irq_status(adreno_dev, status);
 
@@ -1789,7 +1804,8 @@ static irqreturn_t gen7_irq_handler(struct adreno_device *adreno_dev)
 
 	kgsl_regwrite(device, GEN7_RBBM_INT_CLEAR_CMD, status);
 
-	ret = adreno_irq_callbacks(adreno_dev, gen7_irq_funcs, status);
+	ret = adreno_irq_callbacks(adreno_dev, gen7_irq_funcs,
+		status, adreno_dev->irq_mask);
 
 	trace_kgsl_gen7_irq_status(adreno_dev, status);
 
@@ -1917,7 +1933,7 @@ static u32 _get_pipeid(u32 groupid)
 	}
 }
 
-int gen7_perfcounter_remove(struct adreno_device *adreno_dev,
+static int gen7_perfcounter_remove(struct adreno_device *adreno_dev,
 	struct adreno_perfcount_register *reg, u32 groupid)
 {
 	const struct adreno_perfcounters *counters = ADRENO_PERFCOUNTERS(adreno_dev);

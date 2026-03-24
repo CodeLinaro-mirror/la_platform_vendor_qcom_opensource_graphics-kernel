@@ -4362,8 +4362,11 @@ static const struct gen8_nonctxt_regs gen8_11_0_nonctxt_regs[] = {
 	/* Disable early EOBlk return */
 	{ GEN8_RB_DBG_ECO_CNTL, BIT(17), BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_GC_GMEM_PROTECT, 0x12000000, BIT(PIPE_BR) },
-	/* Disable pre-mvcc dead draw merge scheme on LRZ-RB */
-	{ GEN8_RB_RBP_CNTL, BIT(6), BIT(PIPE_BV) | BIT(PIPE_BR) },
+	/*
+	 * BIT(5): Disable dead draw merge scheme on RB-HLSQ
+	 * BIT(6): Disable pre-mvcc dead draw merge scheme on LRZ-RB
+	 */
+	{ GEN8_RB_RBP_CNTL, BIT(5) | BIT(6), BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, 0x00000007, BIT(PIPE_BR) },
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, 0x00004000, BIT(PIPE_BR) },
 	{ GEN8_RBBM_NC_MODE_CNTL, 0x00000001, BIT(PIPE_NONE) },
@@ -4490,7 +4493,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_17_0 = {
 	.highest_bank_bit = 15,
 	.gmu_hub_clk_freq = 200000000,
 	.gen8_snapshot_block_list = &gen8_3_0_snapshot_block_list,
-	.ctxt_record_size = (4558 * SZ_1K),
+	.ctxt_record_size = (1038 * SZ_1K),
 	.noc_timeout_us = 3410, /* 3.41 msec */
 	.preempt_level = 1,
 	.bcl_data = 1,

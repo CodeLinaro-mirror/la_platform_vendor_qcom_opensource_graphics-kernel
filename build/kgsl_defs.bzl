@@ -114,6 +114,7 @@ def external_deps(target, variant):
         "lahaina",
         "art",
         "bengal",
+        "bengal-le",
         "chora",
         "malabar"
         ]:

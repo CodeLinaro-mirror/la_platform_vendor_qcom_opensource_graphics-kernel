@@ -51,6 +51,7 @@ gki_perf_variants = [
 
 le_targets = [
     # keep sorted
+    "bengal-le",
     "vienna-le",
 ]
 

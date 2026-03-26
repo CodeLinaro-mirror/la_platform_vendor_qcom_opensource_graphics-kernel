@@ -969,6 +969,7 @@ static struct kgsl_regmap_restore_list sp_profiling_regs[] = {
 	{ GEN8_DBGC_CFG_DBGBUS_SEL_B },
 	{ GEN8_DBGC_CFG_DBGBUS_SEL_C },
 	{ GEN8_DBGC_CFG_DBGBUS_SEL_D },
+	{ GEN8_DBGC_CFG_DBGBUS_SEL_D },
 	/* Constant regs */
 	{ GEN8_DBGC_CFG_DBGBUS_MISC_MODE, 0x80000000 },
 	{ GEN8_DBGC_GBIF_DBG_CNTL, 0x00000003 },

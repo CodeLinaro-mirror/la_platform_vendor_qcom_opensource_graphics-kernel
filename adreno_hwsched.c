@@ -55,6 +55,11 @@ inline bool adreno_hwsched_context_queue_enabled(struct adreno_device *adreno_de
 	return test_bit(ADRENO_HWSCHED_CONTEXT_QUEUE, &adreno_dev->hwsched.flags);
 }
 
+static bool is_cmdobj(struct kgsl_drawobj *drawobj)
+{
+	return drawobj->type & CMDOBJ_TYPE;
+}
+
 static bool _check_context_queue(struct adreno_context *drawctxt, u32 count)
 {
 	bool ret;

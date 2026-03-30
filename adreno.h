@@ -194,6 +194,8 @@
 #define ADRENO_AHB_TIMEOUT_RECOVERY BIT(30)
 /* Enable SPEL (System Power and Energy Limits) */
 #define ADRENO_GMU_SPEL BIT(31)
+/* Enable ACD AVG (Adaptive Voltage Guardband) */
+#define ADRENO_ACD_AVG BIT_ULL(32)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -585,7 +587,7 @@ struct adreno_gpu_core {
 	 * device
 	 */
 	const char *compatible;
-	unsigned long features;
+	u64 features;
 	const struct adreno_gpudev *gpudev;
 	const struct adreno_perfcounters *perfcounters;
 	u32 uche_gmem_alignment;
@@ -728,6 +730,10 @@ struct adreno_device {
 	bool lm_enabled;
 	/** @acd_enabled: True if acd is enabled for this target */
 	bool acd_enabled;
+	/** @acd_avg_debugfs_dir: Debugfs directory node for ACD AVG related nodes */
+	struct dentry *acd_avg_debugfs_dir;
+	/** @acd_avg_enabled: True if ACD AVG is enabled for this target */
+	bool acd_avg_enabled;
 	/** @hwcg_enabled: True if hardware clock gating is enabled */
 	bool hwcg_enabled;
 	/** @throttling_enabled: True if LM throttling is enabled on a5xx */
@@ -1865,6 +1871,21 @@ static inline bool adreno_is_fast_context_destroy_enabled(
 static inline bool adreno_preemption_feature_set(struct adreno_device *adreno_dev)
 {
 	return ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION) || adreno_dev->preempt_override;
+}
+
+/**
+ * adreno_is_acd_avg_feature_set - Check whether the ACD AVG feature is statically enabled
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * The ACD feature must be enabled for ACD AVG to be enabled. Check that both of these feature
+ * flags are present for the target.
+ *
+ * Return: True if ACD AVG is statically enabled; false otherwise
+ */
+static inline bool adreno_is_acd_avg_feature_set(struct adreno_device *adreno_dev)
+{
+	return ADRENO_FEATURE(adreno_dev, ADRENO_ACD) &&
+		ADRENO_FEATURE(adreno_dev, ADRENO_ACD_AVG);
 }
 
 /*

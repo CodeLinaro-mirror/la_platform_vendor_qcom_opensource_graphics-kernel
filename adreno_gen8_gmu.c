@@ -2087,7 +2087,7 @@ static int gen8_gmu_qmp_aoss_init(struct adreno_device *adreno_dev,
 	return 0;
 }
 
-static void gen8_gmu_acd_probe(struct kgsl_device *device,
+static int gen8_gmu_acd_probe(struct kgsl_device *device,
 		struct gen8_gmu_device *gmu, struct device_node *node)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
@@ -2098,7 +2098,15 @@ static void gen8_gmu_acd_probe(struct kgsl_device *device,
 	int ret, i, cmd_idx = 0;
 
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_ACD))
-		return;
+		return 0;
+
+	/* Ensure that the enable info for all power levels can be represented */
+	if (pwr->num_pwrlevels >= (sizeof(cmd->enable_by_level) * __CHAR_BIT__)) {
+		dev_err_ratelimited(GMU_PDEV_DEV(device),
+			"ACD enablement is limited to %zu power levels\n",
+			sizeof(cmd->enable_by_level) * __CHAR_BIT__);
+		return -EINVAL;
+	}
 
 	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_ACD_TBL, HFI_MSG_CMD);
 
@@ -2110,24 +2118,33 @@ static void gen8_gmu_acd_probe(struct kgsl_device *device,
 	 * Iterate through each gpu power level and generate a mask for GMU
 	 * firmware for ACD enabled levels and store the corresponding control
 	 * register configurations to the acd_table structure.
+	 *
+	 * Power levels are reversed since lower enable bits correspond to lower frequencies
+	 * Enable bit 0 is reserved for the 0 frequency
 	 */
 	for (i = 0; i < pwr->num_pwrlevels; i++) {
 		if (pwrlevel->acd_level) {
-			cmd->enable_by_level |= (1 << (i + 1));
+			cmd->enable_by_level |= BIT(i + 1);
 			cmd->data[cmd_idx++] = pwrlevel->acd_level;
 		}
 		pwrlevel--;
 	}
 
 	if (!cmd->enable_by_level)
-		return;
+		return 0;
 
 	cmd->num_levels = cmd_idx;
 
+	/*
+	 * Without QMP, ACD cannot be enabled -- removing peak current mitigation. This is a
+	 * stability risk that scales with GPU fmax, but the device can still boot. As such,
+	 * probe is not failed for QMP errors.
+	 */
 	ret = gen8_gmu_qmp_aoss_init(adreno_dev, gmu);
 	if (ret)
-		dev_err(GMU_PDEV_DEV(device),
-			"AOP qmp init failed: %d\n", ret);
+		dev_err(GMU_PDEV_DEV(device), "AOP qmp init failed: %d\n", ret);
+
+	return 0;
 }
 
 static int gen8_gmu_reg_probe(struct adreno_device *adreno_dev)
@@ -2280,7 +2297,9 @@ int gen8_gmu_probe(struct kgsl_device *device,
 		gmu->idle_level = GPU_HW_ACTIVE;
 	}
 
-	gen8_gmu_acd_probe(device, gmu, pdev->dev.of_node);
+	ret = gen8_gmu_acd_probe(device, gmu, pdev->dev.of_node);
+	if (ret)
+		goto error;
 
 	set_bit(GMU_ENABLED, &gmu_core->flags);
 

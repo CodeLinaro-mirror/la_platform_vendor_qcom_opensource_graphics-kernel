@@ -1169,7 +1169,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a624 = {
 		DEFINE_ADRENO_REV(ADRENO_REV_A624, 6, 2, 4, ANY_ID),
 		.compatible = "qcom,adreno-gpu-a624",
 		.features = ADRENO_CONTENT_PROTECTION | ADRENO_IOCOHERENT |
-			ADRENO_APRIV | ADRENO_IFPC,
+			ADRENO_APRIV | ADRENO_IFPC | ADRENO_PREEMPTION,
 		.gpudev = &adreno_a6xx_hwsched_gpudev.base,
 		.perfcounters = &adreno_a6xx_perfcounters,
 		.uche_gmem_alignment = 0,

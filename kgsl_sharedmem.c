@@ -531,7 +531,7 @@ static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 		return VM_FAULT_SIGBUS;
 
 	pgoff = offset >> PAGE_SHIFT;
-	spin_lock(&memdesc->lock);
+	mutex_lock(&memdesc->lock);
 
 	if (memdesc->pages[pgoff]) {
 		page = memdesc->pages[pgoff];
@@ -542,7 +542,7 @@ static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 
 		/* We are here because page was reclaimed */
 		SET_FLAG(KGSL_MEMDESC_SKIP_RECLAIM, &memdesc->priv);
-		spin_unlock(&memdesc->lock);
+		mutex_unlock(&memdesc->lock);
 
 		page = shmem_read_mapping_page_gfp(
 			memdesc->shmem_filp->f_mapping, pgoff,
@@ -556,14 +556,14 @@ static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 		 * Update the pages array only if the page was
 		 * not already brought back.
 		 */
-		spin_lock(&memdesc->lock);
+		mutex_lock(&memdesc->lock);
 		if (!memdesc->pages[pgoff]) {
 			memdesc->pages[pgoff] = page;
 			atomic_dec(&priv->unpinned_page_count);
 			get_page(page);
 		}
 	}
-	spin_unlock(&memdesc->lock);
+	mutex_unlock(&memdesc->lock);
 
 	ret = vmf_insert_page(vma, vmf->address, page);
 	put_page(page);
@@ -839,7 +839,7 @@ void kgsl_memdesc_init(struct kgsl_device *device,
 		kgsl_memdesc_get_align(memdesc), ilog2(PAGE_SIZE));
 	kgsl_memdesc_set_align(memdesc, align);
 
-	spin_lock_init(&memdesc->lock);
+	mutex_init(&memdesc->lock);
 	idr_init(&memdesc->vma_idr);
 }
 
@@ -1130,15 +1130,21 @@ static void kgsl_shmem_fill_page(void *ptr,
 	if (IS_ERR_OR_NULL(memdesc) || order)
 		return;
 
+	mutex_lock(&memdesc->lock);
 	if (list_empty(&memdesc->shmem_page_list)) {
 		int ret = kgsl_shmem_alloc_pages(memdesc);
 
-		if (ret <= 0)
+		if (ret <= 0) {
+			mutex_unlock(&memdesc->lock);
 			return;
+		}
 	}
 
-	*folio = list_first_entry(&memdesc->shmem_page_list, struct folio, lru);
-	list_del(&(*folio)->lru);
+	if (!list_empty(&memdesc->shmem_page_list)) {
+		*folio = list_first_entry(&memdesc->shmem_page_list, struct folio, lru);
+		list_del(&(*folio)->lru);
+	}
+	mutex_unlock(&memdesc->lock);
 }
 #else
 static void kgsl_shmem_fill_page(void *ptr,
@@ -1149,15 +1155,21 @@ static void kgsl_shmem_fill_page(void *ptr,
 	if (IS_ERR_OR_NULL(memdesc))
 		return;
 
+	mutex_lock(&memdesc->lock);
 	if (list_empty(&memdesc->shmem_page_list)) {
 		int ret = kgsl_shmem_alloc_pages(memdesc);
 
-		if (ret <= 0)
+		if (ret <= 0) {
+			mutex_unlock(&memdesc->lock);
 			return;
+		}
 	}
 
-	*folio = list_first_entry(&memdesc->shmem_page_list, struct folio, lru);
-	list_del(&(*folio)->lru);
+	if (!list_empty(&memdesc->shmem_page_list)) {
+		*folio = list_first_entry(&memdesc->shmem_page_list, struct folio, lru);
+		list_del(&(*folio)->lru);
+	}
+	mutex_unlock(&memdesc->lock);
 }
 #endif
 
@@ -1298,14 +1310,21 @@ static void kgsl_free_page(struct kgsl_memdesc *memdesc, struct page *p)
 
 void kgsl_memdesc_pagelist_cleanup(struct file *shmem_filp, struct kgsl_memdesc *memdesc)
 {
+	struct page *p, *tmp;
+	LIST_HEAD(page_list);
+
 	if (!shmem_filp)
 		return;
 
-	while (!list_empty(&memdesc->shmem_page_list)) {
-		struct page *page = list_first_entry(&memdesc->shmem_page_list, struct page, lru);
+	/* Detach page list under lock, free pages outside the lock */
+	mutex_lock(&memdesc->lock);
+	list_replace_init(&memdesc->shmem_page_list, &page_list);
+	memdesc->shmem_pages = 0;
+	mutex_unlock(&memdesc->lock);
 
-		list_del(&page->lru);
-		put_page(page);
+	list_for_each_entry_safe(p, tmp, &page_list, lru) {
+		list_del(&p->lru);
+		put_page(p);
 	}
 }
 

@@ -510,4 +510,14 @@ int adreno_hwsched_import_external_fence_legacy(struct adreno_device *adreno_dev
  */
 void adreno_hwsched_enable_gmu_fencing(struct adreno_device *adreno_dev);
 
+/*
+ * adreno_hwsched_retire_cmdlist_obj - helper function for cleaning up cmd_list_obj
+ * @adreno_dev: Pointer to the adreno device
+ * @obj: pointer to cmd_list_obj
+ *
+ * Helper function to remove node from cmd_list.
+ *
+ */
+void adreno_hwsched_retire_cmdlist_obj(struct adreno_device *adreno_dev,
+	struct cmd_list_obj *obj);
 #endif

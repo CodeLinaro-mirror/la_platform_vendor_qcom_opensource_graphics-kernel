@@ -433,6 +433,18 @@ struct kgsl_gmu_trace {
 	bool reset_hdr;
 };
 
+#define GMU_PWR_BUDGET_DWORDS 7
+
+/**
+ * struct kgsl_gmu_spel - Struct for SPEL status / configuration details
+ */
+struct kgsl_gmu_spel {
+	/** @enabled: True if SPEL is enabled */
+	bool enabled;
+	/** @config: Power budget configuration */
+	u32 config[GMU_PWR_BUDGET_DWORDS];
+};
+
 /* GMU memdesc entries */
 #define GMU_KERNEL_ENTRIES		32
 
@@ -654,6 +666,8 @@ struct gmu_core_device {
 	struct kgsl_gmu_trace pwr_limits_trace;
 	/** @gmu_pwr_limits_trace_buf_size: Size of trace buf for GMU pwr limits events */
 	u32 gmu_pwr_limits_trace_buf_size;
+	/** @spel: Container for SPEL related data */
+	struct kgsl_gmu_spel spel;
 };
 
 extern struct platform_driver a6xx_gmu_driver;

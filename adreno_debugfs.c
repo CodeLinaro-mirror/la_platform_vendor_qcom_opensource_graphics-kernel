@@ -1027,6 +1027,163 @@ static int _gmu_pwr_trace_trigger_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(gmu_pwr_trace_trigger_fops, _gmu_pwr_trace_trigger_get,
 				_gmu_pwr_trace_trigger_set, "0x%08llx\n");
 
+static void spel_config_set(struct adreno_device *adreno_dev, void *priv)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_gmu_spel *spel = &gmu->spel;
+
+	memcpy(spel->config, priv, GMU_PWR_BUDGET_DWORDS * sizeof(u32));
+}
+
+static ssize_t spel_config_store(struct file *filep,
+		const char __user *user_buf, size_t len, loff_t *off)
+{
+	struct seq_file *seq = (struct seq_file *) filep->private_data;
+	struct adreno_device *adreno_dev = seq->private;
+	char *buf;
+	ssize_t size;
+	u32 user_config[GMU_PWR_BUDGET_DWORDS];
+	int ret;
+
+	if ((len >= PAGE_SIZE) || (len == 0))
+		return -EINVAL;
+
+	buf = kzalloc(len + 1, GFP_KERNEL);
+	if (buf == NULL)
+		return -ENOMEM;
+
+	if (copy_from_user(buf, user_buf, len)) {
+		ret = -EFAULT;
+		goto out;
+	}
+
+	/* For sanity and parsing, ensure it is null terminated */
+	buf[len] = '\0';
+
+	size = sscanf(buf, "0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x",
+		&user_config[0], &user_config[1], &user_config[2], &user_config[3],
+		&user_config[4], &user_config[5], &user_config[6]);
+	if (size != GMU_PWR_BUDGET_DWORDS) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	ret = adreno_power_cycle(adreno_dev, spel_config_set, user_config);
+	if (!ret)
+		ret = len;
+
+out:
+	kfree(buf);
+	return ret;
+}
+
+static int spel_config_show(struct seq_file *s, void *unused)
+{
+	struct adreno_device *adreno_dev = s->private;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_gmu_spel *spel = &gmu->spel;
+	u32 raw;
+
+	raw = spel->config[0];
+	seq_printf(s, "RAW[0] = 0x%08x\n", raw);
+	seq_printf(s, "    forced_telemetry_window   = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_FORCED_TELEMETRY_WINDOW, raw));
+	seq_printf(s, "    min_perf_level            = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_MIN_PERF_LEVEL, raw));
+	seq_printf(s, "    short_dce_margin_scale_en = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_SHORT_DCE_MARGIN_SCALE_EN, raw));
+	seq_printf(s, "    local_pmic_loss_calc_en   = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_LOCAL_PMIC_LOSS_CALC_EN, raw));
+	seq_printf(s, "    cdyn_hist_en              = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_CDYN_HIST_EN, raw));
+	seq_printf(s, "    long_desired_pwr_en       = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_LONG_DESIRED_PWR_EN, raw));
+	seq_printf(s, "    short_desired_pwr_en      = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_SHORT_DESIRED_PWR_EN, raw));
+	seq_printf(s, "    telemetry_en              = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_TELEMETRY_EN, raw));
+	seq_printf(s, "    long_pwr_budget_enforce   = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_LONG_PWR_BUDGET_ENFORCE, raw));
+	seq_printf(s, "    long_en                   = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_LONG_EN, raw));
+	seq_printf(s, "    short_en                  = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_SHORT_EN, raw));
+	seq_printf(s, "    lkg_en                    = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_LKG_EN, raw));
+	seq_printf(s, "    dyn_en                    = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_DYN_EN, raw));
+	seq_puts(s, "\n");
+
+	raw = spel->config[1];
+	seq_printf(s, "RAW[1] = 0x%08x\n", raw);
+	seq_printf(s, "    dce_cdyn_bx_scale         = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_DCE_CDYN_BX_SCALE, raw));
+	seq_printf(s, "    dce_cdyn_mx_scale         = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_DCE_CDYN_MX_SCALE, raw));
+	seq_printf(s, "    max_budget_cdyn_gfx_short = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_MAX_BUDGET_CDYN_GFX_SHORT, raw));
+	seq_printf(s, "    max_budget_cdyn_gfx       = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_MAX_BUDGET_CDYN_GFX, raw));
+	seq_printf(s, "    des_pwr_alpha             = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_DES_PWR_ALPHA, raw));
+	seq_puts(s, "\n");
+
+	raw = spel->config[2];
+	seq_printf(s, "RAW[2] = 0x%08x\n", raw);
+	seq_printf(s, "    reserved_2                = 0x%lx\n",
+		FIELD_GET(GMU_PWR_BUDGET_RESERVED_2, raw));
+	seq_printf(s, "    cdyn_accum_config_0       = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_CDYN_ACCUM_CONFIG_0, raw));
+	seq_printf(s, "    cdyn_hist_alpha           = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_CDYN_HIST_ALPHA, raw));
+	seq_printf(s, "    cdyn_scale_factor_en      = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_CDYN_SCALE_FACTOR_EN, raw));
+	seq_printf(s, "    num_samples               = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_NUM_SAMPLES, raw));
+	seq_puts(s, "\n");
+
+	raw = spel->config[3];
+	seq_printf(s, "RAW[3] = 0x%08x\n", raw);
+	seq_printf(s, "    reserved_3                = 0x%lx\n",
+		FIELD_GET(GMU_PWR_BUDGET_RESERVED_3, raw));
+	seq_puts(s, "\n");
+
+	raw = spel->config[4];
+	seq_printf(s, "RAW[4] = 0x%08x\n", raw);
+	seq_printf(s, "    forced_long_budget        = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_FORCED_LONG_BUDGET, raw));
+	seq_puts(s, "\n");
+
+	raw = spel->config[5];
+	seq_printf(s, "RAW[5] = 0x%08x\n", raw);
+	seq_printf(s, "    forced_long_time_const    = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_FORCED_LONG_TIME_CONST, raw));
+	seq_puts(s, "\n");
+
+	raw = spel->config[6];
+	seq_printf(s, "RAW[6] = 0x%08x\n", raw);
+	seq_printf(s, "    forced_short_budget       = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_FORCED_SHORT_BUDGET, raw));
+
+	return 0;
+}
+
+static int spel_config_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, spel_config_show, inode->i_private);
+}
+
+static const struct file_operations spel_config_fops = {
+	.owner = THIS_MODULE,
+	.open = spel_config_open,
+	.read = seq_read,
+	.write = spel_config_store,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 static int _ifpc_hyst_store(void *data, u64 val)
 {
 	struct adreno_device *adreno_dev = data;
@@ -1452,6 +1609,10 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 			&gmu_pwr_limits_trace_buf_out_fops);
 		debugfs_create_file("gmu_pwr_trace_trigger", 0644, device->gmu_core.gmu_debugfs_dir,
 			device, &gmu_pwr_trace_trigger_fops);
+
+		if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_SPEL))
+			debugfs_create_file("spel_config", 0644, device->gmu_core.gmu_debugfs_dir,
+				device, &spel_config_fops);
 	}
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS))

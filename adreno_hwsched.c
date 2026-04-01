@@ -46,6 +46,16 @@ inline bool adreno_hwsched_context_queue_enabled(struct adreno_device *adreno_de
 	return test_bit(ADRENO_HWSCHED_CONTEXT_QUEUE, &adreno_dev->hwsched.flags);
 }
 
+void adreno_hwsched_retire_cmdlist_obj(struct adreno_device *adreno_dev,
+				       struct cmd_list_obj *obj)
+{
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+
+	list_del_init(&obj->node);
+	kmem_cache_free(obj_cache, obj);
+	hwsched->inflight--;
+}
+
 static bool is_cmdobj(struct kgsl_drawobj *drawobj)
 {
 	return (drawobj->type & CMDOBJ_TYPE);
@@ -1388,9 +1398,7 @@ void adreno_hwsched_replay(struct adreno_device *adreno_dev)
 
 		retired++;
 
-		list_del_init(&obj->node);
-		kmem_cache_free(obj_cache, obj);
-		hwsched->inflight--;
+		adreno_hwsched_retire_cmdlist_obj(adreno_dev, obj);
 	}
 
 	if (hwsched->recurring_cmdobj) {

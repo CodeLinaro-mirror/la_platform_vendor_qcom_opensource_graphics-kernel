@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// tatic u32 _context_drawqueue_size = ADRENO_CONTEXT_DRAWQUEUE_SIZE - 1;tatic u32 _context_drawqueue_size = ADRENO_CONTEXT_DRAWQUEUE_SIZE - 1DX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
@@ -47,6 +47,16 @@ static struct kmem_cache *obj_cache;
 inline bool adreno_hwsched_context_queue_enabled(struct adreno_device *adreno_dev)
 {
 	return test_bit(ADRENO_HWSCHED_CONTEXT_QUEUE, &adreno_dev->hwsched.flags);
+}
+
+void adreno_hwsched_retire_cmdlist_obj(struct adreno_device *adreno_dev,
+					struct cmd_list_obj *obj)
+{
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+
+	list_del_init(&obj->node);
+	kmem_cache_free(obj_cache, obj);
+	hwsched->inflight--;
 }
 
 static bool is_cmdobj(struct kgsl_drawobj *drawobj)
@@ -1395,9 +1405,7 @@ void adreno_hwsched_replay(struct adreno_device *adreno_dev)
 
 		retired++;
 
-		list_del_init(&obj->node);
-		kmem_cache_free(obj_cache, obj);
-		hwsched->inflight--;
+		adreno_hwsched_retire_cmdlist_obj(adreno_dev, obj);
 	}
 
 	if (hwsched->recurring_cmdobj) {

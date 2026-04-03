@@ -180,7 +180,7 @@ done:
 	if (reset) {
 		/* Trace the constraint being un-set by the driver */
 		trace_kgsl_constraint(device, pwr->constraint.type,
-						old_level, 0, 0);
+			old_level, 0, 0, pwr->constraint.owner_id);
 		/*Invalidate the constraint set */
 		pwr->constraint.expires = 0;
 		pwr->constraint.type = KGSL_CONSTRAINT_NONE;
@@ -307,12 +307,13 @@ void kgsl_pwrctrl_set_constraint(struct kgsl_device *device,
 		pwrc_old->owner_timestamp = ts;
 		kgsl_pwrctrl_pwrlevel_change(device, constraint);
 		/* Trace the constraint being set by the driver */
-		trace_kgsl_constraint(device, pwrc_old->type, constraint, 1, 0);
+		trace_kgsl_constraint(device, pwrc_old->type, constraint, 1, 0, pwrc_old->owner_id);
 	} else if ((pwrc_old->type == pwrc->type) && (pwrc_old->sub_type == pwrc->sub_type)) {
 		pwrc_old->owner_id = id;
 		pwrc_old->owner_timestamp = ts;
 		pwrc_old->expires = jiffies +
 			msecs_to_jiffies(atomic64_read(&device->pwrctrl.interval_timeout));
+		trace_kgsl_constraint(device, pwrc_old->type, constraint, 1, 0, pwrc_old->owner_id);
 	}
 }
 

@@ -3005,7 +3005,7 @@ static void move_detached_context_hardware_fences(struct adreno_device *adreno_d
 	struct adreno_hw_fence_entry *entry, *tmp;
 	struct gen7_hwsched_hfi *hfi = to_gen7_hwsched_hfi(adreno_dev);
 
-	/* We don't need the drawctxt lock here because this context has already been detached */
+	spin_lock(&drawctxt->lock);
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_inflight_list, node) {
 		struct gmu_context_queue_header *hdr =  drawctxt->gmu_context_queue.hostptr;
 
@@ -3017,6 +3017,8 @@ static void move_detached_context_hardware_fences(struct adreno_device *adreno_d
 
 		gen7_remove_hw_fence_entry(adreno_dev, entry);
 	}
+
+	spin_unlock(&drawctxt->lock);
 
 	/* Also grab all the hardware fences which were never sent to GMU */
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_list, node) {
@@ -3039,21 +3041,32 @@ static int check_detached_context_hardware_fences(struct adreno_device *adreno_d
 	struct adreno_hw_fence_entry *entry, *tmp;
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	int ret = 0;
+	u32 id, ts, fence_ts;
 
-	/* We don't need the drawctxt lock because this context has been detached */
+	spin_lock(&drawctxt->lock);
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_inflight_list, node) {
 		struct gmu_context_queue_header *hdr =  drawctxt->gmu_context_queue.hostptr;
 
 		if ((timestamp_cmp((u32)entry->cmd.ts, hdr->out_fence_ts) > 0)) {
+<<<<<<< HEAD   (98ff34 Merge "kgsl: hwsched: Resolve type confusion for lpac")
 			dev_err(&gmu->pdev->dev,
+=======
+			id = drawctxt->base.id;
+			ts = (u32)entry->cmd.ts;
+			fence_ts = hdr->out_fence_ts;
+
+			spin_unlock(&drawctxt->lock);
+			dev_err(GMU_PDEV_DEV(device),
+>>>>>>> CHANGE (9f382f kgsl: hwsched: Acquire lock while working on fence lists)
 				"detached ctx:%d has unsignaled fence ts:%d retired:%d\n",
-				drawctxt->base.id, (u32)entry->cmd.ts, hdr->out_fence_ts);
+			       id, ts, fence_ts);
 			ret = -EINVAL;
 			goto fault;
 		}
 		gen7_remove_hw_fence_entry(adreno_dev, entry);
 	}
 
+<<<<<<< HEAD   (98ff34 Merge "kgsl: hwsched: Resolve type confusion for lpac")
 	/* Send hardware fences (to TxQueue) that were not dispatched to GMU */
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_list, node) {
 
@@ -3066,6 +3079,10 @@ static int check_detached_context_hardware_fences(struct adreno_device *adreno_d
 	}
 
 	return 0;
+=======
+	spin_unlock(&drawctxt->lock);
+	return drain_context_hw_fence_gmu(adreno_dev, drawctxt);
+>>>>>>> CHANGE (9f382f kgsl: hwsched: Acquire lock while working on fence lists)
 
 fault:
 	move_detached_context_hardware_fences(adreno_dev, drawctxt);
@@ -3689,15 +3706,32 @@ void gen7_trigger_hw_fence_cpu(struct adreno_device *adreno_dev,
 	int ret = msm_hw_fence_update_txq(adreno_dev->hwsched.hw_fence.handle,
 			entry->cmd.hash_index, 0, 0);
 
+<<<<<<< HEAD   (98ff34 Merge "kgsl: hwsched: Resolve type confusion for lpac")
 	if (ret) {
 		dev_err_ratelimited(adreno_dev->dev.dev,
 			"Failed to trigger hw fence via cpu: ctx:%d ts:%d ret:%d\n",
 			entry->drawctxt->base.id, (u32)entry->cmd.ts, ret);
 		return;
+=======
+	spin_lock(&drawctxt->lock);
+	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_inflight_list, node) {
+		struct gmu_context_queue_header *hdr =  drawctxt->gmu_context_queue.hostptr;
+
+		if ((timestamp_cmp((u32)entry->cmd.ts, hdr->out_fence_ts) > 0)) {
+			dev_err_ratelimited(GMU_PDEV_DEV(device),
+				"destroying detached ctx:%d unsignaled hw fence ts:%d retired:%d\n",
+				drawctxt->base.id, (u32)entry->cmd.ts, hdr->out_fence_ts);
+		}
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
+>>>>>>> CHANGE (9f382f kgsl: hwsched: Acquire lock while working on fence lists)
 	}
+<<<<<<< HEAD   (98ff34 Merge "kgsl: hwsched: Resolve type confusion for lpac")
 
 	msm_hw_fence_trigger_signal(adreno_dev->hwsched.hw_fence.handle, IPCC_CLIENT_GPU,
 		IPCC_CLIENT_APSS, 0);
+=======
+	spin_unlock(&drawctxt->lock);
+>>>>>>> CHANGE (9f382f kgsl: hwsched: Acquire lock while working on fence lists)
 }
 
 /* We don't want to unnecessarily wake the GMU to trigger hardware fences */

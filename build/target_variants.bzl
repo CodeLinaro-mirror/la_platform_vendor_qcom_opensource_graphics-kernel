@@ -9,6 +9,7 @@ targets = [
     "vienna",
     "bengal",
     "chora",
+    "shikra",
 ]
 
 la_variants = [

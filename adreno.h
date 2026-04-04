@@ -281,6 +281,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A663 = 663,
 	ADRENO_REV_A680 = 680,
 	ADRENO_REV_A702 = 702,
+	ADRENO_REV_A704 = 704,
 	/*
 	 * Version numbers may exceed 1 digit
 	 * Bits 16-23: Major
@@ -1296,6 +1297,7 @@ ADRENO_TARGET(a663, ADRENO_REV_A663)
 ADRENO_TARGET(a680, ADRENO_REV_A680)
 ADRENO_TARGET(gen6_3_26_0, ADRENO_REV_GEN6_3_26_0)
 ADRENO_TARGET(a702, ADRENO_REV_A702)
+ADRENO_TARGET(a704, ADRENO_REV_A704)
 
 /* A642L and A643 is derived from A660 and shares same logic */
 static inline int adreno_is_a660(struct adreno_device *adreno_dev)

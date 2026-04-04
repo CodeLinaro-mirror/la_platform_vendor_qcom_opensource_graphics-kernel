@@ -330,6 +330,7 @@ enum gmu_trace_id {
 	GMU_TRACE_DCVS_PWRSTATS = 7,
 	GMU_TRACE_PWR_CONSTRAINT = 8,
 	GMU_TRACE_DCVS_PROFILE = 9,
+	GMU_TRACE_PREEMPT_INFO = 10,
 	GMU_TRACE_MAX,
 };
 
@@ -404,6 +405,11 @@ struct trace_dcvs_profile {
 	u32 action;
 	u32 profile;
 	struct kgsl_dcvs_attrs attrs;
+} __packed;
+
+struct trace_preempt_info {
+	u32 level_info;
+	u32 reason;
 } __packed;
 
 /**

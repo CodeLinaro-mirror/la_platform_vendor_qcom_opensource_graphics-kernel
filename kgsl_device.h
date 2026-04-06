@@ -410,6 +410,16 @@ struct kgsl_device {
 	bool host_based_dcvs;
 	/** @syncobj_hw_fence_cache: Kmem cache for hardware fences in a sync object */
 	struct kmem_cache *syncobj_hw_fence_cache;
+	/** @fence_deadline_boost: Flag to indicate if deadline boost is enabled */
+	bool fence_deadline_boost;
+	/** @deadline_worker: Worker thread to send missed deadline hint to GMU */
+	struct kthread_worker *deadline_worker;
+	/** @prev_missed_deadline: previous deadline for the vsync */
+	ktime_t prev_missed_deadline;
+	/** @prev_deadline_ktime: Previous ktime of deadline boost sent */
+	ktime_t prev_deadline_ktime;
+	/** @bootcomplete_ktime: ktime of gpu boot completion */
+	ktime_t bootcomplete_ktime;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \

@@ -764,6 +764,7 @@ static int gen8_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 	 * as false so that in the next run we can do warmboot
 	 */
 	clear_bit(GMU_FORCE_COLDBOOT, &device->gmu_core.flags);
+	device->bootcomplete_ktime = ktime_get();
 err:
 	gen8_gmu_oob_clear(device, oob_gpu);
 
@@ -1159,6 +1160,7 @@ no_gx_power:
 
 	gen8_hwsched_soccp_vote(adreno_dev, false);
 
+	device->bootcomplete_ktime = 0;
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 
 	return ret;
@@ -1891,6 +1893,19 @@ static void gen8_hwsched_set_tuning_param(struct adreno_device *adreno_dev, u32 
 	}
 }
 
+static void gen8_hwsched_notify_deadline_boost(struct adreno_device *adreno_dev, u32 ctx_id)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	kgsl_mutex_lock(&device->mutex);
+
+	/* If GMU is up, send the HFI */
+	if (device->state == KGSL_STATE_ACTIVE)
+		gen8_hwsched_send_deadline_boost(adreno_dev, ctx_id);
+
+	kgsl_mutex_unlock(&device->mutex);
+}
+
 struct adreno_dcvs_tuning_attribute {
 	struct kobj_attribute attr;
 	u32 tuning_attr;
@@ -2217,6 +2232,7 @@ const struct adreno_hwsched_ops gen8_hwsched_ops = {
 	.preempt_info = gen8_hwsched_preempt_info_get,
 	.create_hw_fence = gen8_hwsched_create_hw_fence,
 	.set_dcvs_profile = gen8_hwsched_set_dcvs_profile,
+	.notify_deadline_boost = gen8_hwsched_notify_deadline_boost,
 };
 
 int gen8_hwsched_probe(struct platform_device *pdev,
@@ -2283,6 +2299,18 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 			dev_warn(device->dev, "Unable to create adreno_tsense_wq\n");
 	}
 
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_FENCE_DEADLINE_BOOST) &&
+			ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS)) {
+		device->deadline_worker = kgsl_kthread_run_worker(0, "kgsl_deadline_worker");
+		if (IS_ERR(device->deadline_worker)) {
+			ret = PTR_ERR(device->deadline_worker);
+			device->deadline_worker = NULL;
+			dev_err(device->dev, "Failed to create deadline worker ret=%d\n", ret);
+			return ret;
+		}
+		device->fence_deadline_boost = true;
+	}
+
 	gmu_dev = GMU_PDEV_DEV(device);
 	WARN_ON(kobject_init_and_add(&adreno_dev->hwsched.tunables_kobj, &ktype_tunables,
 				&gmu_dev->kobj, "dcvs_tunables"));
@@ -2297,11 +2325,17 @@ void gen8_hwsched_remove(struct adreno_device *adreno_dev)
 {
 	struct gen8_device *gen8_dev = container_of(adreno_dev,
 					struct gen8_device, adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	if (gen8_dev->tsense_wq) {
 		flush_workqueue(gen8_dev->tsense_wq);
 		destroy_workqueue(gen8_dev->tsense_wq);
 		gen8_dev->tsense_wq = NULL;
+	}
+
+	if (!IS_ERR_OR_NULL(device->deadline_worker)) {
+		kthread_destroy_worker(device->deadline_worker);
+		device->deadline_worker = NULL;
 	}
 }
 

@@ -100,6 +100,10 @@ struct adreno_hwsched_ops {
 	 */
 	int (*set_dcvs_profile)(struct adreno_device *adreno_dev,
 		struct kgsl_process_private *proc_priv);
+	/**
+	 * @notify_deadline_boost: Send missed deadline hint to GMU for supported targets
+	 */
+	void (*notify_deadline_boost)(struct adreno_device *adreno_dev, u32 ctx_id);
 };
 
 enum gpu_reset_type {

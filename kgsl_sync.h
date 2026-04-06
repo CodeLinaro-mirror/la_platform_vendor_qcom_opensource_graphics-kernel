@@ -44,6 +44,13 @@ struct kgsl_sync_timeline {
  */
 #define KGSL_FENCE_FLAG_SIGNAL_REFCOUNT 0
 
+/*
+ * Set this flag for a kgsl hardware fence to indicate that the hr timer has been
+ * triggered at least once. This can later be checked if the timer needs to be canceled
+ * when the fence is signaled.
+ */
+#define KGSL_FENCE_FLAG_TIMER_TRIGGERED 1
+
 /**
  * struct kgsl_sync_fence - A struct containing a fence and other data
  *				associated with it
@@ -72,6 +79,14 @@ struct kgsl_sync_fence {
 	struct kref hw_refcount;
 	/** @flags: kgsl sync fence specific flags */
 	unsigned long flags;
+	/** @deadline_work: Work that gets scheduled when deadline_timer expires */
+	struct kthread_work deadline_work;
+	/** @deadline_timer: A missed deadline detection timer */
+	struct hrtimer deadline_timer;
+	/** @deadline: Kernel time representing fence deadline */
+	ktime_t deadline;
+	/** @signaled: Kernel time when the fence was signaled */
+	ktime_t signaled;
 };
 
 /**

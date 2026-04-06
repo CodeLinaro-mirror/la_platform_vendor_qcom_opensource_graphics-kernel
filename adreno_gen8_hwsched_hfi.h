@@ -431,4 +431,16 @@ void gen8_hwsched_hfi_get_dcvs_tuning_attrs(struct adreno_device *adreno_dev, u3
  * Return: Zero on success or negative error on failure
  */
 int gen8_hwsched_process_f2h_platform_msg(struct adreno_device *adreno_dev, u32 *rcvd);
+
+/**
+ * gen8_hwsched_send_deadline_boost - Send H2F msg to boost gpu frequency
+ * @adreno_dev: Pointer to the adreno device
+ * @ctx_id: Context id for which the deadline was overdue
+ *
+ * This function sends an HFI to GMU to boost gpu frequency to meet further
+ * deadlines.
+ *
+ * Return: Zero on success or negative error on failure
+ */
+int gen8_hwsched_send_deadline_boost(struct adreno_device *adreno_dev, u32 ctx_id);
 #endif

@@ -2564,6 +2564,98 @@ static void adreno_hwsched_work(struct kthread_work *work)
 	kgsl_mutex_unlock(&hwsched->mutex);
 }
 
+#define DEADLINE_BOOST_DEBOUNCE_WINDOW_US    4000
+
+static void adreno_hwsched_hint_missed_deadline(struct kgsl_context *context, u32 timestamp,
+		ktime_t deadline)
+{
+	struct kgsl_device *device = context->device;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_hwsched_ops *hwsched_ops = adreno_dev->hwsched.hwsched_ops;
+
+	/* Return early if fence deadline boost is not supported */
+	if (!hwsched_ops->notify_deadline_boost || !device->fence_deadline_boost)
+		return;
+
+	if (!deadline) {
+		ktime_t now = ktime_get();
+
+		/*
+		 * Ignore duplicate deadline boosts within a short period. We only want one
+		 * boost per frame in this path.
+		 */
+		if (ktime_us_delta(now, device->prev_deadline_ktime) <
+				DEADLINE_BOOST_DEBOUNCE_WINDOW_US)
+			return;
+
+		trace_kgsl_missed_deadline(context->id, timestamp, 0);
+		hwsched_ops->notify_deadline_boost(adreno_dev, context->id);
+		device->prev_deadline_ktime = now;
+	} else if (ktime_after(deadline, device->prev_missed_deadline)) {
+		/* Ignore multiple boosts for same deadline */
+		trace_kgsl_missed_deadline(context->id, timestamp, ktime_to_ns(deadline));
+		hwsched_ops->notify_deadline_boost(adreno_dev, context->id);
+		device->prev_missed_deadline = deadline;
+	}
+}
+
+static void adreno_hwsched_fence_deadline_work(struct kthread_work *work)
+{
+	struct kgsl_sync_fence *kfence = container_of(work, struct kgsl_sync_fence, deadline_work);
+	struct kgsl_sync_timeline *ktimeline = kfence->parent;
+	struct kgsl_context *context;
+	ktime_t deadline;
+	ktime_t signaled;
+	u32 timestamp;
+	unsigned long flags;
+
+	spin_lock_irqsave(&ktimeline->lock, flags);
+
+	context = ktimeline->context;
+	if (!_kgsl_context_get(context)) {
+		spin_unlock_irqrestore(&ktimeline->lock, flags);
+		dma_fence_put(&kfence->fence);
+		return;
+	}
+
+	/* Check if the context is valid */
+	if (kgsl_context_is_bad(context)) {
+		spin_unlock_irqrestore(&ktimeline->lock, flags);
+		dma_fence_put(&kfence->fence);
+		kgsl_context_put(context);
+		return;
+	}
+
+	/* Get the fence status */
+	deadline = kfence->deadline;
+	signaled = kfence->signaled;
+	timestamp = kfence->timestamp;
+
+	spin_unlock_irqrestore(&ktimeline->lock, flags);
+	dma_fence_put(&kfence->fence);
+
+	/* Apply the deadline boost if the fence did not meet the deadline */
+	if ((!signaled) || ktime_after(signaled, deadline))
+		adreno_hwsched_hint_missed_deadline(context, timestamp, deadline);
+
+	kgsl_context_put(context);
+}
+
+static enum hrtimer_restart adreno_hwsched_fence_deadline_timer(struct hrtimer *t)
+{
+	struct kgsl_sync_fence *kfence = kgsl_timer_container_of(kfence, t, deadline_timer);
+	struct kgsl_sync_timeline *ktimeline = kfence->parent;
+	struct kgsl_device *device = ktimeline->device;
+
+	dma_fence_get(&kfence->fence);
+
+	/* In case the work was not queued as it was already pending, put the fence back */
+	if (!kthread_queue_work(device->deadline_worker, &kfence->deadline_work))
+		dma_fence_put(&kfence->fence);
+
+	return HRTIMER_NORESTART;
+}
+
 static void adreno_hwsched_setup_fence(struct adreno_device *adreno_dev,
 	struct kgsl_sync_fence *kfence)
 {
@@ -2572,14 +2664,26 @@ static void adreno_hwsched_setup_fence(struct adreno_device *adreno_dev,
 	const struct adreno_hwsched_ops *hwsched_ops =
 				adreno_dev->hwsched.hwsched_ops;
 
-	if (!gmu_core_is_gmu_fencing_enabled(KGSL_DEVICE(adreno_dev)))
-		return;
-
-	/* Do not create a hardware backed fence, if this context is bad or going away */
+	/* Return early if the context is bad */
 	if (kgsl_context_is_bad(context))
 		return;
 
-	hwsched_ops->create_hw_fence(adreno_dev, kfence);
+	kthread_init_work(&kfence->deadline_work, adreno_hwsched_fence_deadline_work);
+
+#if (KERNEL_VERSION(6, 15, 0) > LINUX_VERSION_CODE)
+	hrtimer_init(&kfence->deadline_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+	kfence->deadline_timer.function = adreno_hwsched_fence_deadline_timer;
+#else
+	hrtimer_setup(&kfence->deadline_timer, adreno_hwsched_fence_deadline_timer,
+			CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+#endif
+
+	if (!gmu_core_is_gmu_fencing_enabled(KGSL_DEVICE(adreno_dev)))
+		return;
+
+	/* If the fence is already signaled, skip the work to create a hw fence */
+	if (!dma_fence_is_signaled(&kfence->fence))
+		hwsched_ops->create_hw_fence(adreno_dev, kfence);
 }
 
 static int adreno_hwsched_setup_context(struct adreno_device *adreno_dev,

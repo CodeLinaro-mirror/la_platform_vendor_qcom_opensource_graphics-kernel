@@ -1656,6 +1656,25 @@ static int _host_based_dcvs_store(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(host_based_dcvs_fops, _host_based_dcvs_show,
 				_host_based_dcvs_store, "%llu\n");
 
+static int _fence_deadline_boost_show(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+
+	*val = (u64)device->fence_deadline_boost;
+	return 0;
+}
+
+static int _fence_deadline_boost_store(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+
+	device->fence_deadline_boost = val ? true : false;
+
+	return 0;
+}
+DEFINE_DEBUGFS_ATTRIBUTE(fence_deadline_boost_fops, _fence_deadline_boost_show,
+				_fence_deadline_boost_store, "%llu\n");
+
 static int _gpu_voltage_show(struct seq_file *s, void *unused)
 {
 	struct kgsl_device *device = s->private;
@@ -1872,9 +1891,13 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 				device, &spel_config_fops);
 	}
 
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS))
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS)) {
 		debugfs_create_file("host_based_dcvs", 0644, device->d_debugfs,
 				device, &host_based_dcvs_fops);
+		if (ADRENO_FEATURE(adreno_dev, ADRENO_FENCE_DEADLINE_BOOST))
+			debugfs_create_file("fence_deadline_boost", 0644, device->d_debugfs,
+					device, &fence_deadline_boost_fops);
+	}
 
 	debugfs_create_file("gpu_voltage", 0644, device->d_debugfs,
 			device, &gpu_voltage_fops);

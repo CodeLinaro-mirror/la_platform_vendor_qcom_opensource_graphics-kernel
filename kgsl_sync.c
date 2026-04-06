@@ -13,6 +13,7 @@
 #include "kgsl_device.h"
 #include "kgsl_gmu_core.h"
 #include "kgsl_sync.h"
+#include "kgsl_trace.h"
 
 const struct dma_fence_ops kgsl_sync_fence_ops;
 static const struct dma_fence_ops kgsl_syncsource_fence_ops;
@@ -801,8 +802,7 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 		goto out;
 	}
 
-	if (!retired)
-		device->ftbl->setup_fence(device, kfence);
+	device->ftbl->setup_fence(device, kfence);
 
 	fd_install(priv.fence_fd, kfence->sync_file->file);
 
@@ -944,6 +944,11 @@ void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 	list_for_each_entry_safe(kfence, next, &ktimeline->child_list_head,
 				child_list) {
 		if (dma_fence_is_signaled_locked(&kfence->fence)) {
+			kfence->signaled = ktime_get();
+			/* Now that the fence is signaled, cancel the timer if needed */
+			if (__test_and_clear_bit(KGSL_FENCE_FLAG_TIMER_TRIGGERED, &kfence->flags))
+				hrtimer_cancel(&kfence->deadline_timer);
+
 			if (__test_and_clear_bit(KGSL_FENCE_FLAG_SIGNAL_REFCOUNT, &kfence->flags))
 				kgsl_hw_fence_put(kfence);
 			list_del_init(&kfence->child_list);
@@ -981,6 +986,104 @@ void kgsl_sync_timeline_put(struct kgsl_sync_timeline *ktimeline)
 		kref_put(&ktimeline->kref, kgsl_sync_timeline_destroy);
 }
 
+#if (KERNEL_VERSION(6, 4, 0) <= LINUX_VERSION_CODE)
+#define BOOT_COMPLETE_COOLDOWN_WINDOW_US    16000
+
+static void kgsl_handle_missed_deadline(struct kgsl_sync_fence *kfence, ktime_t now)
+{
+	struct kgsl_sync_timeline *ktimeline = kfence->parent;
+	struct kgsl_device *device = ktimeline->device;
+
+	trace_kgsl_fence_deadline_info(kfence->context_id, kfence->timestamp, 0, 0, 0);
+
+	/* Account for bootup latency and ignore notification within short period */
+	if (!device->bootcomplete_ktime ||
+		ktime_us_delta(now, device->bootcomplete_ktime) < BOOT_COMPLETE_COOLDOWN_WINDOW_US)
+		return;
+
+	dma_fence_get(&kfence->fence);
+
+	/* In case the work was not queued as it was already pending, put the fence back */
+	if (!kthread_queue_work(device->deadline_worker, &kfence->deadline_work))
+		dma_fence_put(&kfence->fence);
+}
+
+static void kgsl_sync_fence_process_deadline(struct kgsl_sync_fence *kfence, ktime_t deadline)
+{
+	struct kgsl_sync_timeline *ktimeline = kfence->parent;
+	struct kgsl_device *device = ktimeline->device;
+	ktime_t signaled, now;
+	unsigned long flags;
+
+	spin_lock_irqsave(&ktimeline->lock, flags);
+
+	/* Ignore repeated deadlines for the same fence */
+	if (kfence->deadline) {
+		spin_unlock_irqrestore(&ktimeline->lock, flags);
+		return;
+	}
+
+	/* Update the fence */
+	signaled = kfence->signaled;
+	kfence->deadline = deadline;
+	now = ktime_get();
+
+	trace_kgsl_fence_deadline_info(kfence->context_id, kfence->timestamp, deadline,
+			(s64)(ktime_to_us(deadline) - ktime_to_us(now)), kfence->signaled);
+
+	/*
+	 * Schedule work to notify missed deadline if the fence is signaled after the deadline, or
+	 * if the fence is unsignaled even after the deadline.
+	 */
+	if ((signaled && ktime_before(deadline, signaled)) ||
+			(!signaled && ktime_before(deadline, now))) {
+		bool ret;
+
+		/* Get a reference to the fence and release it when scheduled work is done */
+		dma_fence_get(&kfence->fence);
+		ret = kthread_queue_work(device->deadline_worker, &kfence->deadline_work);
+		spin_unlock_irqrestore(&ktimeline->lock, flags);
+		/* In case the work was not queued as it was already pending, put the fence back */
+		if (!ret)
+			dma_fence_put(&kfence->fence);
+		return;
+	}
+
+	/* Check unsignaled fences for missed deadlines */
+	if (!signaled && ktime_after(deadline, now)) {
+		hrtimer_start(&kfence->deadline_timer, deadline, HRTIMER_MODE_ABS);
+		__set_bit(KGSL_FENCE_FLAG_TIMER_TRIGGERED, &kfence->flags);
+	}
+
+	spin_unlock_irqrestore(&ktimeline->lock, flags);
+}
+
+static void kgsl_sync_fence_set_deadline(struct dma_fence *fence, ktime_t deadline)
+{
+	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
+	struct kgsl_sync_timeline *ktimeline = kfence->parent;
+	struct kgsl_device *device = ktimeline->device;
+	ktime_t now = ktime_get();
+
+	/* Return early is the context is bad */
+	if (kgsl_context_is_bad(ktimeline->context))
+		return;
+
+	/* If missed deadline detection and response is not supported, return early */
+	if ((!device->fence_deadline_boost) || (device->host_based_dcvs) ||
+			(IS_ERR_OR_NULL(device->deadline_worker)))
+		return;
+
+	if (!deadline) {
+		/* A deadline of 0 represents an exclusion of a draw for a context from a frame */
+		kgsl_handle_missed_deadline(kfence, now);
+		return;
+	}
+
+	kgsl_sync_fence_process_deadline(kfence, deadline);
+}
+#endif
+
 const struct dma_fence_ops kgsl_sync_fence_ops = {
 	.get_driver_name = kgsl_sync_fence_driver_name,
 	.get_timeline_name = kgsl_sync_timeline_name,
@@ -992,6 +1095,10 @@ const struct dma_fence_ops kgsl_sync_fence_ops = {
 #if (KERNEL_VERSION(6, 16, 0) > LINUX_VERSION_CODE)
 	.fence_value_str = kgsl_sync_fence_value_str,
 	.timeline_value_str = kgsl_sync_timeline_value_str,
+#endif
+
+#if (KERNEL_VERSION(6, 4, 0) <= LINUX_VERSION_CODE)
+	.set_deadline = kgsl_sync_fence_set_deadline,
 #endif
 };
 

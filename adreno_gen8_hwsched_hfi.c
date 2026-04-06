@@ -4742,3 +4742,17 @@ int gen8_hwsched_set_dcvs_profile(struct adreno_device *adreno_dev,
 
 	return ret;
 }
+
+int gen8_hwsched_send_deadline_boost(struct adreno_device *adreno_dev, u32 ctx_id)
+{
+	struct hfi_msg_deadline_boost cmd = {0};
+	struct hfi_msg_platform msg = {0};
+
+	msg.sub_type = H2F_ST_MSG_DEADLINE_BOOST;
+	CMD_MSG_HDR(msg, H2F_MSG_PLATFORM_LA);
+	cmd.header = msg;
+	cmd.version = 1;
+	cmd.ctx_id = ctx_id;
+
+	return gen8_hfi_send_cmd_async(adreno_dev, &cmd, sizeof(cmd));
+}

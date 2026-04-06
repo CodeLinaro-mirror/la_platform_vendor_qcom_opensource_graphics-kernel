@@ -1244,7 +1244,17 @@ struct hfi_scale_gmu_cmd {
 enum h2f_platform_action {
 	H2F_ST_MSG_PROFILE_REGISTER,
 	H2F_ST_MSG_PWR_BUDGET,
+	H2F_ST_MSG_DEADLINE_BOOST,
 };
+
+struct hfi_msg_deadline_boost {
+	/** @header: Header for deadline boost message packet */
+	struct hfi_msg_platform header;
+	/** @version: Version of the message packet */
+	u32 version;
+	/** @ctx_id: Context id of the context owning the dma fence that expred */
+	u32 ctx_id;
+} __packed;
 
 /* H2F */
 struct hfi_profile_register {

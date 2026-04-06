@@ -329,6 +329,53 @@ TRACE_EVENT(kgsl_pwrlevel,
 	)
 );
 
+TRACE_EVENT(kgsl_missed_deadline,
+	TP_PROTO(unsigned int ctx, unsigned int ts, u64 deadline),
+	TP_ARGS(ctx, ts, deadline),
+	TP_STRUCT__entry(
+		__field(unsigned int, ctx)
+		__field(unsigned int, ts)
+		__field(u64, deadline)
+	),
+	TP_fast_assign(
+		__entry->ctx = ctx;
+		__entry->ts = ts;
+		__entry->deadline = deadline;
+	),
+
+	TP_printk("ctx=%u ts=%u deadline=%llu",
+		__entry->ctx,
+		__entry->ts,
+		__entry->deadline)
+);
+
+TRACE_EVENT(kgsl_fence_deadline_info,
+	TP_PROTO(unsigned int ctx, unsigned int ts, u64 deadline_ktime, s64 expiry_us,
+		u64 signaled_ktime),
+	TP_ARGS(ctx, ts, deadline_ktime, expiry_us, signaled_ktime),
+	TP_STRUCT__entry(
+		__field(unsigned int, ctx)
+		__field(unsigned int, ts)
+		__field(u64, deadline_ktime)
+		__field(s64, expiry_us)
+		__field(u64, signaled_ktime)
+	),
+	TP_fast_assign(
+		__entry->ctx = ctx;
+		__entry->ts = ts;
+		__entry->deadline_ktime = deadline_ktime;
+		__entry->expiry_us = expiry_us;
+		__entry->signaled_ktime = signaled_ktime;
+	),
+
+	TP_printk("ctx=%u ts=%u deadline_ktime=%llu expiry_us=%lld signaled_ktime=%llu",
+		__entry->ctx,
+		__entry->ts,
+		__entry->deadline_ktime,
+		__entry->expiry_us,
+		__entry->signaled_ktime)
+);
+
 /*
  * Tracepoint for kgsl gpu_frequency
  */

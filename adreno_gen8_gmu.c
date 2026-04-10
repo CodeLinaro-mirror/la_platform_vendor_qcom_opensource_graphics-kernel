@@ -1952,11 +1952,6 @@ static int gen8_gmu_acd_set(struct kgsl_device *device, bool val)
 	return adreno_power_cycle(adreno_dev, set_acd, &val);
 }
 
-#define BCL_RESP_TYPE_MASK   BIT(0)
-#define BCL_SID0_MASK        GENMASK(7, 1)
-#define BCL_SID1_MASK        GENMASK(14, 8)
-#define BCL_SID2_MASK        GENMASK(21, 15)
-
 static int gen8_bcl_sid_set(struct kgsl_device *device, u32 sid_id, u64 sid_val)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
@@ -2006,6 +2001,35 @@ static u64 gen8_bcl_sid_get(struct kgsl_device *device, u32 sid_id)
 	}
 }
 
+static u32 gen8_bcl_query_data(struct kgsl_device *device, u32 percentage_drop, u32 mode)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	const struct gen8_dynamic_bcl_entry *tbl = gen8_core->dynamic_bcl_lut;
+	int i;
+
+	/* Check if BCL lookup table is available */
+	if (!tbl)
+		return 0;
+
+	for (i = 0; tbl[i].percentage_power_drop; i++) {
+		/*
+		 * Mode 0 is to look up clock throttle percentage from power drop percentage.
+		 * This returns the clock throttle percentage corresponding to the rounded up
+		 * entry for power drop percentage.
+		 * Mode 1 is to look up power drop percentage from clock throttle percentage.
+		 * This returns the power drop percentage corresponding to the rounded down entry
+		 * for clock throttle percentage.
+		 */
+		if ((mode == 0) && (percentage_drop <= tbl[i].percentage_power_drop))
+			return tbl[i].percentage_clock_throttle;
+		else if ((mode == 1) && (percentage_drop >= tbl[i].percentage_clock_throttle))
+			return tbl[i].percentage_power_drop;
+	}
+
+	return 0;
+}
+
 static u32 gen8_gmu_pwr_trace_trigger_get(struct kgsl_device *device)
 {
 	u32 val;
@@ -2047,6 +2071,7 @@ static const struct gmu_dev_ops gen8_gmudev = {
 	.gmu_pwr_trace_trigger_set = gen8_gmu_pwr_trace_trigger_set,
 	.gmu_pwr_trace_trigger_get = gen8_gmu_pwr_trace_trigger_get,
 	.force_first_boot = gen8_gmu_force_first_boot,
+	.bcl_query_data = gen8_bcl_query_data,
 };
 
 static int gen8_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,

@@ -160,6 +160,13 @@ struct gen8_thermal_mit_cfg {
 	const struct therm_tsens_en_cfg *tsens_en_cfg;
 };
 
+struct gen8_dynamic_bcl_entry {
+	/** @percentage_power_drop: Expected power drop in percentage */
+	u32 percentage_power_drop;
+	/** @percentage_clock_throttle: Expected clock rate in percentage */
+	u32 percentage_clock_throttle;
+};
+
 /**
  * struct adreno_gen8_core - gen8 specific GPU core definitions
  */
@@ -233,6 +240,8 @@ struct adreno_gen8_core {
 	bool three_rail_memory;
 	/** @malu: This target has MALU */
 	bool malu;
+	/** @dynamic_bcl_lut: Lookup table for bcl throttling */
+	const struct gen8_dynamic_bcl_entry *dynamic_bcl_lut;
 };
 
 /**

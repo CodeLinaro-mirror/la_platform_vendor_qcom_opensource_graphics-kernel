@@ -566,6 +566,7 @@ struct gmu_dev_ops {
 	void (*minbw_idle_level_set)(struct kgsl_device *device, u32 val);
 	u32 (*gmu_pwr_trace_trigger_set)(struct kgsl_device *device, u32 val);
 	u32 (*gmu_pwr_trace_trigger_get)(struct kgsl_device *device);
+	u32 (*bcl_query_data)(struct kgsl_device *device, u32 percent_drop, u32 mode);
 };
 
 struct firmware_capabilities {

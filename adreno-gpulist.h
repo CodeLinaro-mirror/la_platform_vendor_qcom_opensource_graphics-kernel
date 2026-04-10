@@ -4265,6 +4265,36 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_9_0 = {
 	.bcl_data = 1,
 };
 
+/*
+ * Look up table for dynamic BCL configuration. This is a pair of percentage
+ * power drop expected and the corresponding percentage clock rate required
+ * to achieve such drop. The clock rate is achieved by configuring corresponding
+ * sid for clock throttling.
+ */
+static const struct gen8_dynamic_bcl_entry gen8_dynamic_bcl_lut[] = {
+	{5, 91},
+	{10, 91},
+	{15, 83},
+	{20, 83},
+	{25, 75},
+	{30, 75},
+	{35, 66},
+	{40, 62},
+	{45, 58},
+	{50, 54},
+	{55, 50},
+	{60, 45},
+	{65, 41},
+	{70, 37},
+	{75, 33},
+	{80, 29},
+	{85, 25},
+	{90, 20},
+	{95, 16},
+	{100, 12},
+	{0},
+};
+
 static const struct hfi_clx_table_v2_cmd gen8_11_0_clx_table = {
 	.version = (2 << 16) | 1,
 	.domain = {
@@ -4555,6 +4585,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_0 = {
 	.three_rail_memory = true,
 	.malu = true,
 	.clx_tbl = &gen8_11_0_clx_table,
+	.dynamic_bcl_lut = gen8_dynamic_bcl_lut,
 };
 
 /* GEN8_11_1 noncontext register list */
@@ -4683,6 +4714,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_1 = {
 	.three_rail_memory = true,
 	.malu = true,
 	.clx_tbl = &gen8_11_0_clx_table,
+	.dynamic_bcl_lut = gen8_dynamic_bcl_lut,
 };
 
 static const struct gen8_nonctxt_regs gen8_14_0_nonctxt_regs[] = {

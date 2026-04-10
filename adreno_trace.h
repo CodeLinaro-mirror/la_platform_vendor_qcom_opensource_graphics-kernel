@@ -1071,6 +1071,28 @@ TRACE_EVENT(adreno_gpu_vote_params,
 	)
 );
 
+TRACE_EVENT(adreno_gpu_preempt_info,
+	TP_PROTO(const struct trace_preempt_info *data, u64 ticks),
+	TP_ARGS(data, ticks),
+	TP_STRUCT__entry(
+		__field(u64, ticks)
+		__field(u32, level_info)
+		__field(u32, reason)
+	),
+	TP_fast_assign(
+		__entry->ticks = ticks;
+		__entry->level_info = data->level_info;
+		__entry->reason = data->reason;
+	),
+	TP_printk("ticks=%llu global_level=%lu dynamic_level=%lu dynamic_level_reason=%u aggr_level=%lu",
+		__entry->ticks,
+		FIELD_GET(GENMASK(15, 8), __entry->level_info),
+		FIELD_GET(GENMASK(7, 0), __entry->level_info),
+		__entry->reason,
+		FIELD_GET(GENMASK(23, 16), __entry->level_info)
+	)
+);
+
 TRACE_EVENT(adreno_gpu_dcvs_profile,
 	TP_PROTO(const struct trace_dcvs_profile *prof, u64 ticks),
 	TP_ARGS(prof, ticks),

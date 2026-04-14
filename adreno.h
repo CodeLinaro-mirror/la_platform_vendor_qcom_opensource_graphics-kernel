@@ -1362,6 +1362,12 @@ static inline int adreno_is_a619_malabar(struct adreno_device *adreno_dev)
 		"qcom,adreno-gpu-a619-malabar");
 }
 
+static inline int adreno_is_a619_bourtzi(struct adreno_device *adreno_dev)
+{
+        return of_device_is_compatible(adreno_dev->dev.pdev->dev.of_node,
+                "qcom,adreno-gpu-a619-bourtzi");
+}
+
 static inline int adreno_is_a620(struct adreno_device *adreno_dev)
 {
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);

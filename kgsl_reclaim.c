@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/kthread.h>
@@ -37,10 +37,12 @@ static int kgsl_memdesc_get_reclaimed_pages(struct kgsl_mem_entry *entry)
 	int i, ret;
 	struct page *page;
 
+	mutex_lock(&memdesc->lock);
 	for (i = 0; i < memdesc->page_count; i++) {
 		if (memdesc->pages[i])
 			continue;
 
+		mutex_unlock(&memdesc->lock);
 		page = shmem_read_mapping_page_gfp(
 			memdesc->shmem_filp->f_mapping, i, kgsl_gfp_mask(0));
 
@@ -53,13 +55,13 @@ static int kgsl_memdesc_get_reclaimed_pages(struct kgsl_mem_entry *entry)
 		 * Update the pages array only if vmfault has not
 		 * updated it meanwhile
 		 */
-		spin_lock(&memdesc->lock);
+		mutex_lock(&memdesc->lock);
 		if (!memdesc->pages[i]) {
 			memdesc->pages[i] = page;
 			atomic_dec(&entry->priv->unpinned_page_count);
 		} else
 			put_page(page);
-		spin_unlock(&memdesc->lock);
+		mutex_unlock(&memdesc->lock);
 	}
 
 	ret = kgsl_mmu_map(memdesc->pagetable, memdesc);
@@ -305,11 +307,11 @@ static u32 kgsl_reclaim_process(struct kgsl_process_private *process,
 			pagevec_init(&pvec);
 			for (i = 0; i < memdesc->page_count; i++) {
 				set_page_dirty_lock(memdesc->pages[i]);
-				spin_lock(&memdesc->lock);
+				mutex_lock(&memdesc->lock);
 				pagevec_add(&pvec, memdesc->pages[i]);
 				memdesc->pages[i] = NULL;
 				atomic_inc(&process->unpinned_page_count);
-				spin_unlock(&memdesc->lock);
+				mutex_unlock(&memdesc->lock);
 				if (pagevec_count(&pvec) == PAGEVEC_SIZE)
 					kgsl_release_page_vec(&pvec);
 				remaining--;

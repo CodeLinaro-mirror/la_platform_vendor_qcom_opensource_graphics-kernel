@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __KGSL_H
 #define __KGSL_H
@@ -285,10 +285,10 @@ struct kgsl_memdesc {
 	struct page **pages;
 	unsigned int page_count;
 	/*
-	 * @lock: Spinlock to protect the gpuaddr from being accessed by
+	 * @lock: Mutex to protect the gpuaddr from being accessed by
 	 * multiple entities trying to map the same SVM region at once
 	 */
-	spinlock_t lock;
+	struct mutex lock;
 	/** @shmem_filp: Pointer to the shmem file backing this memdesc */
 	struct file *shmem_filp;
 	/** @ranges: rbtree base for the interval list of vbo ranges */

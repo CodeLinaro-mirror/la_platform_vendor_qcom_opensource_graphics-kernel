@@ -529,7 +529,7 @@ static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 
 	pgoff = offset >> PAGE_SHIFT;
 
-	spin_lock(&memdesc->lock);
+	mutex_lock(&memdesc->lock);
 	if (memdesc->pages[pgoff]) {
 		page = memdesc->pages[pgoff];
 		get_page(page);
@@ -539,7 +539,7 @@ static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 
 		/* We are here because page was reclaimed */
 		memdesc->priv |= KGSL_MEMDESC_SKIP_RECLAIM;
-		spin_unlock(&memdesc->lock);
+		mutex_unlock(&memdesc->lock);
 
 		page = shmem_read_mapping_page_gfp(
 			memdesc->shmem_filp->f_mapping, pgoff,
@@ -548,7 +548,7 @@ static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 			return VM_FAULT_SIGBUS;
 		kgsl_page_sync(memdesc->dev, page, PAGE_SIZE, DMA_BIDIRECTIONAL);
 
-		spin_lock(&memdesc->lock);
+		mutex_lock(&memdesc->lock);
 		/*
 		 * Update the pages array only if the page was
 		 * not already brought back.
@@ -559,7 +559,7 @@ static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 			get_page(page);
 		}
 	}
-	spin_unlock(&memdesc->lock);
+	mutex_unlock(&memdesc->lock);
 
 	ret = vmf_insert_page(vma, vmf->address, page);
 	put_page(page);
@@ -835,7 +835,7 @@ void kgsl_memdesc_init(struct kgsl_device *device,
 		kgsl_memdesc_get_align(memdesc), ilog2(PAGE_SIZE));
 	kgsl_memdesc_set_align(memdesc, align);
 
-	spin_lock_init(&memdesc->lock);
+	mutex_init(&memdesc->lock);
 }
 
 void kgsl_sharedmem_free(struct kgsl_memdesc *memdesc)
@@ -1098,15 +1098,21 @@ static void kgsl_shmem_fill_page(void *ptr,
 	if (IS_ERR_OR_NULL(memdesc))
 		return;
 
+	mutex_lock(&memdesc->lock);
 	if (list_empty(&memdesc->shmem_page_list)) {
 		int ret = kgsl_shmem_alloc_pages(memdesc);
 
-		if (ret <= 0)
+		if (ret <= 0) {
+			mutex_unlock(&memdesc->lock);
 			return;
+		}
 	}
 
-	*folio = list_first_entry(&memdesc->shmem_page_list, struct folio, lru);
-	list_del(&(*folio)->lru);
+	if (!list_empty(&memdesc->shmem_page_list)) {
+		*folio = list_first_entry(&memdesc->shmem_page_list, struct folio, lru);
+		list_del(&(*folio)->lru);
+	}
+	mutex_unlock(&memdesc->lock);
 }
 
 void kgsl_register_shmem_callback(void)

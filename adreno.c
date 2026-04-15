@@ -1218,8 +1218,7 @@ static int adreno_probe_llcc(struct adreno_device *adreno_dev,
 	} else
 		adreno_dev->gpuhtw_llc_slice_enable = true;
 
-#if ((KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE) && \
-		(KERNEL_VERSION(6, 2, 0) > LINUX_VERSION_CODE))
+#ifdef LLCC_GPUMV
 	if (adreno_is_a621(adreno_dev)) {
 		/* Get the system cache slice descriptor for GPU MV grid buffer */
 		adreno_dev->gpumv_llc_slice = llcc_slice_getd(LLCC_GPUMV);
@@ -1236,8 +1235,11 @@ static int adreno_probe_llcc(struct adreno_device *adreno_dev,
 		} else {
 			adreno_dev->gpumv_llc_slice_enable = true;
 		}
-	} else if (adreno_is_gen8_8_0(adreno_dev)) {
+	}
+#endif
+
 #ifdef LLCC_GPU_LAYERS
+	if (adreno_is_gen8_8_0(adreno_dev)) {
 		adreno_dev->gpulayers_llc_slice = llcc_slice_getd(LLCC_GPU_LAYERS);
 		ret = PTR_ERR_OR_ZERO(adreno_dev->gpulayers_llc_slice);
 		if (ret) {
@@ -1249,13 +1251,11 @@ static int adreno_probe_llcc(struct adreno_device *adreno_dev,
 			if (ret != -ENOENT)
 				dev_warn(&pdev->dev,
 					"Unable to get GPU_LAYERS buffer slice: %d\n", ret);
-			} else {
-				adreno_dev->gpulayers_llc_slice_enable = true;
-			}
-#endif
+		} else {
+			adreno_dev->gpulayers_llc_slice_enable = true;
+		}
 	}
 #endif
-
 	return 0;
 }
 #else

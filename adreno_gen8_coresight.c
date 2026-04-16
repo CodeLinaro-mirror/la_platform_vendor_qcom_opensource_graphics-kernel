@@ -5,6 +5,8 @@
  */
 
 #include <linux/amba/bus.h>
+#include <linux/of_platform.h>
+#include <linux/of_address.h>
 
 #include "adreno.h"
 #include "adreno_coresight.h"
@@ -386,19 +388,38 @@ void gen8_coresight_init(struct adreno_device *adreno_dev)
 {
 	struct adreno_funnel_device *funnel_gfx = &adreno_dev->funnel_gfx;
 	struct device *amba_dev;
+	struct device_node *node;
+	struct resource res;
+	u64 phys_addr;
+	char dev_name_buf[64];
+	const char *child_name;
+
+	node = of_find_compatible_node(NULL, NULL, "qcom,coresight-funnel-gfx");
+	if (!node)
+		return;
+
+	if (of_address_to_resource(node, 0, &res))
+		goto err_put_node;
+
+	phys_addr = res.start;
+	scnprintf(dev_name_buf, sizeof(dev_name_buf), "%llx.funnel", phys_addr);
+
+	if (of_property_read_string(node, "device-name", &child_name))
+		goto err_put_node;
 
 	/* Find the amba funnel device associated with gfx coresight funnel */
-	amba_dev = bus_find_device_by_name(&amba_bustype, NULL, "10963000.funnel");
+	amba_dev = bus_find_device_by_name(&amba_bustype, NULL, dev_name_buf);
 	if (!amba_dev)
-		return;
+		goto err_put_node;
 
-	funnel_gfx->funnel_dev = device_find_child_by_name(amba_dev, "coresight-funnel-gfx");
+	funnel_gfx->funnel_dev = device_find_child_by_name(amba_dev, child_name);
+	put_device(amba_dev);
 	if (funnel_gfx->funnel_dev == NULL)
-		return;
+		goto err_put_node;
 
 	funnel_gfx->funnel_csdev = to_coresight_device(funnel_gfx->funnel_dev);
 	if (funnel_gfx->funnel_csdev == NULL)
-		return;
+		goto err_put_funnel;
 
 	/*
 	 * Since coresight_funnel_gfx component is in graphics block, GPU has to be powered up
@@ -421,4 +442,13 @@ void gen8_coresight_init(struct adreno_device *adreno_dev)
 
 	adreno_coresight_add_device(adreno_dev, "qcom,gpu-coresight-cx",
 		&gen8_coresight_cx, &adreno_dev->cx_coresight);
+
+	of_node_put(node);
+	return;
+
+err_put_funnel:
+	put_device(funnel_gfx->funnel_dev);
+	funnel_gfx->funnel_dev = NULL;
+err_put_node:
+	of_node_put(node);
 }

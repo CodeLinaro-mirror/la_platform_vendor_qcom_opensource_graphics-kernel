@@ -2680,7 +2680,13 @@ static int adreno_prop_calibrated_timer(struct kgsl_device *device,
 		return copy_prop(param, &val, sizeof(val));
 	}
 
-	return -EOPNOTSUPP;
+	/*
+	 * Returning -EOPNOTSUPP may cause userspace to treat the GET_PROPERTY
+	 * ioctl itself as unsupported, potentially blocking further property
+	 * queries. Since the ioctl is valid but this specific property is not
+	 * supported, return -EINVAL instead.
+	 */
+	return -EINVAL;
 }
 
 static int adreno_prop_uche_trap_base(struct kgsl_device *device,

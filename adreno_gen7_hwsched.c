@@ -858,7 +858,6 @@ static int gen7_hwsched_power_off(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	int ret = 0;
-	bool drain_cpu = false;
 
 	if (!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
 		return 0;
@@ -883,14 +882,12 @@ static int gen7_hwsched_power_off(struct adreno_device *adreno_dev)
 no_gx_power:
 	kgsl_pwrctrl_irq(device, false);
 
-	/* Make sure GMU has sent all hardware fences to TxQueue */
-	if (check_inflight_hw_fences(adreno_dev))
-		drain_cpu = true;
-
 	gen7_hwsched_gmu_power_off(adreno_dev);
 
-	/* Now that we are sure that GMU is powered off, drain pending fences */
-	if (drain_cpu)
+	/*
+	 *  Check if GMU has sent all hw fences to TxQueue and drain any un-sent hw fences via cpu
+	 */
+	if (check_inflight_hw_fences(adreno_dev))
 		drain_hw_fences_cpu(adreno_dev);
 
 	adreno_hwsched_unregister_contexts(adreno_dev);

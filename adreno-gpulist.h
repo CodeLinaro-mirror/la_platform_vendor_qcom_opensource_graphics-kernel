@@ -2009,6 +2009,29 @@ static const struct adreno_a6xx_core adreno_gpu_core_a702 = {
 	.highest_bank_bit = 14,
 };
 
+static const struct adreno_a6xx_core adreno_gpu_core_a704 = {
+	.base = {
+		DEFINE_ADRENO_REV(ADRENO_REV_A704, 7, 0, 4, ANY_ID),
+		.features = ADRENO_CONTENT_PROTECTION |
+					ADRENO_APRIV | ADRENO_PREEMPTION,
+		.gpudev = &adreno_a6xx_gpudev,
+		.perfcounters = &adreno_a6xx_legacy_perfcounters,
+		.gmem_size = SZ_128K,
+		.bus_width = 16,
+		.snapshot_size = SZ_1M,
+	},
+	.prim_fifo_threshold = 0x0000c000,
+	.sqefw_name = "a702_sqe.fw",
+	.zap_name = "a704_zap.mdt",
+	.hwcg = a702_hwcg_regs,
+	.hwcg_count = ARRAY_SIZE(a702_hwcg_regs),
+	.vbif = a640_vbif_regs,
+	.vbif_count = ARRAY_SIZE(a640_vbif_regs),
+	.hang_detect_cycles = 0x3ffff,
+	.protected_regs = a620_protected_regs,
+	.highest_bank_bit = 14,
+};
+
 static const struct kgsl_regmap_list gen7_0_0_hwcg_regs[] = {
 	{ GEN7_RBBM_CLOCK_CNTL_SP0, 0x02222222 },
 	{ GEN7_RBBM_CLOCK_CNTL2_SP0, 0x02022222 },
@@ -4119,8 +4142,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_17_0 = {
 		.compatible = "qcom,adreno-gpu-gen8-17-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
 			ADRENO_CONTENT_PROTECTION | ADRENO_IFPC |
-			ADRENO_GMU_AB | ADRENO_PREEMPTION | ADRENO_BCL |
-			ADRENO_GMU_MINBW | ADRENO_ACD,
+			ADRENO_GMU_AB | ADRENO_PREEMPTION | ADRENO_BCL | ADRENO_GMU_MINBW,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -4192,6 +4214,7 @@ static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_a660_shima.base,
 	&adreno_gpu_core_gen6_3_26_0.base,
 	&adreno_gpu_core_a702.base,
+	&adreno_gpu_core_a704.base,
 	&adreno_gpu_core_gen7_0_0.base,
 	&adreno_gpu_core_gen7_0_1.base,
 	&adreno_gpu_core_a662.base,

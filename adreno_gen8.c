@@ -1375,7 +1375,7 @@ void gen8_regread_aperture(struct kgsl_device *device,
 void gen8_periph_regread(struct kgsl_device *device, u32 offsetwords,
 	u32 *value, u32 pipe)
 {
-	gen8_host_aperture_set(ADRENO_DEVICE(device), pipe, 0, 0);
+	gen8_host_aperture_pipe_clear(ADRENO_DEVICE(device), pipe);
 
 	kgsl_regwrite(device, GEN8_CP_SQE_UCODE_DBG_ADDR_PIPE, offsetwords);
 	/*
@@ -1405,6 +1405,17 @@ static inline void gen8_regwrite_aperture(struct kgsl_device *device,
 	kgsl_regmap_write(&device->regmap, value, offsetwords);
 }
 
+void gen8_host_aperture_pipe_clear(struct adreno_device *adreno_dev, u32 pipe_id)
+{
+	/* Slice 0 may not always be active. Use the lowest active slice */
+	gen8_host_aperture_set(adreno_dev, pipe_id, gen8_first_slice(adreno_dev), 0);
+}
+
+void gen8_host_aperture_clear(struct adreno_device *adreno_dev)
+{
+	gen8_host_aperture_pipe_clear(adreno_dev, 0);
+}
+
 #define GEN8_CP_PROTECT_DEFAULT (FIELD_PREP(GENMASK(31, 16), 0xffff) | BIT(0) | BIT(1) | BIT(3))
 static void gen8_protect_init(struct adreno_device *adreno_dev)
 {
@@ -1428,7 +1439,7 @@ static void gen8_protect_init(struct adreno_device *adreno_dev)
 			       GEN8_CP_PROTECT_DEFAULT, PIPE_LPAC, 0, 0);
 
 	/* Clear aperture register */
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 
 	/* Program each register defined by the core definition */
 	for (i = 0; regs[i].reg; i++) {
@@ -1470,7 +1481,7 @@ static void gen8_protect_init(struct adreno_device *adreno_dev)
 				       PIPE_LPAC, 0, 0);
 
 	/* Clear aperture register */
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 }
 
 static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
@@ -1527,7 +1538,7 @@ static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
 	}
 
 	/* Clear aperture register */
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 }
 
 void gen8_set_gmem_protect(struct adreno_device *adreno_dev)
@@ -1563,7 +1574,7 @@ void gen8_set_gmem_protect(struct adreno_device *adreno_dev)
 			gmem_protect->val, pipe, 0, 0);
 
 	/* Clear the aperture register */
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 }
 
 #define RBBM_CLOCK_CNTL_ON 0x8aa8aa82
@@ -1800,7 +1811,7 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	mutex_unlock(&gen8_dev->nc_mutex);
 
 	/* Clear aperture register */
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 
 	lock->dynamic_list_len = gen8_dev->ext_pwrup_list_len;
 }
@@ -2006,6 +2017,9 @@ int gen8_start(struct adreno_device *adreno_dev)
 
 	device->regmap.use_relaxed = false;
 
+	/* Clear aperture register */
+	gen8_host_aperture_clear(adreno_dev);
+
 	/* Make all blocks contribute to the GPU BUSY perf counter */
 	kgsl_regwrite(device, GEN8_RBBM_PERFCTR_GPU_BUSY_MASKED, 0xffffffff);
 
@@ -2024,10 +2038,6 @@ int gen8_start(struct adreno_device *adreno_dev)
 		sp_profiling_disable(adreno_dev);
 
 	if (adreno_dev->lpac_enabled) {
-
-		/* Clear aperture register  */
-		gen8_host_aperture_set(adreno_dev, 0, 0, 0);
-
 		kgsl_regwrite(device, GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_LO,
 				lower_32_bits(adreno_dev->uche_gmem_base));
 		kgsl_regwrite(device, GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_HI,
@@ -2126,8 +2136,8 @@ int gen8_start(struct adreno_device *adreno_dev)
 			       FIELD_PREP(GENMASK(0, 0), mal),
 			       PIPE_BR, 0, 0);
 
-	/* Clear aperture register  */
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	/* Clear aperture register */
+	gen8_host_aperture_clear(adreno_dev);
 
 	kgsl_regwrite(device, GEN8_SP_NC_MODE_CNTL,
 		      FIELD_PREP(GENMASK(11, 10), hbb_hi) |
@@ -2163,8 +2173,8 @@ int gen8_start(struct adreno_device *adreno_dev)
 		gen8_regwrite_aperture(device,
 				GEN8_RB_CONTEXT_SWITCH_GMEM_SAVE_RESTORE,
 				0x1, PIPE_BR, 0, 0);
-		/* Clear aperture register  */
-		gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+		/* Clear aperture register */
+		gen8_host_aperture_clear(adreno_dev);
 	}
 
 	/* Enable GMU power counter 0 to count GPU busy */
@@ -2203,8 +2213,8 @@ int gen8_start(struct adreno_device *adreno_dev)
 			CP_HW_FAULT_STATUS_MASK_PIPE, pipe_id, 0, 0);
 	}
 
-	/* Clear aperture register  */
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	/* Clear aperture register */
+	gen8_host_aperture_clear(adreno_dev);
 
 	/* Program CP interrupt status mask to enable HW and SW error interrupts */
 	kgsl_regwrite(device, GEN8_CP_INTERRUPT_STATUS_MASK_GLOBAL,
@@ -2586,7 +2596,7 @@ static void gen8_get_cp_hwfault_status(struct adreno_device *adreno_dev, u32 sta
 	gen8_regread_aperture(device, GEN8_CP_HW_FAULT_STATUS_PIPE, &hw_status,
 		pipe_id, gen8_first_slice(adreno_dev), 0);
 	/* Clear aperture register */
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 
 	dev_crit_ratelimited(device->dev, "CP HW Fault pipe_id:%u %s\n", pipe_id,
 			hw_status < ARRAY_SIZE(table) ? table[hw_status] : "UNKNOWN");
@@ -2670,7 +2680,7 @@ static void gen8_get_cp_swfault_status(struct adreno_device *adreno_dev, u32 sta
 	}
 
 	/* Clear aperture register */
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 }
 
 static void gen8_cp_hw_err_callback(struct adreno_device *adreno_dev, int bit)
@@ -3756,7 +3766,7 @@ static void gen8_lpac_fault_header(struct adreno_device *adreno_dev,
 	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB3_BASE_LO,
 			GEN8_CP_PERIPH_IB3_BASE_HI, &ib3base, PIPE_LPAC);
 	gen8_periph_regread(device, GEN8_CP_PERIPH_IB3_OFFSET, &ib3sz, PIPE_LPAC);
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 
 	pr_context(device, drawobj->context,
 		   "LPAC: status %8.8X rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x ib3 %16.16llX/%4.4x\n",
@@ -3825,7 +3835,7 @@ static void gen8_fault_header(struct adreno_device *adreno_dev,
 	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB3_BASE_LO,
 			GEN8_CP_PERIPH_IB3_BASE_HI, &ib3base_bv, PIPE_BV);
 	gen8_periph_regread(device, GEN8_CP_PERIPH_IB3_OFFSET, &ib3sz_bv, PIPE_BV);
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 
 	dev_err(device->dev,
 		"status %8.8X gfx_status %8.8X gfx_br_status %8.8X gfx_bv_status %8.8X\n",

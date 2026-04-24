@@ -704,6 +704,23 @@ void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id,
 		u32 slice_id, u32 use_slice_id);
 
 /**
+ * gen8_host_aperture_clear - Clear the CP aperture register
+ * @adreno_dev: Handle to the adreno device
+ *
+ * This function clears the CP aperture register
+ */
+void gen8_host_aperture_clear(struct adreno_device *adreno_dev);
+
+/**
+ * gen8_host_aperture_pipe_clear - Clear the CP aperture register, using a pipe ID
+ * @adreno_dev: Handle to the adreno device
+ * @pipe_id: Pipe for which the register is to be cleared
+ *
+ * This function clears the CP aperture register and writes the provided pipe ID
+ */
+void gen8_host_aperture_pipe_clear(struct adreno_device *adreno_dev, u32 pipe_id);
+
+/**
  * gen8_set_gmem_protect - Program the RB_GC_GMEM_PROTECT
  * @adreno_dev: Handle to the adreno device
  *

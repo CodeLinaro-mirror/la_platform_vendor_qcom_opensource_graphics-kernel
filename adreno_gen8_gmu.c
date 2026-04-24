@@ -783,7 +783,7 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 		gen8_regread_aperture(device, GEN8_CP_PIPE_STATUS_PIPE, &reg, PIPE_BV, 0, 0);
 		gen8_regread_aperture(device, GEN8_CP_PIPE_STATUS_PIPE, &reg1, PIPE_BR, 0, 0);
 		/* Clear aperture register */
-		gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+		gen8_host_aperture_clear(adreno_dev);
 		kgsl_regread(device, GEN8_CP_CP2GMU_STATUS, &reg2);
 		kgsl_regread(device, GEN8_CP_CONTEXT_SWITCH_CNTL, &reg3);
 

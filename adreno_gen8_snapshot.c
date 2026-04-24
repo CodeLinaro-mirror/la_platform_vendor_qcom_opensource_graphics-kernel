@@ -1040,7 +1040,7 @@ static bool gen8_snapshot_mempool(struct kgsl_device *device,
 	}
 
 	/* Clear aperture register */
-	gen8_host_aperture_set(ADRENO_DEVICE(device), 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 
 	return ret;
 }
@@ -2091,7 +2091,7 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	}
 
 	/* Clear aperture register */
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 
 	slice_mask = gen8_get_slice_mask(adreno_dev);
 

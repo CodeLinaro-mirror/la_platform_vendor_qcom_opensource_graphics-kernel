@@ -2194,6 +2194,9 @@ static unsigned int _process_command_input(struct kgsl_device *device,
 
 static int _enable_hw_syncobj(struct kgsl_device *device, struct kgsl_drawobj_sync *syncobj)
 {
+	if (syncobj->num_hw_fence == 0)
+		return 0;
+
 	if (!test_bit(KGSL_SYNCOBJ_SW, &syncobj->flags)) {
 		set_bit(KGSL_SYNCOBJ_HW, &syncobj->flags);
 		return 0;
@@ -2205,10 +2208,7 @@ static int _enable_hw_syncobj(struct kgsl_device *device, struct kgsl_drawobj_sy
 	 * any hardware fences were identified in the sync object prior to encountering an
 	 * unsignaled sw-only fence.
 	 */
-	if (syncobj->num_hw_fence != 0)
-		return kgsl_drawobj_sync_add_callbacks(device, syncobj);
-
-	return 0;
+	return kgsl_drawobj_sync_add_callbacks(device, syncobj);
 }
 
 long kgsl_ioctl_submit_commands(struct kgsl_device_private *dev_priv,

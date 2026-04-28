@@ -203,6 +203,8 @@
 #define ADRENO_FENCE_DEADLINE_BOOST BIT_ULL(34)
 /* GMU supports thinmem_cfg feature */
 #define ADRENO_GMU_THINMEM_CFG BIT_ULL(35)
+/* Enable dynamic context priority (RB migration) */
+#define ADRENO_GMU_DYNAMIC_CTX_PRIORITY BIT_ULL(36)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds

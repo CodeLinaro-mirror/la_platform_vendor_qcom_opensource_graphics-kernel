@@ -991,6 +991,97 @@ TRACE_EVENT(adreno_ifpc_count,
 	TP_printk("total times GMU entered IFPC = %d", __entry->ifpc_count)
 );
 
+TRACE_EVENT(adreno_ctx_priority_update_request,
+	TP_PROTO(u32 ctx_id, u32 cur_ctx_pri, u32 new_ctx_pri,
+		 u32 cur_rb_id, u32 new_rb_id,
+		 u32 flags, u32 last_submitted_ts, u64 gmu_ticks),
+	TP_ARGS(ctx_id, cur_ctx_pri, new_ctx_pri, cur_rb_id, new_rb_id,
+		flags, last_submitted_ts, gmu_ticks),
+	TP_STRUCT__entry(
+		__field(u32, ctx_id)
+		__field(u32, cur_ctx_pri)
+		__field(u32, new_ctx_pri)
+		__field(u32, cur_rb_id)
+		__field(u32, new_rb_id)
+		__field(u32, flags)
+		__field(u32, last_submitted_ts)
+		__field(u64, ticks)
+	),
+	TP_fast_assign(
+		__entry->ctx_id            = ctx_id;
+		__entry->cur_ctx_pri       = cur_ctx_pri;
+		__entry->new_ctx_pri       = new_ctx_pri;
+		__entry->cur_rb_id         = cur_rb_id;
+		__entry->new_rb_id         = new_rb_id;
+		__entry->flags             = flags;
+		__entry->last_submitted_ts = last_submitted_ts;
+		__entry->ticks             = gmu_ticks;
+	),
+	TP_printk(
+		"ctx=%u cur_ctx_pri=%u new_ctx_pri=%u cur_rb_id=%u new_rb_id=%u flags=0x%x last_submitted_ts=%u ticks=%llu",
+		__entry->ctx_id, __entry->cur_ctx_pri, __entry->new_ctx_pri,
+		__entry->cur_rb_id, __entry->new_rb_id,
+		__entry->flags, __entry->last_submitted_ts, __entry->ticks
+	)
+);
+
+TRACE_EVENT(adreno_ctx_priority_update_done,
+	TP_PROTO(u32 ctx_id, u32 cur_ctx_pri, u32 new_ctx_pri,
+		 u32 cur_rb_id, u32 new_rb_id, u64 gmu_ticks),
+	TP_ARGS(ctx_id, cur_ctx_pri, new_ctx_pri, cur_rb_id, new_rb_id, gmu_ticks),
+	TP_STRUCT__entry(
+		__field(u32, ctx_id)
+		__field(u32, cur_ctx_pri)
+		__field(u32, new_ctx_pri)
+		__field(u32, cur_rb_id)
+		__field(u32, new_rb_id)
+		__field(u64, ticks)
+	),
+	TP_fast_assign(
+		__entry->ctx_id      = ctx_id;
+		__entry->cur_ctx_pri = cur_ctx_pri;
+		__entry->new_ctx_pri = new_ctx_pri;
+		__entry->cur_rb_id   = cur_rb_id;
+		__entry->new_rb_id   = new_rb_id;
+		__entry->ticks       = gmu_ticks;
+	),
+	TP_printk("ctx=%u cur_ctx_pri=%u new_ctx_pri=%u cur_rb_id=%u new_rb_id=%u ticks=%llu",
+		__entry->ctx_id,
+		__entry->cur_ctx_pri,
+		__entry->new_ctx_pri,
+		__entry->cur_rb_id,
+		__entry->new_rb_id,
+		__entry->ticks)
+);
+
+TRACE_EVENT(adreno_ctx_pri_update_deferred,
+	TP_PROTO(u32 ctx_id, u32 cur_ctx_pri, u32 new_ctx_pri,
+		 u32 cur_rb_id, u32 new_rb_id, u32 last_ts, u64 gmu_ticks),
+	TP_ARGS(ctx_id, cur_ctx_pri, new_ctx_pri, cur_rb_id, new_rb_id, last_ts, gmu_ticks),
+	TP_STRUCT__entry(
+		__field(u32, ctx_id)
+		__field(u32, cur_ctx_pri)
+		__field(u32, new_ctx_pri)
+		__field(u32, cur_rb_id)
+		__field(u32, new_rb_id)
+		__field(u32, last_ts)
+		__field(u64, ticks)
+	),
+	TP_fast_assign(
+		__entry->ctx_id      = ctx_id;
+		__entry->cur_ctx_pri = cur_ctx_pri;
+		__entry->new_ctx_pri = new_ctx_pri;
+		__entry->cur_rb_id   = cur_rb_id;
+		__entry->new_rb_id   = new_rb_id;
+		__entry->last_ts     = last_ts;
+		__entry->ticks       = gmu_ticks;
+	),
+	TP_printk("ctx=%u cur_ctx_pri=%u new_ctx_pri=%u cur_rb_id=%u new_rb_id=%u last_ts=%u ticks=%llu",
+		__entry->ctx_id, __entry->cur_ctx_pri,
+		__entry->new_ctx_pri, __entry->cur_rb_id, __entry->new_rb_id,
+		__entry->last_ts, __entry->ticks)
+);
+
 TRACE_EVENT(adreno_dcvs_tuning,
 	TP_PROTO(u32 param, u32 mingap, u32 penalty, u32 numbusy),
 	TP_ARGS(param, mingap, penalty, numbusy),

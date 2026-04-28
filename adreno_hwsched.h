@@ -104,6 +104,11 @@ struct adreno_hwsched_ops {
 	 * @notify_deadline_boost: Send missed deadline hint to GMU for supported targets
 	 */
 	void (*notify_deadline_boost)(struct adreno_device *adreno_dev, u32 ctx_id);
+	/**
+	 * @context_priority_update - Target specific function to send priority update HFI
+	 */
+	int (*context_priority_update)(struct adreno_device *adreno_dev,
+		struct kgsl_context *context, u32 new_ctx_pri);
 };
 
 enum gpu_reset_type {
@@ -138,9 +143,9 @@ struct adreno_hwsched {
 	/** @inflight: Number of active submissions to the dispatch queues */
 	u32 inflight;
 	/** @jobs - Array of dispatch job lists for each priority level */
-	struct llist_head jobs[16];
+	struct llist_head jobs[KGSL_CONTEXT_PRIORITY_NUM];
 	/** @requeue - Array of lists for dispatch jobs that got requeued */
-	struct llist_head requeue[16];
+	struct llist_head requeue[KGSL_CONTEXT_PRIORITY_NUM];
 	/** @cmd_list: List of objects submitted to dispatch queues */
 	struct list_head cmd_list;
 	/** @hwsched_ops: Container for target specific hwscheduler ops */
@@ -528,4 +533,17 @@ void adreno_hwsched_enable_gmu_fencing(struct adreno_device *adreno_dev);
  */
 void adreno_hwsched_retire_cmdlist_obj(struct adreno_device *adreno_dev,
 	struct cmd_list_obj *obj);
+/**
+ * adreno_hwsched_ensure_gmem_for_priority - Ensure GMEM preemption record is allocated
+ * @adreno_dev: Adreno GPU device handle
+ * @drawctxt: The context whose priority is about to change
+ * @new_ctx_pri: The new context priority value (same encoding as context->priority)
+ *
+ * Ensures the GMEM portion of the preemption record is allocated for the RB
+ * level corresponding to @new_ctx_pri.
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int adreno_hwsched_ensure_gmem_for_priority(struct adreno_device *adreno_dev,
+	struct adreno_context *drawctxt, u32 new_ctx_pri);
 #endif

@@ -53,6 +53,17 @@ void gmu_core_unregister(void)
 	of_node_put(node);
 }
 
+int gmu_core_init(struct kgsl_device *device)
+{
+	mutex_init(&device->gmu_core.pwrlevel_mutex);
+
+	return 0;
+}
+
+void gmu_core_close(struct kgsl_device *device)
+{
+}
+
 bool gmu_core_isenabled(struct kgsl_device *device)
 {
 	return test_bit(GMU_ENABLED, &device->gmu_core.flags);
@@ -301,13 +312,9 @@ static bool vma_is_dynamic(struct kgsl_device *device, int vma_id)
 	return (vma_id == GMU_NONCACHED_KERNEL) && (!adreno_is_a6xx(ADRENO_DEVICE(device)));
 }
 
-static int insert_va(struct gmu_vma_entry *vma, u32 addr, u32 size)
+static int insert_va(struct gmu_vma_entry *vma, u32 addr, u32 size, struct gmu_vma_node *new)
 {
 	struct rb_node **node, *parent = NULL;
-	struct gmu_vma_node *new = kzalloc(sizeof(*new), GFP_NOWAIT);
-
-	if (new == NULL)
-		return -ENOMEM;
 
 	new->va = addr;
 	new->size = size;
@@ -324,7 +331,6 @@ static int insert_va(struct gmu_vma_entry *vma, u32 addr, u32 size)
 		else if (addr >= this->va + this->size)
 			node = &parent->rb_right;
 		else {
-			kfree(new);
 			return -EEXIST;
 		}
 	}
@@ -371,6 +377,10 @@ static int _map_gmu_dynamic(struct kgsl_device *device, struct kgsl_memdesc *md,
 	struct gmu_vma_node *vma_node = NULL;
 	int ret;
 	u32 size = ALIGN(md->size, hfi_get_gmu_sz_alignment(align));
+	struct gmu_vma_node *new = kzalloc(sizeof(*new), GFP_KERNEL);
+
+	if (!new)
+		return -ENOMEM;
 
 	spin_lock(&vma->lock);
 	if (!addr) {
@@ -381,15 +391,17 @@ static int _map_gmu_dynamic(struct kgsl_device *device, struct kgsl_memdesc *md,
 		addr = find_unmapped_va(vma, size, hfi_get_gmu_va_alignment(align));
 		if (addr == 0) {
 			spin_unlock(&vma->lock);
+			kfree(new);
 			dev_err(gmu_pdev_dev,
 				"Insufficient VA space size: %x\n", size);
 			return -ENOMEM;
 		}
 	}
 
-	ret = insert_va(vma, addr, size);
+	ret = insert_va(vma, addr, size, new);
 	spin_unlock(&vma->lock);
 	if (ret < 0) {
+		kfree(new);
 		dev_err(gmu_pdev_dev,
 			"Could not insert va: %x size %x\n", addr, size);
 		return ret;
@@ -407,7 +419,7 @@ static int _map_gmu_dynamic(struct kgsl_device *device, struct kgsl_memdesc *md,
 		addr, md->size, ret);
 
 	spin_lock(&vma->lock);
-	vma_node = find_va(vma, md->gmuaddr, size);
+	vma_node = find_va(vma, addr, size);
 	if (vma_node)
 		rb_erase(&vma_node->node, &vma->vma_root);
 	spin_unlock(&vma->lock);
@@ -904,6 +916,18 @@ static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packe
 		trace_kgsl_constraint(device, data->type, data->value, data->status, pkt->ticks);
 		break;
 		}
+	case GMU_TRACE_DCVS_PROFILE: {
+		struct trace_dcvs_profile *data =
+				(struct trace_dcvs_profile *)pkt->payload;
+		trace_adreno_gpu_dcvs_profile(data, pkt->ticks);
+		break;
+		}
+	case GMU_TRACE_PREEMPT_INFO: {
+		struct trace_preempt_info *data =
+			(struct trace_preempt_info *)pkt->payload;
+		trace_adreno_gpu_preempt_info(data, pkt->ticks);
+		break;
+		}
 	default: {
 		char str[64];
 
@@ -1150,6 +1174,8 @@ int gmu_core_clk_probe(struct kgsl_device *device)
 	if (ret < 0)
 		return ret;
 
+	gmu->min_pwrlevel = 0;
+
 	/*
 	 * Voting for apb_pclk will enable power and clocks required for
 	 * QDSS path to function. However, if QCOM_KGSL_QDSS_STM is not enabled,
@@ -1205,6 +1231,7 @@ read_gmu_freq:
 	}
 
 	gmu->num_freqs = num_freqs;
+	gmu->max_pwrlevel = gmu->num_freqs - 1;
 
 	return 0;
 
@@ -1216,6 +1243,7 @@ default_gmu_freq:
 	gmu->vlvls[1] = RPMH_REGULATOR_LEVEL_SVS;
 
 	gmu->num_freqs = 2;
+	gmu->max_pwrlevel = gmu->num_freqs - 1;
 
 	if (adreno_is_a6xx(adreno_dev) && !adreno_is_a660(adreno_dev))
 		gmu->vlvls[0] = RPMH_REGULATOR_LEVEL_MIN_SVS;
@@ -1250,12 +1278,24 @@ static int scale_hub_clock(struct kgsl_device *device, u32 cx_voltage)
 	return 0;
 }
 
-int gmu_core_clock_set_rate(struct kgsl_device *device, u32 gmu_level)
+static int gmu_core_clock_set_rate_locked(struct kgsl_device *device, u32 pwrlevel)
 {
 	struct gmu_core_device *gmu_core = &device->gmu_core;
 	int ret;
-	u32 req_freq = gmu_core->freqs[gmu_level];
+	u32 req_freq;
 
+	/* Apply min/max limits */
+	if (pwrlevel > gmu_core->max_pwrlevel)
+		pwrlevel = gmu_core->max_pwrlevel;
+
+	if (pwrlevel < gmu_core->min_pwrlevel)
+		pwrlevel = gmu_core->min_pwrlevel;
+
+	/* If already at requested level, do nothing */
+	if (pwrlevel == gmu_core->cur_pwrlevel)
+		return  0;
+
+	req_freq = gmu_core->freqs[pwrlevel];
 	gmu_core_rdpm_cx_freq_update(device, req_freq / 1000);
 
 	ret = kgsl_clk_set_rate(gmu_core->clks, gmu_core->num_clks, "gmu_clk", req_freq);
@@ -1264,14 +1304,28 @@ int gmu_core_clock_set_rate(struct kgsl_device *device, u32 gmu_level)
 		return ret;
 	}
 
-	trace_kgsl_gmu_pwrlevel(req_freq, gmu_core->freqs[gmu_core->cur_level]);
+	trace_kgsl_gmu_pwrlevel(req_freq, gmu_core->freqs[gmu_core->cur_pwrlevel]);
 
-	gmu_core->cur_level = gmu_level;
+	gmu_core->cur_pwrlevel = pwrlevel;
 
-	return scale_hub_clock(device, gmu_core->vlvls[gmu_level]);
+	ret = scale_hub_clock(device, gmu_core->vlvls[pwrlevel]);
+
+	return ret;
 }
 
-int gmu_core_enable_clks(struct kgsl_device *device, u32 level)
+int gmu_core_clock_set_rate(struct kgsl_device *device, u32 pwrlevel)
+{
+	int ret;
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+
+	mutex_lock(&gmu_core->pwrlevel_mutex);
+	ret = gmu_core_clock_set_rate_locked(device, pwrlevel);
+	mutex_unlock(&gmu_core->pwrlevel_mutex);
+
+	return ret;
+}
+
+int gmu_core_enable_clks(struct kgsl_device *device, u32 pwrlevel)
 {
 	struct gmu_core_device *gmu = &device->gmu_core;
 	int ret;
@@ -1279,7 +1333,7 @@ int gmu_core_enable_clks(struct kgsl_device *device, u32 level)
 	/* Reset hub clock level */
 	gmu->cur_hub_level = gmu->num_hub_freqs;
 
-	ret = gmu_core_clock_set_rate(device, level);
+	ret = gmu_core_clock_set_rate(device, pwrlevel);
 	if (ret)
 		return ret;
 
@@ -1305,7 +1359,7 @@ void gmu_core_scale_gmu_frequency(struct kgsl_device *device, int buslevel)
 {
 	struct gmu_core_device *gmu = &device->gmu_core;
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	u32 i, gmu_level = 0;
+	u32 i, pwrlevel = 0;
 
 	if (!gmu->perf_ddr_bw[0])
 		return;
@@ -1313,13 +1367,109 @@ void gmu_core_scale_gmu_frequency(struct kgsl_device *device, int buslevel)
 	/* Check if IB threshold has been breached to scale gmu */
 	for (i = 0; i < MAX_CX_LEVELS; i++) {
 		if ((pwr->ddr_table[buslevel] >= gmu->perf_ddr_bw[i]) && (gmu->perf_ddr_bw[i] != 0))
-			gmu_level = (i + 1);
+			pwrlevel = (i + 1);
 	}
 
-	if ((gmu_level < MAX_CX_LEVELS) && (gmu->cur_level != gmu_level))
-		gmu_core_clock_set_rate(device, gmu_level);
+	if (pwrlevel < MAX_CX_LEVELS)
+		gmu_core_clock_set_rate(device, pwrlevel);
+
 
 	return;
+}
+
+int gmu_core_get_active_frequency(struct kgsl_device *device)
+{
+	int ret;
+	struct gmu_core_device *gmu_core_dev = &device->gmu_core;
+
+	mutex_lock(&gmu_core_dev->pwrlevel_mutex);
+	ret = gmu_core_dev->freqs[gmu_core_dev->cur_pwrlevel];
+	mutex_unlock(&gmu_core_dev->pwrlevel_mutex);
+	return ret;
+}
+
+int gmu_core_get_num_pwrlevels(struct kgsl_device *device)
+{
+	struct gmu_core_device *gmu_core_dev = &device->gmu_core;
+
+	return gmu_core_dev->num_freqs;
+}
+
+int gmu_core_get_min_pwrlevel(struct kgsl_device *device)
+{
+	int ret;
+	struct gmu_core_device *gmu_core_dev = &device->gmu_core;
+
+	mutex_lock(&gmu_core_dev->pwrlevel_mutex);
+	ret = gmu_core_dev->min_pwrlevel;
+	mutex_unlock(&gmu_core_dev->pwrlevel_mutex);
+	return ret;
+}
+
+int gmu_core_set_min_pwrlevel(struct kgsl_device *device, u64 val)
+{
+	int ret;
+	struct gmu_core_device *gmu_core_dev = &device->gmu_core;
+
+	/* Min power level cannot be greater than num power levels */
+	if (val >= gmu_core_dev->num_freqs)
+		val = gmu_core_dev->num_freqs - 1;
+
+	/* Min power level cannot be greater than max power level */
+	mutex_lock(&gmu_core_dev->pwrlevel_mutex);
+	if (val > gmu_core_dev->max_pwrlevel)
+		val = gmu_core_dev->max_pwrlevel;
+
+	gmu_core_dev->min_pwrlevel = val;
+
+	/* Update GMU frequency based on new limits */
+	ret = gmu_core_clock_set_rate_locked(device, gmu_core_dev->cur_pwrlevel);
+	mutex_unlock(&gmu_core_dev->pwrlevel_mutex);
+	return ret;
+}
+
+int gmu_core_get_max_pwrlevel(struct kgsl_device *device)
+{
+	int ret;
+	struct gmu_core_device *gmu_core_dev = &device->gmu_core;
+
+	mutex_lock(&gmu_core_dev->pwrlevel_mutex);
+	ret = gmu_core_dev->max_pwrlevel;
+	mutex_unlock(&gmu_core_dev->pwrlevel_mutex);
+	return ret;
+}
+
+int gmu_core_set_max_pwrlevel(struct kgsl_device *device, u64 val)
+{
+	int ret;
+	struct gmu_core_device *gmu_core_dev = &device->gmu_core;
+
+	/* Max power level cannot be greater than num power levels */
+	if (val >= gmu_core_dev->num_freqs)
+		val = gmu_core_dev->num_freqs - 1;
+
+	/* Max power level cannot be smaller than min power level */
+	mutex_lock(&gmu_core_dev->pwrlevel_mutex);
+	if (val < gmu_core_dev->min_pwrlevel)
+		val = gmu_core_dev->min_pwrlevel;
+
+	gmu_core_dev->max_pwrlevel = val;
+
+	/* Update GMU frequency based on new limits */
+	ret = gmu_core_clock_set_rate_locked(device, gmu_core_dev->cur_pwrlevel);
+	mutex_unlock(&gmu_core_dev->pwrlevel_mutex);
+	return ret;
+}
+
+int gmu_core_list_frequencies(struct kgsl_device *device, struct seq_file *s)
+{
+	struct gmu_core_device *gmu_core_dev = &device->gmu_core;
+	int i;
+
+	for (i = 0; i < gmu_core_dev->num_freqs; i++)
+		seq_printf(s, "%u ", gmu_core_dev->freqs[i]);
+
+	return 0;
 }
 
 int gmu_core_hwsched_memory_init(struct kgsl_device *device)

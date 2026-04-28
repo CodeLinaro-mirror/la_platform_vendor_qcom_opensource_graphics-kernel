@@ -220,7 +220,7 @@ static void gen8_hwsched_set_ctxt_record_vrb(struct adreno_device *adreno_dev)
 	gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_CTXRECORD_TOTAL_SZ,
 		adreno_dev->total_ctxt_record_sz >> 10);
 	gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_CTXRECORD_GMEM_SZ,
-		adreno_dev->gpucore->gmem_size >> 10);
+		adreno_gmem_size(adreno_dev) >> 10);
 
 	/* Populate size of AQE context record */
 	gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_CTXRECORD_AQE_SZ,
@@ -898,6 +898,8 @@ static int gen8_hwsched_first_boot(struct adreno_device *adreno_dev)
 		device->pwrctrl.last_stat_updated = ktime_get();
 	}
 
+	set_bit(ADRENO_DEVICE_FIRST_BOOT_DONE, &adreno_dev->priv);
+
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_ACTIVE);
 
 	return 0;
@@ -1247,7 +1249,7 @@ static int gen8_hwsched_pm_suspend(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	int ret;
+	int ret, active_count;
 
 	if (test_bit(GMU_PRIV_PM_SUSPEND, &gmu->flags))
 		return 0;
@@ -1257,6 +1259,16 @@ static int gen8_hwsched_pm_suspend(struct adreno_device *adreno_dev)
 	ret = adreno_hwsched_drain_and_idle(adreno_dev);
 	if (ret)
 		goto err;
+
+	active_count = atomic_read(&device->active_cnt);
+
+	if (active_count > 0) {
+		ret = -ETIMEDOUT;
+		dev_err_ratelimited(GMU_PDEV_DEV(device),
+			"Aborting suspend because of active count:%d\n",
+			active_count);
+		goto err;
+	}
 
 	gen8_hwsched_power_off(adreno_dev);
 
@@ -1973,7 +1985,26 @@ static ssize_t gpu_load_show(struct kobject *kobj, struct kobj_attribute *attr,
 	return scnprintf(buf, PAGE_SIZE, "%u\n", busy_perc);
 }
 
+static ssize_t gpu_maxclk_constraints_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 thermal_max_pwrlevel = max_t(u32, READ_ONCE(pwr->thermal_pwrlevel),
+							READ_ONCE(pwr->pmqos_max_pwrlevel));
+	u32 aggregated_max_pwrlevel = max_t(u32, thermal_max_pwrlevel, pwr->aggr_max_pwrlevel);
+
+	return scnprintf(buf, PAGE_SIZE,
+			"gpuclk: %lu\naggregated_max_gpuclk: %u\nthermal_gpuclk: %u\n",
+			kgsl_pwrctrl_active_freq(&device->pwrctrl),
+			pwr->pwrlevels[aggregated_max_pwrlevel].gpu_freq,
+			pwr->pwrlevels[thermal_max_pwrlevel].gpu_freq);
+}
+
 DCVS_SYSFS_RO(aggregated_max_gpuclk);
+DCVS_SYSFS_RO(gpu_maxclk_constraints);
 DCVS_SYSFS_RO(dcvs_tunables_default);
 DCVS_SYSFS_RO(dcvs_tunables_cur);
 DCVS_SYSFS_RO(gpu_load);
@@ -1983,6 +2014,7 @@ static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_dcvs_tunables_default.attr,
 	&dcvs_attr_dcvs_tunables_cur.attr,
 	&dcvs_attr_gpu_load.attr,
+	&dcvs_attr_gpu_maxclk_constraints.attr,
 	NULL,
 };
 

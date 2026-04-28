@@ -1477,6 +1477,18 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	device->debug_bus_bin = status;
 
+	status = adreno_read_fuse(pdev, "debugbus_en");
+	if (status < 0)
+		dev_err(device->dev, "failed to read debugbus_en nvmem cell\n");
+
+	device->debugbus_en = status;
+
+	status = adreno_read_fuse(pdev, "gpu_niden_en");
+	if (status < 0)
+		dev_err(device->dev, "failed to read gpu_niden_en nvmem cell\n");
+
+	device->gpu_niden_en = status;
+
 	adreno_read_soc_code(device);
 
 	status = adreno_of_get_power(adreno_dev, pdev);
@@ -1990,6 +2002,7 @@ static int adreno_open(struct adreno_device *adreno_dev)
 		goto err;
 
 	complete_all(&device->hwaccess_gate);
+	set_bit(ADRENO_DEVICE_FIRST_BOOT_DONE, &adreno_dev->priv);
 	kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
 	adreno_active_count_put(adreno_dev);
 
@@ -3964,11 +3977,11 @@ static void adreno_set_thermal_index(struct kgsl_device *device)
 		ops->set_thermal_index(adreno_dev);
 }
 
-static bool adreno_is_reset_recovery(struct kgsl_device *device)
+static bool adreno_is_first_boot_done(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
-	return test_bit(ADRENO_DEVICE_RESET_RECOVERY, &adreno_dev->priv);
+	return test_bit(ADRENO_DEVICE_FIRST_BOOT_DONE, &adreno_dev->priv);
 }
 
 static const struct kgsl_functable adreno_functable = {
@@ -4015,7 +4028,7 @@ static const struct kgsl_functable adreno_functable = {
 	.gmu_based_dcvs_pwr_ops = adreno_gmu_based_dcvs_pwr_ops,
 	.set_thermal_index = adreno_set_thermal_index,
 	.alloc_dcvs_profile_memory = adreno_alloc_dcvs_profile_memory,
-	.is_reset_recovery = adreno_is_reset_recovery,
+	.is_first_boot_done = adreno_is_first_boot_done,
 };
 
 static const struct component_master_ops adreno_ops = {

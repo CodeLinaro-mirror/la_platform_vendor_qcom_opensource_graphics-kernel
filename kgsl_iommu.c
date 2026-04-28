@@ -2414,6 +2414,7 @@ out:
 	memdesc->gpuaddr = gpuaddr;
 	memdesc->pagetable = pagetable;
 	mutex_unlock(&memdesc->lock);
+
 	return ret;
 }
 

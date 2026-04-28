@@ -985,10 +985,6 @@ static void kgsl_destroy_process_private(struct kref *kref)
 			struct kgsl_process_private, refcount);
 	struct kgsl_device *device = KGSL_MMU_DEVICE(private->pagetable->mmu);
 
-	if (private->profile.md.hostptr)
-		gmu_core_free_block(device, private->profile.md.hostptr);
-
-	kgsl_put_work_period(private->period);
 	/*
 	 * While removing sysfs entries, kernfs_mutex is held by sysfs apis. Since
 	 * it is a global fs mutex, sometimes it takes longer for kgsl to get hold
@@ -997,7 +993,6 @@ static void kgsl_destroy_process_private(struct kref *kref)
 	 * mutex to avoid wasting re-tries when kgsl is waiting for kernfs mutex.
 	 */
 	mutex_lock(&kgsl_driver.process_mutex);
-
 	debugfs_remove_recursive(private->debug_root);
 	kobject_put(&private->kobj_memtype);
 	kobject_put(&private->kobj);
@@ -1012,6 +1007,7 @@ static void kgsl_destroy_process_private(struct kref *kref)
 	write_unlock(&kgsl_driver.proclist_lock);
 	mutex_unlock(&kgsl_driver.process_mutex);
 
+	kgsl_put_work_period(private->period);
 	kfree(private->cmdline);
 	put_pid(private->pid);
 	idr_destroy(&private->mem_idr);
@@ -1020,6 +1016,16 @@ static void kgsl_destroy_process_private(struct kref *kref)
 	/* When using global pagetables, do not put global pagetable */
 	if (private->pagetable->name != KGSL_MMU_GLOBAL_PT)
 		kgsl_mmu_putpagetable(private->pagetable);
+
+
+	if (private->profile.md.gmuaddr) {
+		/*
+		 * This calls iommu_unmap(), which may take variable amount of time to
+		 * complete. So do this at the very end of process private cleanup, so that
+		 * this doesn't delay the clean up of rest of the process private resources.
+		 */
+		gmu_core_free_block(device, &private->profile.md);
+	}
 
 	kfree(private);
 }
@@ -1145,7 +1151,7 @@ static void _log_gpu_work_events(struct work_struct *work)
 
 static void kgsl_work_period_timer(struct timer_list *t)
 {
-	struct kgsl_device *device = from_timer(device, t, work_period_timer);
+	struct kgsl_device *device = kgsl_timer_container_of(device, t, work_period_timer);
 
 	queue_work(kgsl_driver.lockless_workqueue, &device->work_period_ws);
 }
@@ -1349,7 +1355,7 @@ static struct kgsl_process_private *kgsl_process_private_open(
 	 * private destroy is triggered but didn't complete. Retry creating
 	 * process private after sometime to allow previous destroy to complete.
 	 */
-	for (i = 0; (PTR_ERR_OR_ZERO(private) == -EEXIST) && (i < 50); i++) {
+	for (i = 0; (PTR_ERR_OR_ZERO(private) == -EEXIST) && (i < 1000); i++) {
 		usleep_range(10, 100);
 		private = _process_private_open(device);
 	}
@@ -5276,10 +5282,14 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 	if (status)
 		return status;
 
+	status = gmu_core_init(device);
+	if (status)
+		goto error_gmu_core;
+
 	/* Can return -EPROBE_DEFER */
 	status = kgsl_pwrctrl_init(device);
 	if (status)
-		goto error;
+		goto error_pwrctrl;
 
 	device->events_worker = kthread_create_worker(0, "kgsl-events");
 
@@ -5323,7 +5333,9 @@ error_pwrctrl_close:
 		kthread_destroy_worker(device->events_worker);
 
 	kgsl_pwrctrl_close(device);
-error:
+error_pwrctrl:
+	gmu_core_close(device);
+error_gmu_core:
 	_unregister_device(device);
 	return status;
 }
@@ -5344,6 +5356,7 @@ void kgsl_device_platform_remove(struct kgsl_device *device)
 	kgsl_free_globals(device);
 
 	kgsl_pwrctrl_close(device);
+	gmu_core_close(device);
 
 	kgsl_device_debugfs_close(device);
 	_unregister_device(device);

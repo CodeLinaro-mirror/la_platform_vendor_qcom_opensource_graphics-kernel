@@ -2601,7 +2601,7 @@ static bool kgsl_iommu_addr_in_range(struct kgsl_pagetable *pagetable,
 	return false;
 }
 
-#if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(6, 11, 0) <= LINUX_VERSION_CODE)
 static struct iommu_domain *kgsl_iommu_domain_alloc(struct device *dev)
 {
 	return iommu_paging_domain_alloc(dev);

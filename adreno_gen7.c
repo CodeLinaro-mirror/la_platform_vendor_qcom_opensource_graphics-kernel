@@ -2024,6 +2024,10 @@ static int gen7_perfcounter_remove(struct adreno_device *adreno_dev,
 	u32 *data = ptr + sizeof(*lock), pipe = FIELD_PREP(GENMASK(13, 12), _get_pipeid(groupid));
 	u16 perfcntr_list_len = lock->dynamic_list_len - gen7_dev->ext_pwrup_list_len;
 
+	/* On no_cb targets, all groups are enabled with PIPE_NONE; override pipe accordingly */
+	if (adreno_is_gen7_no_cb_family(adreno_dev))
+		pipe = PIPE_NONE;
+
 	if (!perfcntr_list_len)
 		return -EINVAL;
 

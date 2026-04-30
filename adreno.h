@@ -205,6 +205,8 @@
 #define ADRENO_GMU_THINMEM_CFG BIT_ULL(35)
 /* Enable dynamic context priority (RB migration) */
 #define ADRENO_GMU_DYNAMIC_CTX_PRIORITY BIT_ULL(36)
+/* Enable TDCVS via GMU */
+#define ADRENO_TDCVS BIT_ULL(37)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -930,6 +932,10 @@ struct adreno_device {
 	u32 viz_flush_prim_count;
 	/** @adreno_err_code: Error code to be dumped on snapshot */
 	u32 adreno_err_code;
+	/** @tdcvs_enable: Value of TDCVS enable from debugfs */
+	u32 tdcvs_enable;
+	/** @tdcvs_data: Value of TDCVS data from debugfs */
+	u32 tdcvs_data;
 };
 
 /* Time to wait for suspend recovery gate to complete */

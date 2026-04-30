@@ -1757,6 +1757,76 @@ static const struct file_operations gpu_voltage_fops = {
 	.release = single_release,
 };
 
+struct tdcvs_config {
+	u32 enable;
+	u32 data;
+};
+
+static void set_tdcvs(struct adreno_device *adreno_dev, void *priv)
+{
+	struct tdcvs_config *config = (struct tdcvs_config *)priv;
+
+	adreno_dev->tdcvs_enable = config->enable;
+	adreno_dev->tdcvs_data = config->data;
+}
+
+static ssize_t _tdcvs_write(struct file *file, const char __user *user_buf,
+		size_t count, loff_t *ppos)
+{
+	struct seq_file *s = file->private_data;
+	struct kgsl_device *device = s->private;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	int ret;
+	char buf[64];
+	struct tdcvs_config config;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	buf[count] = 0;
+
+	ret = sscanf(buf, "%x %x", &config.enable, &config.data);
+	if (ret != 2)
+		return -EINVAL;
+
+	/* Config remains the same. No reason to power cycle */
+	if ((config.enable == adreno_dev->tdcvs_enable) && (config.data == adreno_dev->tdcvs_data))
+		goto out;
+
+	ret = adreno_power_cycle(adreno_dev, set_tdcvs, &config);
+	if (ret)
+		return ret;
+
+out:
+	return count;
+}
+
+static int _tdcvs_show(struct seq_file *s, void *unused)
+{
+	struct kgsl_device *device = s->private;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+
+	seq_printf(s, "0x%x 0x%x\n", adreno_dev->tdcvs_enable, adreno_dev->tdcvs_data);
+	return 0;
+}
+
+static int _tdcvs_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, _tdcvs_show, inode->i_private);
+}
+
+static const struct file_operations tdcvs_fops = {
+	.owner = THIS_MODULE,
+	.open = _tdcvs_open,
+	.read = seq_read,
+	.write = _tdcvs_write,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 void adreno_debugfs_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1898,6 +1968,10 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 			debugfs_create_file("fence_deadline_boost", 0644, device->d_debugfs,
 					device, &fence_deadline_boost_fops);
 	}
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_TDCVS))
+		debugfs_create_file("tdcvs", 0644, device->d_debugfs,
+				device, &tdcvs_fops);
 
 	debugfs_create_file("gpu_voltage", 0644, device->d_debugfs,
 			device, &gpu_voltage_fops);

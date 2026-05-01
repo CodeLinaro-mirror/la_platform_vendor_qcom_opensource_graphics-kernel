@@ -379,4 +379,13 @@ int gen8_gmu_trigger_mx_voltage_change(struct adreno_device *adreno_dev);
  * Return: 0 on success or negative error otherwise
  */
 int gen8_gmu_set_non_bufferable_carveout(struct adreno_device *adreno_dev);
+
+/**
+ * gen8_gmu_malu_is_on - Check the state of MALU HW
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Returns true on active or false otherwise
+ */
+bool gen8_gmu_malu_is_on(struct adreno_device *adreno_dev);
+
 #endif

@@ -227,7 +227,6 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 	return ret;
 }
 
-#if (IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) || IS_ENABLED(CONFIG_DEEPSLEEP))
 static void adreno_zap_shader_unload(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -239,7 +238,6 @@ static void adreno_zap_shader_unload(struct adreno_device *adreno_dev)
 			adreno_dev->zap_loaded = false;
 	}
 }
-#endif
 
 /**
  * adreno_readreg64() - Read a 64bit register by getting its offset from the
@@ -1841,6 +1839,20 @@ static void adreno_resume(struct adreno_device *adreno_dev)
 	}
 }
 
+static inline bool adreno_pm_suspend_is_deep_sleep(void)
+{
+#if !IS_ENABLED(CONFIG_DEEPSLEEP)
+	return false;
+
+#elif (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+	return pm_suspend_target_state == PM_SUSPEND_MEM;
+
+#else
+	return pm_suspend_via_firmware();
+
+#endif
+}
+
 static int adreno_pm_resume(struct device *dev)
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
@@ -1853,8 +1865,7 @@ static int adreno_pm_resume(struct device *dev)
 	adreno_dev = ADRENO_DEVICE(device);
 	ops = ADRENO_POWER_OPS(adreno_dev);
 
-#if IS_ENABLED(CONFIG_DEEPSLEEP)
-	if (pm_suspend_via_firmware()) {
+	if (adreno_pm_suspend_is_deep_sleep()) {
 		struct kgsl_iommu *iommu = &device->mmu.iommu;
 		int status = kgsl_set_smmu_aperture(device, &iommu->user_context);
 
@@ -1865,7 +1876,6 @@ static int adreno_pm_resume(struct device *dev)
 		if (status < 0)
 			return status;
 	}
-#endif
 
 	kgsl_mutex_lock(&device->mutex);
 	ops->pm_resume(adreno_dev);
@@ -1906,10 +1916,8 @@ static int adreno_pm_suspend(struct device *dev)
 	kgsl_mutex_lock(&device->mutex);
 	status = ops->pm_suspend(adreno_dev);
 
-#if IS_ENABLED(CONFIG_DEEPSLEEP)
-	if (!status && pm_suspend_via_firmware())
+	if (!status && adreno_pm_suspend_is_deep_sleep())
 		adreno_zap_shader_unload(adreno_dev);
-#endif
 
 	kgsl_mutex_unlock(&device->mutex);
 	mutex_unlock(&adreno_dev->fault_recovery_mutex);

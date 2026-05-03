@@ -293,7 +293,8 @@ int gen8_gmu_device_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	gmu_core_reset_trace_header(&device->gmu_core.trace);
+	gmu_core_reset_trace_header(&device->gmu_core.trace,
+			TRACE_LOGTYPE_HWSCHED, TRACE_MODE_DROP);
 
 	gmu_ao_sync_event(adreno_dev);
 
@@ -2005,6 +2006,23 @@ static u64 gen8_bcl_sid_get(struct kgsl_device *device, u32 sid_id)
 	}
 }
 
+static u32 gen8_gmu_pwr_trace_trigger_get(struct kgsl_device *device)
+{
+	u32 val;
+
+	gmu_core_regread(device, GEN8_GMUAO_SPARE_CNTL, &val);
+
+	return val;
+}
+
+static u32 gen8_gmu_pwr_trace_trigger_set(struct kgsl_device *device, u32 val)
+{
+	gmu_core_regwrite(device, GEN8_GMUAO_SPARE_CNTL, val);
+	gmu_core_regwrite(device, GEN8_GMUCX_GENERIC_GMU_IRQ_TRIGGER, 0x1);
+
+	return 0;
+}
+
 static const struct gmu_dev_ops gen8_gmudev = {
 	.oob_set = gen8_gmu_oob_set,
 	.oob_clear = gen8_gmu_oob_clear,
@@ -2018,6 +2036,8 @@ static const struct gmu_dev_ops gen8_gmudev = {
 	.bcl_sid_get = gen8_bcl_sid_get,
 	.send_nmi = gen8_gmu_send_nmi,
 	.minbw_idle_level_set = gen8_minbw_idle_level_set,
+	.gmu_pwr_trace_trigger_set = gen8_gmu_pwr_trace_trigger_set,
+	.gmu_pwr_trace_trigger_get = gen8_gmu_pwr_trace_trigger_get,
 };
 
 static int gen8_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,

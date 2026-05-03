@@ -3542,7 +3542,7 @@ static struct hfi_therm_profile_ctrl therm_profile_8_11_0 = {
 	.tskin_addr = 0,
 	.tskin_limit = 0,
 	.tsens_cfg_cnt = 1,
-	.tsens_cfg.limit_u = 1080,
+	.tsens_cfg.limit_u = 1130,
 	.tsens_cfg.limit_l = 10,
 	.tsens_cfg.margin_u = 30,
 	.tsens_cfg.margin_l = 20,
@@ -4426,7 +4426,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_0 = {
 			ADRENO_GMU_THERMAL_MITIGATION | ADRENO_AQE | ADRENO_CONTENT_PROTECTION |
 			ADRENO_BCL | ADRENO_DCVS_PROFILE | ADRENO_IFPC | ADRENO_GMU_MINBW |
 			ADRENO_DEFER_GMEM_ALLOC | ADRENO_GMU_FAST_CONTEXT_DESTROY |
-			ADRENO_ACD | ADRENO_GMU_AB | ADRENO_HW_FENCE,
+			ADRENO_ACD | ADRENO_GMU_AB | ADRENO_HW_FENCE |
+			ADRENO_AHB_TIMEOUT_RECOVERY,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_2_x_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -4471,7 +4472,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_17_0 = {
 		.compatible = "qcom,adreno-gpu-gen8-17-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
 			ADRENO_CONTENT_PROTECTION | ADRENO_IFPC |
-			ADRENO_GMU_AB | ADRENO_PREEMPTION | ADRENO_BCL,
+			ADRENO_GMU_AB | ADRENO_PREEMPTION | ADRENO_BCL | ADRENO_GMU_MINBW,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,

@@ -192,6 +192,8 @@
 #define ADRENO_GMU_FAST_CONTEXT_DESTROY BIT(29)
 /* Enable AHB timeout recovery */
 #define ADRENO_AHB_TIMEOUT_RECOVERY BIT(30)
+/* Enable SPEL (System Power and Energy Limits) */
+#define ADRENO_GMU_SPEL BIT(31)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds

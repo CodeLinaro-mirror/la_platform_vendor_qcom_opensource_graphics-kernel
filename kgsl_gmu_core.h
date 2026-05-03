@@ -78,6 +78,8 @@ enum gmu_core_flags {
 	GMU_SOCCP_VOTE_ON,
 	/* GMU FW and KMD support RW buffer disabled carveout */
 	GMU_NON_BUFFERABLE_CARVEOUT,
+	/* Hardware fences are enabled */
+	GMU_HWSCHED_HW_FENCE,
 };
 
 /*
@@ -234,6 +236,8 @@ enum gmu_vrb_idx {
 	VRB_CTXRECORD_AQE_SZ = 11,
 	/* Contains the size of GMEM inside context record in KB */
 	VRB_CTXRECORD_GMEM_SZ = 12,
+	/* Contains the GMU VA of the trace buffer for power prototype */
+	VRB_TRC_BUF_PWR_PROTO_TRACE = 15,
 	/* Contains whether to enable fault on DBGC interrupts */
 	VRB_DBGC_FAULT_ENABLE = 17,
 	/* Contains the GMU base VA of noncached region non bufferable carveout */
@@ -248,6 +252,7 @@ enum gmu_vrb_idx {
 /* Trace header defines */
 /* Logtype to decode the trace pkt data */
 #define TRACE_LOGTYPE_HWSCHED	1
+#define TRACE_LOGTYPE_POWER_BUDGETING	3
 /* Trace buffer threshold for GMU to send F2H message */
 #define TRACE_BUFFER_THRESHOLD	80
 /*
@@ -260,6 +265,8 @@ enum gmu_vrb_idx {
 /* Trace metadata defines */
 /* Trace drop mode hint for GMU to drop trace packets when trace buffer is full */
 #define TRACE_MODE_DROP	1
+/* Trace freerun mode hint for GMU to overwrite trace packets when trace buffer is full */
+#define TRACE_MODE_FREERUN 2
 /* Trace buffer header version */
 #define TRACE_HEADER_VERSION_1	1
 
@@ -426,6 +433,18 @@ struct kgsl_gmu_trace {
 	bool reset_hdr;
 };
 
+#define GMU_PWR_BUDGET_DWORDS 7
+
+/**
+ * struct kgsl_gmu_spel - Struct for SPEL status / configuration details
+ */
+struct kgsl_gmu_spel {
+	/** @enabled: True if SPEL is enabled */
+	bool enabled;
+	/** @config: Power budget configuration */
+	u32 config[GMU_PWR_BUDGET_DWORDS];
+};
+
 /* GMU memdesc entries */
 #define GMU_KERNEL_ENTRIES		32
 
@@ -545,6 +564,8 @@ struct gmu_dev_ops {
 	void (*send_nmi)(struct kgsl_device *device, bool force,
 		enum gmu_fault_panic_policy gf_policy);
 	void (*minbw_idle_level_set)(struct kgsl_device *device, u32 val);
+	u32 (*gmu_pwr_trace_trigger_set)(struct kgsl_device *device, u32 val);
+	u32 (*gmu_pwr_trace_trigger_get)(struct kgsl_device *device);
 };
 
 struct firmware_capabilities {
@@ -637,6 +658,16 @@ struct gmu_core_device {
 	struct kgsl_gmu_trace trace;
 	/** @pwrlevel_mutex: Mutex protects the min/max/cur power level */
 	struct mutex pwrlevel_mutex;
+	/** @pwr_proto_trace: gmu trace container for power prototype events */
+	struct kgsl_gmu_trace pwr_proto_trace;
+	/** @gmu_pwr_proto_trace_buf_size: Size of trace buf for GMU pwr prototype events */
+	u32 gmu_pwr_proto_trace_buf_size;
+	/** @pwr_limits_trace: gmu trace container for power limits events */
+	struct kgsl_gmu_trace pwr_limits_trace;
+	/** @gmu_pwr_limits_trace_buf_size: Size of trace buf for GMU pwr limits events */
+	u32 gmu_pwr_limits_trace_buf_size;
+	/** @spel: Container for SPEL related data */
+	struct kgsl_gmu_spel spel;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -904,14 +935,18 @@ bool gmu_core_is_trace_empty(struct gmu_trace_header *hdr);
 /**
  * gmu_core_trace_header_init - Initialize the GMU trace buffer header
  * @trace: Pointer to kgsl gmu trace
+ * @log_type: Specify the log type being captured
+ * @mode: Specify the mode if drop/freerun.
  */
-void gmu_core_trace_header_init(struct kgsl_gmu_trace *trace);
+void gmu_core_trace_header_init(struct kgsl_gmu_trace *trace, u32 log_type, u32 mode);
 
 /**
  * gmu_core_reset_trace_header - Reset GMU trace buffer header
  * @trace: Pointer to kgsl gmu trace
+ * @log_type: Specify the log type being captured
+ * @mode: Specify the mode if drop/freerun.
  */
-void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace);
+void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace, u32 log_type, u32 mode);
 
 /**
  * gmu_core_soccp_vote - vote for soccp power
@@ -1082,5 +1117,13 @@ int gmu_core_set_max_pwrlevel(struct kgsl_device *device, u64 val);
  * Return: Negative error on failure and zero on success.
  */
 int gmu_core_list_frequencies(struct kgsl_device *device, struct seq_file *s);
+
+/**
+ * gmu_core_is_hw_fencing_enabled() - Check if hw fences is enabled
+ * @device: Pointer to the kgsl device
+
+ * Return: Boolean to indicate if hw fences are enabled or not
+ */
+bool gmu_core_is_hw_fencing_enabled(struct kgsl_device *device);
 
 #endif /* __KGSL_GMU_CORE_H */

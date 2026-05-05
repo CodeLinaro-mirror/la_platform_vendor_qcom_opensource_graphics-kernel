@@ -1254,16 +1254,20 @@ static int check_ack_failure(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u64 ticks = gpudev->read_alwayson(adreno_dev);
 
-	if (ack->results[2] != 0xffffffff)
+	if (ack->results[2] == 0)
 		return 0;
 
 	dev_err(GMU_PDEV_DEV(device),
-		"ACK error: sender id %d seqnum %d\n",
+		"ACK error: sender id %d seqnum %d ret 0x%x\n",
 		MSG_HDR_GET_ID(ack->sent_hdr),
-		MSG_HDR_GET_SEQNUM(ack->sent_hdr));
+		MSG_HDR_GET_SEQNUM(ack->sent_hdr),
+		ack->results[2]);
 
-	KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
-				GMU_PDEV(device), ticks, GMU_FAULT_HFI_ACK);
+	/* GMU fatal error, trigger force a panic */
+	if (ack->results[2] == 0xffffffff)
+		KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
+					GMU_PDEV(device), ticks, GMU_FAULT_HFI_ACK);
+
 	return -EINVAL;
 }
 

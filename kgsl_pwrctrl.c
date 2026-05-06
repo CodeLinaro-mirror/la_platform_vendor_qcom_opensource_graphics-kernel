@@ -621,7 +621,7 @@ static ssize_t gpubusy_show(struct device *dev,
 			stats->busy_old, stats->total_old);
 
 	/* Reset the stats if GPU is OFF */
-	if ((atomic_read(&device->active_cnt) == 0)) {
+	if (!kgsl_state_is_awake(device)) {
 		spin_lock(&pwr->stats_lock);
 		stats->busy_old = 0;
 		stats->total_old = 0;
@@ -891,7 +891,7 @@ static ssize_t _gpu_busy_show(struct kgsl_device *device,
 	ret = scnprintf(buf, PAGE_SIZE, "%d %%\n", busy_percent);
 
 	/* Reset the stats if GPU is OFF */
-	if ((atomic_read(&device->active_cnt) == 0)) {
+	if (!kgsl_state_is_awake(device)) {
 		spin_lock(&pwr->stats_lock);
 		stats->busy_old = 0;
 		stats->total_old = 0;
@@ -2207,7 +2207,7 @@ done:
 
 void kgsl_timer(struct timer_list *t)
 {
-	struct kgsl_device *device = from_timer(device, t, idle_timer);
+	struct kgsl_device *device = kgsl_timer_container_of(device, t, idle_timer);
 
 	if (device->requested_state != KGSL_STATE_SUSPEND) {
 		kgsl_pwrctrl_request_state(device, KGSL_STATE_SLUMBER);

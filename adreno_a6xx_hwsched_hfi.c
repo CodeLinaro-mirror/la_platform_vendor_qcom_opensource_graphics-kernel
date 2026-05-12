@@ -50,6 +50,12 @@ static struct dq_info {
 	{ 4, 4, }, /* RB1 */
 	{ 3, 8, }, /* RB2 */
 	{ 3, 11, }, /* RB3 */
+}, a6xx_hfi_dqs_lpac[KGSL_PRIORITY_MAX_RB_LEVELS + 1] = {
+	{ 4, 0, }, /* RB0 */
+	{ 4, 4, }, /* RB1 */
+	{ 3, 8, }, /* RB2 */
+	{ 2, 11, }, /* RB3 */
+	{ 1, 13, }, /* RB LPAC */
 };
 
 static int a6xx_hfi_dispatch_queue_write(struct adreno_device *adreno_dev, uint32_t queue_idx,
@@ -1254,21 +1260,22 @@ void a6xx_hwsched_hfi_remove(struct adreno_device *adreno_dev)
 		kthread_stop(hw_hfi->f2h_task);
 }
 
-static u32 get_next_dq(u32 priority)
+static u32 get_dq_id(struct adreno_device *adreno_dev, struct kgsl_context *context)
 {
-	struct dq_info *info = &a6xx_hfi_dqs[priority];
-	u32 next = info->base_dq_id + info->offset;
+	u32 priority = adreno_get_level(context);
+	struct dq_info *info;
+	u32 next;
+
+	if (adreno_dev->lpac_enabled)
+		info = &a6xx_hfi_dqs_lpac[priority];
+	else
+		info = &a6xx_hfi_dqs[priority];
+
+	next = info->base_dq_id + info->offset;
 
 	info->offset = (info->offset + 1) % info->max_dq;
 
 	return next;
-}
-
-static u32 get_dq_id(struct kgsl_context *context)
-{
-	u32 level = adreno_get_level(context);
-
-	return get_next_dq(level);
 }
 
 static int send_context_register(struct adreno_device *adreno_dev,
@@ -1357,7 +1364,7 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 	}
 
 	context->gmu_registered = true;
-	context->gmu_dispatch_queue = get_dq_id(context);
+	context->gmu_dispatch_queue = get_dq_id(adreno_dev, context);
 
 	return 0;
 }

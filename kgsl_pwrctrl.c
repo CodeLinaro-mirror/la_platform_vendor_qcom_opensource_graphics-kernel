@@ -597,6 +597,18 @@ static ssize_t idle_timer_store(struct device *dev, struct device_attribute *att
 		return ret;
 
 	/*
+	 * Clamp values below the configured default. Sub-default timeouts cause
+	 * frequent slumber transitions, which hurts performance due to repeated
+	 * GPU/GMU wake sequences and can destabilize the power state machine.
+	 */
+	if (val < CONFIG_QCOM_KGSL_IDLE_TIMEOUT) {
+		dev_warn(device->dev,
+			"idle_timer %u below minimum, clamping to %u\n",
+			val, CONFIG_QCOM_KGSL_IDLE_TIMEOUT);
+		val = CONFIG_QCOM_KGSL_IDLE_TIMEOUT;
+	}
+
+	/*
 	 * We don't quite accept a maximum of 0xFFFFFFFF due to internal jiffy
 	 * math, so make sure the value falls within the largest offset we can
 	 * deal with

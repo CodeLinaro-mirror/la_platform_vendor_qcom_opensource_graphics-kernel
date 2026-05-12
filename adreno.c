@@ -1498,6 +1498,42 @@ static int adreno_pm_notifier(struct notifier_block *nb, unsigned long event, vo
 	return NOTIFY_DONE;
 }
 
+static int adreno_read_speed_bin(struct platform_device *pdev, struct adreno_device *adreno_dev)
+{
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	int status = -EOPNOTSUPP;
+
+	if (gpudev->get_speed_bin)
+		status = gpudev->get_speed_bin(adreno_dev);
+
+	if (status < 0)
+		status = adreno_read_fuse(pdev, "speed_bin");
+
+	return status;
+}
+
+static int adreno_regmap_init(struct platform_device *pdev, struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int status;
+
+	status = kgsl_regmap_init(pdev, &device->regmap, "kgsl_3d0_reg_memory",
+		&adreno_regmap_ops, device);
+	if (status)
+		return status;
+
+	/* Add CX_DBGC block to the regmap */
+	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", NULL, NULL);
+
+	/* Probe for the optional CX_MISC block */
+	kgsl_regmap_add_region(&device->regmap, pdev, "cx_misc", NULL, NULL);
+
+	if (kgsl_regmap_add_region(&device->regmap, pdev, "isense_cntl", NULL, NULL) == 0)
+		adreno_dev->isense_reg_mapped = true;
+
+	return 0;
+}
+
 int adreno_device_probe(struct platform_device *pdev,
 		struct adreno_device *adreno_dev)
 {
@@ -1518,7 +1554,11 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	adreno_update_soc_hw_revision_quirks(adreno_dev, pdev);
 
-	status = adreno_read_fuse(pdev, "speed_bin");
+	status = adreno_regmap_init(pdev, adreno_dev);
+	if (status)
+		goto err;
+
+	status = adreno_read_speed_bin(pdev, adreno_dev);
 	if (status < 0)
 		goto err;
 
@@ -1551,11 +1591,6 @@ int adreno_device_probe(struct platform_device *pdev,
 	status = kgsl_bus_init(device, pdev);
 	if (status)
 		goto err;
-
-	status = kgsl_regmap_init(pdev, &device->regmap, "kgsl_3d0_reg_memory",
-		&adreno_regmap_ops, device);
-	if (status)
-		goto err_bus_close;
 
 	/*
 	 * The SMMU APIs use unsigned long for virtual addresses which means
@@ -1634,15 +1669,6 @@ int adreno_device_probe(struct platform_device *pdev,
 		goto err_unbind;
 
 	adreno_fence_trace_array_init(device);
-
-	/* Add CX_DBGC block to the regmap*/
-	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", NULL, NULL);
-
-	/* Probe for the optional CX_MISC block */
-	kgsl_regmap_add_region(&device->regmap, pdev, "cx_misc", NULL, NULL);
-
-	if (kgsl_regmap_add_region(&device->regmap, pdev, "isense_cntl", NULL, NULL) == 0)
-		adreno_dev->isense_reg_mapped = true;
 
 	/* Allocate the memstore for storing timestamps and other useful info */
 

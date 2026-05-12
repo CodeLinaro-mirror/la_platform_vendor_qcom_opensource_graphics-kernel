@@ -69,6 +69,10 @@
  * Request TZ to program tsense measurement to a large period
  */
 #define GPU_TSENSE_MEASURE_DEFAULT_DISABLE BIT(4)
+/**
+ * Request TZ to set up GPU registers at probe time
+ */
+#define GPU_PROBE BIT(5)
 
 struct regulator;
 struct clk_bulk_data;

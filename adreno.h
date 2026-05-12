@@ -1188,6 +1188,8 @@ struct adreno_gpudev {
 	void (*release_cp_semaphore)(struct adreno_device *adreno_dev);
 	/** @get_gmem_size: Return the GMEM size */
 	u32 (*get_gmem_size)(struct adreno_device *adreno_dev);
+	/** @get_speed_bin: Return the GPU speed bin */
+	int (*get_speed_bin)(struct adreno_device *adreno_dev);
 };
 
 /**

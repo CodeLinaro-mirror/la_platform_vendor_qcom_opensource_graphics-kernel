@@ -3907,6 +3907,29 @@ u32 gen8_get_gmem_size(struct adreno_device *adreno_dev)
 	return adreno_dev->gpucore->gmem_size;
 }
 
+static int gen8_get_speed_bin(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int status;
+	u32 val;
+
+	if (!adreno_is_gen8_11_x(adreno_dev))
+		return -EOPNOTSUPP;
+
+	status = kgsl_scm_gpu_init_regs(&device->pdev->dev, GPU_PROBE);
+	if (status)
+		return status;
+
+	kgsl_regread(device, GEN8_GPU_CX_MISC_SW_FUSE_FREQ_LIMIT_STATUS, &val);
+	status = FIELD_GET(GENMASK(8, 0), val);
+
+	/* Check if val is valid as a speed_bin */
+	if (status <= GEN8_GPU_CX_MISC_SW_FUSE_FREQ_LIMIT_STATUS_MIN)
+		return -EINVAL;
+
+	return status;
+}
+
 const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 	.base = {
 		.reg_offsets = gen8_register_offsets,
@@ -3935,6 +3958,7 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.acquire_cp_semaphore = gen8_acquire_cp_semaphore,
 		.release_cp_semaphore = gen8_release_cp_semaphore,
 		.get_gmem_size = gen8_get_gmem_size,
+		.get_speed_bin = gen8_get_speed_bin,
 		.remove = gen8_hwsched_remove,
 	},
 	.hfi_probe = gen8_hwsched_hfi_probe,
@@ -3969,6 +3993,7 @@ const struct gen8_gpudev adreno_gen8_gmu_gpudev = {
 		.acquire_cp_semaphore = gen8_acquire_cp_semaphore,
 		.release_cp_semaphore = gen8_release_cp_semaphore,
 		.get_gmem_size = gen8_get_gmem_size,
+		.get_speed_bin = gen8_get_speed_bin,
 	},
 	.hfi_probe = gen8_gmu_hfi_probe,
 	.handle_watchdog = gen8_gmu_handle_watchdog,

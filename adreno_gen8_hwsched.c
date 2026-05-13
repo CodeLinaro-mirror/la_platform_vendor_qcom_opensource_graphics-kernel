@@ -1976,6 +1976,11 @@ DCVS_TUNABLES_SYSFS(max_freq_mhz, GPU_TUNING_KEY_MAX_GPU_FREQUENCY);
 DCVS_TUNABLES_SYSFS(mod_percent, GPU_TUNING_KEY_MOD_PERCENT);
 DCVS_TUNABLES_SYSFS(bus_min_freq_mhz, GPU_TUNING_KEY_BUS_MIN_FREQUENCY);
 DCVS_TUNABLES_SYSFS(bus_max_freq_mhz, GPU_TUNING_KEY_BUS_MAX_FREQUENCY);
+DCVS_TUNABLES_SYSFS(deadline_boost_base_freq_mhz, GPU_TUNING_KEY_DEADLINE_BOOST_PWRLEVEL_BASE);
+DCVS_TUNABLES_SYSFS(deadline_boost_stride_percentage,
+		GPU_TUNING_KEY_DEADLINE_BOOST_STRIDE_PERCENTAGE);
+DCVS_TUNABLES_SYSFS(deadline_boost_release_num_frames,
+		GPU_TUNING_KEY_DEADLINE_BOOST_RELEASE_NUM_FRAMES);
 
 static struct attribute *dcvs_tunables_attrs[] = {
 	&dcvs_attr_penalty_up.attr.attr,
@@ -1993,6 +1998,9 @@ static struct attribute *dcvs_tunables_attrs[] = {
 	&dcvs_attr_mod_percent.attr.attr,
 	&dcvs_attr_bus_min_freq_mhz.attr.attr,
 	&dcvs_attr_bus_max_freq_mhz.attr.attr,
+	&dcvs_attr_deadline_boost_base_freq_mhz.attr.attr,
+	&dcvs_attr_deadline_boost_stride_percentage.attr.attr,
+	&dcvs_attr_deadline_boost_release_num_frames.attr.attr,
 	NULL,
 };
 
@@ -2025,6 +2033,9 @@ static const char * const dcvs_tunables_strings[] = {
 	[GPU_TUNING_KEY_BUS_MAX_FREQUENCY] = "bus_max_freq_mhz",
 	[GPU_TUNING_KEY_MIN_AB_MBPS] = NULL,
 	[GPU_TUNING_KEY_MAX_AB_MBPS] = NULL,
+	[GPU_TUNING_KEY_DEADLINE_BOOST_PWRLEVEL_BASE] = "deadline_boost_base_freq_mhz",
+	[GPU_TUNING_KEY_DEADLINE_BOOST_STRIDE_PERCENTAGE] = "deadline_boost_stride_percentage",
+	[GPU_TUNING_KEY_DEADLINE_BOOST_RELEASE_NUM_FRAMES] = "deadline_boost_release_num_frames",
 	[GPU_TUNING_KEY_MAX] = NULL
 };
 

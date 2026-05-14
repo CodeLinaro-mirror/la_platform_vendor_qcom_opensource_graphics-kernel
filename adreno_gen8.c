@@ -2571,6 +2571,7 @@ static void gen8_get_cp_hwfault_status(struct adreno_device *adreno_dev, u32 sta
 			[CP_HW_RBFAULT] = "RBFAULT",
 			[CP_HW_IB1FAULT] = "IB1FAULT",
 			[CP_HW_IB2FAULT] = "IB2FAULT",
+			[CP_HW_IB3FAULT] = "IB3FAULT",
 			[CP_HW_SDSFAULT] = "SDSFAULT",
 			[CP_HW_MRBFAULT] = "MRGFAULT",
 			[CP_HW_VSDFAULT] = "VSDFAULT",
@@ -2609,7 +2610,8 @@ static void gen8_get_cp_hwfault_status(struct adreno_device *adreno_dev, u32 sta
 	gen8_host_aperture_clear(adreno_dev);
 
 	dev_crit_ratelimited(device->dev, "CP HW Fault pipe_id:%u %s\n", pipe_id,
-			hw_status < ARRAY_SIZE(table) ? table[hw_status] : "UNKNOWN");
+			(hw_status < ARRAY_SIZE(table) && table[hw_status]) ?
+			table[hw_status] : "UNKNOWN");
 }
 
 static void gen8_get_cp_swfault_status(struct adreno_device *adreno_dev, u32 status)
@@ -2669,7 +2671,8 @@ static void gen8_get_cp_swfault_status(struct adreno_device *adreno_dev, u32 sta
 			      pipe_id, first_slice, 0);
 
 	dev_crit_ratelimited(device->dev, "CP SW Fault pipe_id: %u %s\n", pipe_id,
-			sw_status < ARRAY_SIZE(table) ? table[sw_status] : "UNKNOWN");
+			(sw_status < ARRAY_SIZE(table) && table[sw_status]) ?
+			table[sw_status] : "UNKNOWN");
 
 	if (sw_status & BIT(CP_SW_OPCODEERROR)) {
 		gen8_regwrite_aperture(device, GEN8_CP_SQE_STAT_ADDR_PIPE, 1,

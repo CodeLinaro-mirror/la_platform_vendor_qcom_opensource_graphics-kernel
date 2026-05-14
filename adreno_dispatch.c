@@ -1109,6 +1109,7 @@ static int drawctxt_queue_markerobj(struct adreno_device *adreno_dev,
 	 */
 	if (!drawctxt->queued && kgsl_check_timestamp(drawobj->device,
 			drawobj->context, drawctxt->queued_timestamp)) {
+		drawctxt->queued_timestamp = *timestamp;
 		_retire_timestamp(drawobj);
 		return 1;
 	}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -524,8 +524,11 @@ int adreno_perfcounter_put(struct adreno_device *adreno_dev,
 				if (gpudev->perfcounter_remove)
 					ret = gpudev->perfcounter_remove(adreno_dev,
 							&group->regs[i], groupid);
-				if (!ret)
+				if (!ret) {
 					group->regs[i].countable = KGSL_PERFCOUNTER_NOT_USED;
+					if (group->disable)
+						group->disable(adreno_dev, group, i, countable);
+				}
 			}
 
 			return ret;

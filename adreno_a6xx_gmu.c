@@ -322,8 +322,15 @@ void a6xx_load_rsc_ucode(struct adreno_device *adreno_dev)
 	_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_ADDR, 0);
 	_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_DATA + RSC_CMD_OFFSET, 0);
 	_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_ADDR + RSC_CMD_OFFSET, 0);
-	_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_DATA + RSC_CMD_OFFSET * 2,
-			adreno_is_a622_family(adreno_dev) ? 0x80000028 : 0x80000000);
+	if (adreno_is_a622(adreno_dev))
+		_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_DATA + RSC_CMD_OFFSET * 2,
+			0x80000028);
+	else if (adreno_is_a624(adreno_dev))
+		_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_DATA + RSC_CMD_OFFSET * 2,
+			0x80000021);
+	else
+		_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_DATA + RSC_CMD_OFFSET * 2,
+			0x80000000);
 	_regwrite(rscc, A6XX_RSCC_HIDDEN_TCS_CMD0_ADDR + RSC_CMD_OFFSET * 2,
 			0);
 	_regwrite(rscc, A6XX_RSCC_OVERRIDE_START_ADDR, 0);

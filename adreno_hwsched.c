@@ -1221,7 +1221,7 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 	spin_unlock(&device->submit_lock);
 
 	/* If the dispatcher is busy then schedule the work for later */
-	if (!mutex_trylock(&hwsched->mutex)) {
+	if (!kgsl_mutex_trylock(&hwsched->mutex)) {
 		_decrement_submit_now(device);
 		goto done;
 	}
@@ -1236,7 +1236,7 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 		kgsl_mutex_unlock(&device->mutex);
 	}
 
-	mutex_unlock(&hwsched->mutex);
+	kgsl_mutex_unlock(&hwsched->mutex);
 	_decrement_submit_now(device);
 	return;
 
@@ -2517,10 +2517,9 @@ static void adreno_hwsched_work(struct kthread_work *work)
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	mutex_lock(&hwsched->mutex);
-
+	kgsl_mutex_lock(&hwsched->mutex);
 	if (adreno_hwsched_do_fault(adreno_dev)) {
-		mutex_unlock(&hwsched->mutex);
+		kgsl_mutex_unlock(&hwsched->mutex);
 		return;
 	}
 
@@ -2545,7 +2544,7 @@ static void adreno_hwsched_work(struct kthread_work *work)
 		kgsl_mutex_unlock(&device->mutex);
 	}
 
-	mutex_unlock(&hwsched->mutex);
+	kgsl_mutex_unlock(&hwsched->mutex);
 }
 
 static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
@@ -2624,7 +2623,7 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
 		return PTR_ERR(adreno_dev->scheduler_worker);
 	}
 
-	mutex_init(&hwsched->mutex);
+	kgsl_mutex_init(&hwsched->mutex);
 
 	kthread_init_work(&adreno_dev->scheduler_work, adreno_hwsched_work);
 

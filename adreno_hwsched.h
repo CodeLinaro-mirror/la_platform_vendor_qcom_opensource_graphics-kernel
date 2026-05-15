@@ -122,7 +122,11 @@ struct adreno_hwsched {
 	/** @mem_alloc_entries: Number of entries in the memory allocation table */
 	u32 mem_alloc_entries;
 	/** @mutex: Mutex needed to run dispatcher function */
+#if IS_ENABLED(CONFIG_QCOM_KGSL_RT_MUTEX)
+	struct rt_mutex mutex;
+#else
 	struct mutex mutex;
+#endif
 	/** @flags: Container for the dispatcher internal flags */
 	unsigned long flags;
 	/** @inflight: Number of active submissions to the dispatch queues */

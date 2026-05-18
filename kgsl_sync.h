@@ -157,6 +157,16 @@ void kgsl_hw_fence_put(struct kgsl_sync_fence *kfence);
 
 void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size);
 
+/*
+ * kgsl_populate_hw_fences - Populate hardware fences in a sync event
+ * event: Pointer to the sync event
+ *
+ * This function checks if the fences in the sync event are hardware fences.
+ * If so, it will allocate an array to keep track of all hardware fences
+ * in this sync event. If there is an unsignaled software fence, then it will
+ * set KGSL_SYNCOBJ_SW for this sync event.
+ */
+void kgsl_populate_hw_fences(struct kgsl_drawobj_sync_event *event);
 #else
 static inline int kgsl_add_fence_event(struct kgsl_device *device,
 	u32 context_id, u32 timestamp, void __user *data, int len,
@@ -244,18 +254,71 @@ static inline void kgsl_syncsource_process_release_syncsources(
 
 }
 
-bool is_kgsl_fence(struct dma_fence *f)
+static inline bool is_kgsl_fence(struct dma_fence *f)
 {
 	return false;
 }
 
-void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
+static inline void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 		u32 timestamp)
 {
 
 }
 
+static inline void kgsl_hw_fence_put(struct kgsl_sync_fence *kfence)
+{
+
+}
+
+static inline void kgsl_populate_hw_fences(struct kgsl_drawobj_sync_event *event)
+{
+}
+
 #endif /* CONFIG_SYNC_FILE */
+
+#if IS_ENABLED(CONFIG_QCOM_KGSL_SYNX)
+int kgsl_synx_register(struct kgsl_device *device, struct kgsl_memdesc *synx_md);
+
+void kgsl_synx_deregister(struct kgsl_device *device, struct kgsl_memdesc *synx_md);
+
+int kgsl_synx_import(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index);
+
+void kgsl_synx_import_release(struct kgsl_device *device, u32 handle);
+
+bool kgsl_is_synx_hw_fence(struct dma_fence *fence);
+
+bool kgsl_is_synx_native_fence(struct dma_fence *fence);
+#else
+static inline int kgsl_synx_register(struct kgsl_device *device, struct kgsl_memdesc *synx_md)
+{
+	return -EINVAL;
+}
+
+static inline void kgsl_synx_deregister(struct kgsl_device *device, struct kgsl_memdesc *synx_md)
+{
+
+}
+
+static inline int kgsl_synx_import(struct kgsl_device *device, struct dma_fence *fence,
+		u32 *hash_index)
+{
+	return -EINVAL;
+}
+
+static inline void kgsl_synx_import_release(struct kgsl_device *device, u32 handle)
+{
+}
+
+static inline bool kgsl_is_synx_hw_fence(struct dma_fence *fence)
+{
+	return false;
+}
+
+static inline bool kgsl_is_synx_native_fence(struct dma_fence *fence)
+{
+	return false;
+}
+#endif
 
 #if (IS_ENABLED(CONFIG_SYNC_FILE) && (IS_ENABLED(CONFIG_QTI_HW_FENCE) || \
 	IS_ENABLED(CONFIG_QCOM_KGSL_SYNX)))
@@ -279,32 +342,13 @@ int kgsl_hw_fence_soccp_vote(bool pwr_on);
 
 int kgsl_hw_fence_register(struct kgsl_device *device, struct kgsl_memdesc *md);
 
-int kgsl_synx_register(struct kgsl_device *device, struct kgsl_memdesc *synx_md);
-
 void kgsl_hw_fence_deregister(struct kgsl_device *device, struct kgsl_memdesc *md);
 
-void kgsl_synx_deregister(struct kgsl_device *device, struct kgsl_memdesc *synx_md);
-
 int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
-
-int kgsl_synx_import(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index);
-
-void kgsl_synx_import_release(struct kgsl_device *device, u32 handle);
 
 int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index);
 
 bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, u32 pending_hw_fence_count);
-
-/*
- * kgsl_populate_hw_fences - Populate hardware fences in a sync event
- * event: Pointer to the sync event
- *
- * This function checks if the fences in the sync event are hardware fences.
- * If so, it will allocate an array to keep track of all hardware fences
- * in this sync event. If there is an unsignaled software fence, then it will
- * set KGSL_SYNCOBJ_SW for this sync event.
- */
-void kgsl_populate_hw_fences(struct kgsl_drawobj_sync_event *event);
 
 #else
 
@@ -357,48 +401,13 @@ static inline bool kgsl_is_input_hw_fence(struct dma_fence *fence)
 	return false;
 }
 
-void kgsl_populate_hw_fences(struct kgsl_drawobj_sync_event *event)
-{
-
-}
-
-int kgsl_synx_register(struct kgsl_device *device, struct kgsl_memdesc *synx_md)
+static inline int kgsl_hw_fence_register(struct kgsl_device *device, struct kgsl_memdesc *md)
 {
 	return -EINVAL;
 }
 
-void kgsl_synx_deregister(struct kgsl_device *device, struct kgsl_memdesc *synx_md)
+static inline void kgsl_hw_fence_deregister(struct kgsl_device *device, struct kgsl_memdesc *md)
 {
-
-}
-
-int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
-{
-	return -EINVAL;
-}
-
-int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index)
-{
-	return -EINVAL;
-}
-
-int kgsl_synx_import(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index)
-{
-	return -EINVAL;
-}
-
-void kgsl_synx_import_release(struct kgsl_device *device, u32 handle)
-{
-}
-
-bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, u32 pending_hw_fence_count)
-{
-	return false;
-}
-
-void kgsl_hw_fence_put(struct kgsl_sync_fence *kfence)
-{
-
 }
 
 #endif /* CONFIG_SYNC_FILE && (CONFIG_QTI_HW_FENCE || CONFIG_QCOM_KGSL_SYNX) */

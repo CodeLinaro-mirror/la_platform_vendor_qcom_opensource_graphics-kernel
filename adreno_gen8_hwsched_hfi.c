@@ -5,8 +5,6 @@
  */
 
 #include <linux/iommu.h>
-#include <synx_interop.h>
-
 #include "adreno.h"
 #include "adreno_gen8.h"
 #include "adreno_gen8_hwsched.h"
@@ -20,6 +18,7 @@
 #include "kgsl_snapshot.h"
 #include "kgsl_timeline.h"
 #include "kgsl_util.h"
+#include "kgsl_sync.h"
 
 #define HFI_QUEUE_MAX (HFI_QUEUE_DEFAULT_CNT)
 
@@ -3805,7 +3804,7 @@ static inline int setup_hw_fence_info_cmd(struct adreno_device *adreno_dev,
 	if (ret)
 		return ret;
 
-	if (test_bit(SYNX_NATIVE_FENCE_FLAG_ENABLED_BIT, &kfence->fence.flags))
+	if (kgsl_is_synx_native_fence(&kfence->fence))
 		entry->cmd.flags |= HW_FENCE_FLAG_SYNX_HANDLE;
 
 	entry->cmd.gmu_ctxt_id = entry->drawctxt->base.id;

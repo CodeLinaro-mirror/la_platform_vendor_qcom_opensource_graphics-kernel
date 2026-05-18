@@ -12,11 +12,11 @@
 #include "kgsl_eventlog.h"
 #include "kgsl_trace.h"
 #include "kgsl_pwrctrl.h"
+#include "kgsl_sync.h"
 #include "kgsl_timeline.h"
 #include <linux/msm_kgsl.h>
 #include <linux/sched/clock.h>
 #include <soc/qcom/msm_performance.h>
-#include <synx_interop.h>
 
 #define POLL_SLEEP_US 100
 
@@ -3874,7 +3874,7 @@ int adreno_hwsched_import_external_fence(struct adreno_device *adreno_dev,
 	int ret = -EINVAL;
 	bool use_hw_fence = !test_bit(GMU_HWSCHED_SYNX, &device->gmu_core.flags) ||
 		(gmu_core_is_hw_fencing_enabled(device) &&
-		test_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &hw_fence->fence->flags));
+		kgsl_is_synx_hw_fence(hw_fence->fence));
 
 	if (use_hw_fence) {
 		ret = kgsl_hw_fence_add_waiter(device, hw_fence->fence, &obj->hash_index);

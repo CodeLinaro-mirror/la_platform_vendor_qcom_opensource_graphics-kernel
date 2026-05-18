@@ -425,7 +425,17 @@ static bool kgsl_is_input_hw_fence(struct dma_fence *fence)
 		test_bit(SYNX_NATIVE_FENCE_FLAG_ENABLED_BIT, &fence->flags) || is_kgsl_fence(fence);
 }
 
-#else
+bool kgsl_is_synx_hw_fence(struct dma_fence *fence)
+{
+	return test_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags);
+}
+
+bool kgsl_is_synx_native_fence(struct dma_fence *fence)
+{
+	return test_bit(SYNX_NATIVE_FENCE_FLAG_ENABLED_BIT, &fence->flags);
+}
+
+#elif IS_ENABLED(CONFIG_QTI_HW_FENCE)
 #if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
 #include <msm_hw_fence.h>
 #else
@@ -583,6 +593,11 @@ bool kgsl_hw_fence_signaled(struct dma_fence *fence)
 static bool kgsl_is_input_hw_fence(struct dma_fence *fence)
 {
 	return test_bit(MSM_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags);
+}
+
+#else
+static void _hw_fence_destroy(struct kgsl_sync_fence *kfence)
+{
 }
 
 #endif

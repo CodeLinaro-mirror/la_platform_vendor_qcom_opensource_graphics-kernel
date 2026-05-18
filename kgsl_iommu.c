@@ -31,6 +31,7 @@
 #include "kgsl_mmu.h"
 #include "kgsl_pwrctrl.h"
 #include "kgsl_sharedmem.h"
+#include "kgsl_snapshot.h"
 #include "kgsl_trace.h"
 
 /* These defines control the base / size of the global memory region when using split pagetables */
@@ -1380,7 +1381,10 @@ static int kgsl_iommu_fault_handler(struct kgsl_mmu *mmu,
 	kgsl_iommu_add_fault_info(context, addr, flags);
 
 	if (stall || terminate) {
+		struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 		u32 sctlr;
+
+		adreno_dev->adreno_err_code = SNAPSHOT_ERROR_GPU_PAGE_FAULT;
 
 		/*
 		 * Disable context fault interrupts as we do not clear FSR in
@@ -1395,8 +1399,6 @@ static int kgsl_iommu_fault_handler(struct kgsl_mmu *mmu,
 
 		/* This is used by reset/recovery path */
 		if (stall) {
-			struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-
 			ctx->stalled_on_fault = true;
 
 			/* Go ahead with recovery*/

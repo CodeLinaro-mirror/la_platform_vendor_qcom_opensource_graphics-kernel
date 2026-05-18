@@ -2511,6 +2511,8 @@ static int gen8_boot(struct adreno_device *adreno_dev)
 	bool bcl_state = adreno_dev->bcl_enabled;
 	int ret;
 
+	adreno_dev->adreno_err_code = 0;
+
 	if (WARN_ON(test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags)))
 		return 0;
 
@@ -2565,6 +2567,8 @@ static int gen8_first_boot(struct adreno_device *adreno_dev)
 
 		return 0;
 	}
+
+	adreno_dev->adreno_err_code = 0;
 
 	ret = gen8_ringbuffer_init(adreno_dev);
 	if (ret)

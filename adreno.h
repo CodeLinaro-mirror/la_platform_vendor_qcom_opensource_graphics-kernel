@@ -928,6 +928,8 @@ struct adreno_device {
 	u32 viz_flush_draw_count;
 	/** @viz_flush_prim_count: Prim count to flush visibility stream **/
 	u32 viz_flush_prim_count;
+	/** @adreno_err_code: Error code to be dumped on snapshot */
+	u32 adreno_err_code;
 };
 
 /* Time to wait for suspend recovery gate to complete */

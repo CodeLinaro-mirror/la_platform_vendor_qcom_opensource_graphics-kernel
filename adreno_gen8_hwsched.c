@@ -570,6 +570,7 @@ err:
 	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	if (device->gmu_fault) {
+		adreno_dev->adreno_err_code = SNAPSHOT_ERROR_GMU_BOOT_FAILURE;
 		gen8_hwsched_gmu_suspend(adreno_dev, false);
 		return ret;
 	}
@@ -911,6 +912,8 @@ static int gen8_hwsched_boot(struct adreno_device *adreno_dev)
 	bool bcl_state = adreno_dev->bcl_enabled;
 	int ret;
 
+	adreno_dev->adreno_err_code = 0;
+
 	if (test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
 		return 0;
 
@@ -973,6 +976,8 @@ static int gen8_hwsched_first_boot(struct adreno_device *adreno_dev)
 
 	if (test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags))
 		return gen8_hwsched_boot(adreno_dev);
+
+	adreno_dev->adreno_err_code = 0;
 
 	adreno_hwsched_start(adreno_dev);
 
@@ -1440,6 +1445,8 @@ void gen8_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 mask;
+
+	adreno_dev->adreno_err_code = SNAPSHOT_ERROR_GMU_WATCHDOG_TIMEOUT;
 
 	/* Temporarily mask the watchdog interrupt to prevent a storm */
 	gmu_core_regread(device, GEN8_GMUAO_AO_HOST_INTERRUPT_MASK,

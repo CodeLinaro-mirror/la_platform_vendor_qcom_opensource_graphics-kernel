@@ -96,6 +96,7 @@ static inline struct kgsl_pagetable *_get_memdesc_pagetable(
 static void kgsl_mem_entry_detach_process(struct kgsl_mem_entry *entry);
 
 static const struct vm_operations_struct kgsl_gpumem_vm_ops;
+static const struct vm_operations_struct kgsl_gpumem_guard_vm_ops;
 
 #if (KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE)
 static unsigned long kgsl_mm_get_unmapped_area(struct mm_struct *mm, struct file *file,
@@ -2979,7 +2980,8 @@ static bool check_vma(struct kgsl_device *device, struct kgsl_memdesc *memdesc,
 		return false;
 
 	/* Don't remap memory that we already own */
-	if (vma->vm_file && (vma->vm_ops == &kgsl_gpumem_vm_ops))
+	if (vma->vm_file && ((vma->vm_ops == &kgsl_gpumem_vm_ops) ||
+		(vma->vm_ops == &kgsl_gpumem_guard_vm_ops)))
 		return false;
 
 	cached = _vma_is_cached(vma);
@@ -2992,7 +2994,8 @@ static bool check_vma(struct kgsl_device *device, struct kgsl_memdesc *memdesc,
 			return false;
 
 		/* Don't remap memory that we already own */
-		if (vma->vm_file && (vma->vm_ops == &kgsl_gpumem_vm_ops))
+		if (vma->vm_file && ((vma->vm_ops == &kgsl_gpumem_vm_ops) ||
+			(vma->vm_ops == &kgsl_gpumem_guard_vm_ops)))
 			return false;
 
 		/*
@@ -3211,7 +3214,8 @@ static long _gpuobj_map_dma_buf(struct kgsl_device *device,
 		KGSL_MEMALIGN_MASK |
 		KGSL_MEMFLAGS_SECURE |
 		KGSL_MEMFLAGS_FORCE_32BIT |
-		KGSL_MEMFLAGS_GUARD_PAGE;
+		KGSL_MEMFLAGS_GUARD_PAGE |
+		KGSL_MEMFLAGS_UNMAPPED_GUARD_PAGES_MASK;
 
 	kgsl_memdesc_init(device, &entry->memdesc, param->flags);
 
@@ -4377,7 +4381,8 @@ struct kgsl_mem_entry *gpumem_alloc_entry(
 		| KGSL_MEMFLAGS_SECURE
 		| KGSL_MEMFLAGS_FORCE_32BIT
 		| KGSL_MEMFLAGS_IOCOHERENT
-		| KGSL_MEMFLAGS_GUARD_PAGE;
+		| KGSL_MEMFLAGS_GUARD_PAGE
+		| KGSL_MEMFLAGS_UNMAPPED_GUARD_PAGES_MASK;
 
 	/* Return not supported error if secure memory isn't enabled */
 	if ((flags & KGSL_MEMFLAGS_SECURE) && !check_and_warn_secured(device))
@@ -4688,7 +4693,7 @@ kgsl_memstore_vm_fault(struct vm_fault *vmf)
 {
 	struct kgsl_memdesc *memdesc = vmf->vma->vm_private_data;
 
-	return memdesc->ops->vmfault(memdesc, vmf->vma, vmf);
+	return memdesc->ops->vmfault(memdesc, vmf->vma, vmf, 0);
 }
 
 static const struct vm_operations_struct kgsl_memstore_vm_ops = {
@@ -4780,7 +4785,7 @@ kgsl_gpumem_vm_fault(struct vm_fault *vmf)
 	if (!entry->memdesc.ops || !entry->memdesc.ops->vmfault)
 		return VM_FAULT_SIGBUS;
 
-	return entry->memdesc.ops->vmfault(&entry->memdesc, vmf->vma, vmf);
+	return entry->memdesc.ops->vmfault(&entry->memdesc, vmf->vma, vmf, 0);
 }
 
 static void
@@ -4816,6 +4821,26 @@ kgsl_gpumem_vm_close(struct vm_area_struct *vma)
 static const struct vm_operations_struct kgsl_gpumem_vm_ops = {
 	.open  = kgsl_gpumem_vm_open,
 	.fault = kgsl_gpumem_vm_fault,
+	.close = kgsl_gpumem_vm_close,
+};
+
+static vm_fault_t kgsl_gpumem_guard_vm_fault(struct vm_fault *vmf)
+{
+	struct kgsl_mem_entry *entry = vmf->vma->vm_private_data;
+	u64 data_offset;
+
+	if (!entry)
+		return VM_FAULT_SIGBUS;
+	if (!entry->memdesc.ops || !entry->memdesc.ops->vmfault)
+		return VM_FAULT_SIGBUS;
+
+	data_offset = (u64)entry->memdesc.unmapped_guard_page_count * PAGE_SIZE;
+	return entry->memdesc.ops->vmfault(&entry->memdesc, vmf->vma, vmf, data_offset);
+}
+
+static const struct vm_operations_struct kgsl_gpumem_guard_vm_ops = {
+	.open = kgsl_gpumem_vm_open,
+	.fault = kgsl_gpumem_guard_vm_fault,
 	.close = kgsl_gpumem_vm_close,
 };
 
@@ -5048,6 +5073,8 @@ static int kgsl_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	unsigned int cache;
 	unsigned long vma_offset = vma->vm_pgoff << PAGE_SHIFT;
+	unsigned long vma_size = vma->vm_end - vma->vm_start;
+	unsigned long data_start = vma->vm_start;
 	struct kgsl_device_private *dev_priv = file->private_data;
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_mem_entry *entry = NULL;
@@ -5064,8 +5091,7 @@ static int kgsl_mmap(struct file *file, struct vm_area_struct *vma)
 	 * The reference count on the entry that we get from
 	 * get_mmap_entry() will be held until kgsl_gpumem_vm_close().
 	 */
-	ret = get_mmap_entry(private, &entry, vma->vm_pgoff,
-				vma->vm_end - vma->vm_start);
+	ret = get_mmap_entry(private, &entry, vma->vm_pgoff, vma_size);
 	if (ret)
 		return ret;
 
@@ -5094,7 +5120,12 @@ static int kgsl_mmap(struct file *file, struct vm_area_struct *vma)
 		break;
 	}
 
-	vma->vm_ops = &kgsl_gpumem_vm_ops;
+	/* When mapping the full footprint, offset past any potential unmapped regions */
+	if (vma_size == kgsl_memdesc_footprint(&entry->memdesc)) {
+		vma->vm_ops = &kgsl_gpumem_guard_vm_ops;
+		data_start += entry->memdesc.unmapped_guard_page_count * PAGE_SIZE;
+	} else
+		vma->vm_ops = &kgsl_gpumem_vm_ops;
 
 	flags = entry->memdesc.flags;
 
@@ -5102,7 +5133,7 @@ static int kgsl_mmap(struct file *file, struct vm_area_struct *vma)
 	    (cache == KGSL_CACHEMODE_WRITEBACK ||
 	     cache == KGSL_CACHEMODE_WRITETHROUGH)) {
 		int i;
-		unsigned long addr = vma->vm_start;
+		unsigned long addr = data_start;
 		struct kgsl_memdesc *m = &entry->memdesc;
 
 		for (i = 0; i < m->page_count; i++) {
@@ -5135,7 +5166,7 @@ static int kgsl_mmap(struct file *file, struct vm_area_struct *vma)
 	if (atomic_inc_return(&entry->map_count) == 1)
 		atomic64_add(entry->memdesc.size, &entry->priv->gpumem_mapped);
 
-	trace_kgsl_mem_mmap(entry, vma->vm_start);
+	trace_kgsl_mem_mmap(entry, data_start);
 	return 0;
 }
 

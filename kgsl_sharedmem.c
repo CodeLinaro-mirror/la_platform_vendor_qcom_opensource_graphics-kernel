@@ -523,16 +523,16 @@ kgsl_sharedmem_init_sysfs(void)
 
 static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 				struct vm_area_struct *vma,
-				struct vm_fault *vmf)
+				struct vm_fault *vmf, u64 data_offset)
 {
 	int pgoff, ret;
 	struct page *page;
 	u64 offset = ((u64)vma->vm_pgoff << PAGE_SHIFT) + (vmf->address - vma->vm_start);
 
-	if (offset >= memdesc->size)
+	if ((offset < data_offset) || (offset >= (data_offset + memdesc->size)))
 		return VM_FAULT_SIGBUS;
 
-	pgoff = offset >> PAGE_SHIFT;
+	pgoff = (offset - data_offset) >> PAGE_SHIFT;
 	mutex_lock(&memdesc->lock);
 
 	if (memdesc->pages[pgoff]) {
@@ -693,7 +693,7 @@ static int kgsl_paged_map_kernel(struct kgsl_memdesc *memdesc)
 
 static vm_fault_t kgsl_contiguous_vmfault(struct kgsl_memdesc *memdesc,
 				struct vm_area_struct *vma,
-				struct vm_fault *vmf)
+				struct vm_fault *vmf, u64 data_offset)
 {
 	unsigned long offset, pfn;
 
@@ -824,6 +824,9 @@ void kgsl_memdesc_init(struct kgsl_device *device,
 	if (kgsl_mmu_has_feature(device, KGSL_MMU_NEED_GUARD_PAGE) ||
 		(flags & KGSL_MEMFLAGS_GUARD_PAGE))
 		SET_FLAG(KGSL_MEMDESC_GUARD_PAGE, &memdesc->priv);
+
+	memdesc->unmapped_guard_page_count =
+		FIELD_GET(KGSL_MEMFLAGS_UNMAPPED_GUARD_PAGES_MASK, flags);
 
 	if (flags & KGSL_MEMFLAGS_SECURE)
 		SET_FLAG(KGSL_MEMDESC_SECURE, &memdesc->priv);

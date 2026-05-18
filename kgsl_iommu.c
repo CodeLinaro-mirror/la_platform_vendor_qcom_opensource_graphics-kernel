@@ -584,7 +584,7 @@ static int kgsl_iopgtbl_map(struct kgsl_pagetable *pagetable,
 	if (mapped == 0)
 		return -ENOMEM;
 
-	padding = kgsl_memdesc_footprint(memdesc) - mapped;
+	padding = kgsl_memdesc_mapped_size(memdesc) - mapped;
 
 	if (padding) {
 		struct page *page = iommu_get_guard_page(memdesc);
@@ -608,7 +608,7 @@ static int kgsl_iopgtbl_unmap(struct kgsl_pagetable *pagetable,
 		struct kgsl_memdesc *memdesc)
 {
 	return _iopgtbl_unmap(to_iommu_pt(pagetable), memdesc->gpuaddr,
-		kgsl_memdesc_footprint(memdesc));
+		kgsl_memdesc_mapped_size(memdesc));
 }
 
 static int _iommu_unmap(struct iommu_domain *domain, u64 addr, size_t size)
@@ -706,7 +706,7 @@ _kgsl_iommu_map(struct kgsl_mmu *mmu, struct iommu_domain *domain,
 	if (mapped <= 0)
 		return mapped ? mapped : -ENOMEM;
 
-	padding = kgsl_memdesc_footprint(memdesc) - mapped;
+	padding = kgsl_memdesc_mapped_size(memdesc) - mapped;
 
 	if (padding) {
 		struct page *page = iommu_get_guard_page(memdesc);
@@ -750,8 +750,7 @@ static int _kgsl_iommu_unmap(struct iommu_domain *domain,
 	if (memdesc->size == 0 || memdesc->gpuaddr == 0)
 		return -EINVAL;
 
-	return _iommu_unmap(domain, memdesc->gpuaddr,
-		kgsl_memdesc_footprint(memdesc));
+	return _iommu_unmap(domain, memdesc->gpuaddr, kgsl_memdesc_mapped_size(memdesc));
 }
 
 /* Map on the default pagetable and the LPAC pagetable if it exists */
@@ -1040,10 +1039,11 @@ static void print_entry(struct device *dev, struct kgsl_mem_entry *entry,
 
 	kgsl_get_memory_usage(name, sizeof(name), entry->memdesc.flags);
 
-	dev_err(dev, "[%016llX - %016llX] %s %s (pid = %d) (%s)\n",
+	dev_err(dev, "[%016llX - %016llX] %s %s %s (pid = %d) (%s)\n",
 	      entry->memdesc.gpuaddr,
 	      entry->memdesc.gpuaddr + entry->memdesc.size - 1,
 	      TEST_FLAG(KGSL_MEMDESC_GUARD_PAGE, &entry->memdesc.priv) ? "(+guard)" : "",
+	      entry->memdesc.unmapped_guard_page_count ? "(+/- unmapped guard)" : "",
 	      entry->pending_free ? "(pending free)" : "",
 	      pid, name);
 }
@@ -2628,7 +2628,7 @@ out:
 		return ret;
 	}
 
-	memdesc->gpuaddr = gpuaddr;
+	memdesc->gpuaddr = kgsl_memdesc_gpuaddr_from_base(memdesc, gpuaddr);
 	memdesc->pagetable = pagetable;
 	mutex_unlock(&memdesc->lock);
 	return ret;
@@ -2659,7 +2659,7 @@ static int get_gpuaddr(struct kgsl_pagetable *pagetable,
 	spin_unlock(&pagetable->lock);
 
 	if (ret == 0) {
-		memdesc->gpuaddr = addr;
+		memdesc->gpuaddr = kgsl_memdesc_gpuaddr_from_base(memdesc, addr);
 		memdesc->pagetable = pagetable;
 	} else {
 		kmem_cache_free(addr_entry_cache, new);
@@ -2704,12 +2704,15 @@ static int kgsl_iommu_get_gpuaddr(struct kgsl_pagetable *pagetable,
 
 static void kgsl_iommu_put_gpuaddr(struct kgsl_memdesc *memdesc)
 {
+	u64 base;
+
 	if (memdesc->pagetable == NULL)
 		return;
 
 	spin_lock(&memdesc->pagetable->lock);
 
-	_remove_gpuaddr(memdesc->pagetable, memdesc->gpuaddr);
+	base = kgsl_memdesc_base_from_gpuaddr(memdesc, memdesc->gpuaddr);
+	_remove_gpuaddr(memdesc->pagetable, base);
 
 	spin_unlock(&memdesc->pagetable->lock);
 }

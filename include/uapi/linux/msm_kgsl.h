@@ -162,6 +162,11 @@
 #define KGSL_MEMFLAGS_VBO             (1ULL << 34)
 #define KGSL_MEMFLAGS_VBO_NO_MAP_ZERO (1ULL << 35)
 
+/* Number of pages to use in the allocation's unmapped guard regions */
+#define KGSL_MEMFLAGS_UNMAPPED_GUARD_PAGES_SHIFT 36
+#define KGSL_MEMFLAGS_UNMAPPED_GUARD_PAGES_MASK \
+	(0xFULL << KGSL_MEMFLAGS_UNMAPPED_GUARD_PAGES_SHIFT)
+
 /* Memory types for which allocations are made */
 #define KGSL_MEMTYPE_MASK		0x0000FF00
 #define KGSL_MEMTYPE_SHIFT		8

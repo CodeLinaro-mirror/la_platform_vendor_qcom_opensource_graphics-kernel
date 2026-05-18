@@ -2456,7 +2456,7 @@ static void gen7_hwsched_hw_fence_timeout(struct work_struct *work)
 
 static void gen7_hwsched_hw_fence_timer(struct timer_list *t)
 {
-	struct gen7_hwsched_hfi *hfi = from_timer(hfi, t, hw_fence_timer);
+	struct gen7_hwsched_hfi *hfi = kgsl_timer_container_of(hfi, t, hw_fence_timer);
 
 	kgsl_schedule_work(&hfi->hw_fence_ws);
 }
@@ -3066,8 +3066,6 @@ static struct adreno_hw_fence_entry *allocate_hw_fence_entry(struct adreno_devic
 		return NULL;
 	}
 
-	dma_fence_get(&kfence->fence);
-
 	drawctxt->hw_fence_count++;
 	hwsched->hw_fence.pending_count++;
 
@@ -3236,7 +3234,6 @@ void gen7_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 		if (__ratelimit(&_rs))
 			dev_err(GMU_PDEV_DEV(device), "hw fence for ctx:%d ts:%d ret:%d may not be destroyed\n",
 				kfence->context_id, kfence->timestamp, ret);
-		kgsl_hw_fence_destroy(kfence);
 		destroy = true;
 		drawctxt->hw_fence_last_ts = hw_fence_last_ts;
 		goto done;

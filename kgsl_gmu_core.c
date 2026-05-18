@@ -312,13 +312,9 @@ static bool vma_is_dynamic(struct kgsl_device *device, int vma_id)
 	return (vma_id == GMU_NONCACHED_KERNEL) && (!adreno_is_a6xx(ADRENO_DEVICE(device)));
 }
 
-static int insert_va(struct gmu_vma_entry *vma, u32 addr, u32 size)
+static int insert_va(struct gmu_vma_entry *vma, u32 addr, u32 size, struct gmu_vma_node *new)
 {
 	struct rb_node **node, *parent = NULL;
-	struct gmu_vma_node *new = kzalloc(sizeof(*new), GFP_NOWAIT);
-
-	if (new == NULL)
-		return -ENOMEM;
 
 	new->va = addr;
 	new->size = size;
@@ -335,7 +331,6 @@ static int insert_va(struct gmu_vma_entry *vma, u32 addr, u32 size)
 		else if (addr >= this->va + this->size)
 			node = &parent->rb_right;
 		else {
-			kfree(new);
 			return -EEXIST;
 		}
 	}
@@ -382,6 +377,10 @@ static int _map_gmu_dynamic(struct kgsl_device *device, struct kgsl_memdesc *md,
 	struct gmu_vma_node *vma_node = NULL;
 	int ret;
 	u32 size = ALIGN(md->size, hfi_get_gmu_sz_alignment(align));
+	struct gmu_vma_node *new = kzalloc(sizeof(*new), GFP_KERNEL);
+
+	if (!new)
+		return -ENOMEM;
 
 	spin_lock(&vma->lock);
 	if (!addr) {
@@ -392,15 +391,17 @@ static int _map_gmu_dynamic(struct kgsl_device *device, struct kgsl_memdesc *md,
 		addr = find_unmapped_va(vma, size, hfi_get_gmu_va_alignment(align));
 		if (addr == 0) {
 			spin_unlock(&vma->lock);
+			kfree(new);
 			dev_err(gmu_pdev_dev,
 				"Insufficient VA space size: %x\n", size);
 			return -ENOMEM;
 		}
 	}
 
-	ret = insert_va(vma, addr, size);
+	ret = insert_va(vma, addr, size, new);
 	spin_unlock(&vma->lock);
 	if (ret < 0) {
+		kfree(new);
 		dev_err(gmu_pdev_dev,
 			"Could not insert va: %x size %x\n", addr, size);
 		return ret;
@@ -418,7 +419,7 @@ static int _map_gmu_dynamic(struct kgsl_device *device, struct kgsl_memdesc *md,
 		addr, md->size, ret);
 
 	spin_lock(&vma->lock);
-	vma_node = find_va(vma, md->gmuaddr, size);
+	vma_node = find_va(vma, addr, size);
 	if (vma_node)
 		rb_erase(&vma_node->node, &vma->vma_root);
 	spin_unlock(&vma->lock);
@@ -796,6 +797,16 @@ static void _gmu_trace_dcvs_pwrlevel(struct kgsl_device *device, struct gmu_trac
 	if (data->prev_pwrlvl == pwr->num_pwrlevels)
 		data->prev_pwrlvl = pwr->active_pwrlevel;
 
+	if (data->prev_pwrlvl != data->new_pwrlvl) {
+		unsigned long flags;
+
+		/* Track GPU frequency transitions for GMU-based DCVS */
+		spin_lock_irqsave(&pwr->trans_stats.lock, flags);
+		pwr->trans_stats.trans_table[data->prev_pwrlvl][data->new_pwrlvl]++;
+		pwr->trans_stats.total_trans++;
+		spin_unlock_irqrestore(&pwr->trans_stats.lock, flags);
+	}
+
 	if (pwr->active_pwrlevel != data->new_pwrlvl) {
 		u32 penalty = FIELD_PREP(GENMASK(31, 16), data->penalty_down) |
 				FIELD_PREP(GENMASK(15, 0), data->penalty_up);
@@ -851,6 +862,9 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 
 	pwr->clock_times[pwr->active_pwrlevel] += data->gpu_time;
 	pwr->time_in_pwrlevel[pwr->active_pwrlevel] += data->total_time;
+	pwr->trans_stats.time_in_pwrlevel[pwr->active_pwrlevel] += data->total_time;
+	pwr->trans_stats.last_time_updated = ktime_get();
+
 	if (pwr->thermal_pwrlevel)
 		pwr->thermal_time += data->gpu_time;
 
@@ -860,6 +874,20 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 	pwr->accum_busy_stats += data->gpu_time;
 	pwr->accum_total_time += data->total_time;
 	spin_unlock(&pwr->stats_lock);
+}
+
+static void _gmu_trace_pwr_constraint(struct kgsl_device *device,
+		struct gmu_trace_packet *pkt)
+{
+	struct trace_pwr_constraint data = {};
+	u32 pkt_words = TRACE_PKT_GET_SIZE(pkt->hdr);
+	u32 hdr_words = offsetof(struct gmu_trace_packet, payload) >> 2;
+	u32 payload_words = pkt_words - hdr_words;
+	u32 payload_bytes = payload_words * sizeof(u32);
+
+	memcpy(&data, pkt->payload, min_t(u32, payload_bytes, sizeof(data)));
+	trace_kgsl_constraint(device, data.type, data.value,
+		data.status, pkt->ticks, data.owner_ctx_id);
 }
 
 static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packet *pkt)
@@ -909,16 +937,19 @@ static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packe
 		break;
 		}
 	case GMU_TRACE_PWR_CONSTRAINT: {
-		struct trace_pwr_constraint *data =
-			(struct trace_pwr_constraint *)pkt->payload;
-
-		trace_kgsl_constraint(device, data->type, data->value, data->status, pkt->ticks);
+		_gmu_trace_pwr_constraint(device, pkt);
 		break;
 		}
 	case GMU_TRACE_DCVS_PROFILE: {
 		struct trace_dcvs_profile *data =
 				(struct trace_dcvs_profile *)pkt->payload;
 		trace_adreno_gpu_dcvs_profile(data, pkt->ticks);
+		break;
+		}
+	case GMU_TRACE_PREEMPT_INFO: {
+		struct trace_preempt_info *data =
+			(struct trace_preempt_info *)pkt->payload;
+		trace_adreno_gpu_preempt_info(data, pkt->ticks);
 		break;
 		}
 	default: {

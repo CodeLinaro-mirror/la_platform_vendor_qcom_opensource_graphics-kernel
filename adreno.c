@@ -1477,6 +1477,18 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	device->debug_bus_bin = status;
 
+	status = adreno_read_fuse(pdev, "debugbus_en");
+	if (status < 0)
+		dev_err(device->dev, "failed to read debugbus_en nvmem cell\n");
+
+	device->debugbus_en = status;
+
+	status = adreno_read_fuse(pdev, "gpu_niden_en");
+	if (status < 0)
+		dev_err(device->dev, "failed to read gpu_niden_en nvmem cell\n");
+
+	device->gpu_niden_en = status;
+
 	adreno_read_soc_code(device);
 
 	status = adreno_of_get_power(adreno_dev, pdev);
@@ -2768,7 +2780,8 @@ int adreno_set_constraint(struct kgsl_device *device,
 	if ((status == 0) &&
 		(context->id == device->pwrctrl.constraint.owner_id)) {
 		trace_kgsl_constraint(device, device->pwrctrl.constraint.type,
-					device->pwrctrl.active_pwrlevel, 0, 0);
+			device->pwrctrl.active_pwrlevel, 0, 0,
+			device->pwrctrl.constraint.owner_id);
 		device->pwrctrl.constraint.type = KGSL_CONSTRAINT_NONE;
 	}
 

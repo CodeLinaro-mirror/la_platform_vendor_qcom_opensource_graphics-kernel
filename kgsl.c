@@ -888,7 +888,7 @@ kgsl_context_destroy(struct kref *kref)
 			trace_kgsl_constraint(device,
 				device->pwrctrl.constraint.type,
 				device->pwrctrl.active_pwrlevel,
-				0, 0);
+				0, 0, device->pwrctrl.constraint.owner_id);
 			device->pwrctrl.constraint.type = KGSL_CONSTRAINT_NONE;
 		}
 
@@ -1151,7 +1151,7 @@ static void _log_gpu_work_events(struct work_struct *work)
 
 static void kgsl_work_period_timer(struct timer_list *t)
 {
-	struct kgsl_device *device = from_timer(device, t, work_period_timer);
+	struct kgsl_device *device = kgsl_timer_container_of(device, t, work_period_timer);
 
 	queue_work(kgsl_driver.lockless_workqueue, &device->work_period_ws);
 }
@@ -1355,7 +1355,7 @@ static struct kgsl_process_private *kgsl_process_private_open(
 	 * private destroy is triggered but didn't complete. Retry creating
 	 * process private after sometime to allow previous destroy to complete.
 	 */
-	for (i = 0; (PTR_ERR_OR_ZERO(private) == -EEXIST) && (i < 50); i++) {
+	for (i = 0; (PTR_ERR_OR_ZERO(private) == -EEXIST) && (i < 1000); i++) {
 		usleep_range(10, 100);
 		private = _process_private_open(device);
 	}

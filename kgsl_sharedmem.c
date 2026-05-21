@@ -1268,6 +1268,18 @@ int kgsl_alloc_shmem_page(struct kgsl_memdesc *memdesc, struct file *shmem_filp,
 	return 1;
 }
 
+#if (KERNEL_VERSION(7, 0, 0) <= LINUX_VERSION_CODE)
+static struct file *kgsl_shmem_file_setup(const char *name, u64 size)
+{
+	return shmem_file_setup(name, size, mk_vma_flags(VMA_NORESERVE_BIT));
+}
+#else
+static struct file *kgsl_shmem_file_setup(const char *name, u64 size)
+{
+	return shmem_file_setup(name, size, VM_NORESERVE);
+}
+#endif
+
 struct file *kgsl_memdesc_file_setup(struct kgsl_memdesc *memdesc)
 {
 	struct file *shmem_filp;
@@ -1281,8 +1293,7 @@ struct file *kgsl_memdesc_file_setup(struct kgsl_memdesc *memdesc)
 	if (kgsl_memdesc_is_secured(memdesc))
 		return 0;
 
-	shmem_filp = shmem_file_setup("kgsl-3d0", memdesc->size,
-			VM_NORESERVE);
+	shmem_filp = kgsl_shmem_file_setup("kgsl-3d0", memdesc->size);
 	if (IS_ERR(shmem_filp))
 		return shmem_filp;
 

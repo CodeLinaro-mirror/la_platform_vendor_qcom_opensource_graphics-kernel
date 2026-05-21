@@ -4554,7 +4554,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_0 = {
 			ADRENO_DEFER_GMEM_ALLOC | ADRENO_GMU_FAST_CONTEXT_DESTROY |
 			ADRENO_ACD | ADRENO_GMU_AB | ADRENO_HW_FENCE | ADRENO_GMU_SPEL |
 			ADRENO_AHB_TIMEOUT_RECOVERY | ADRENO_FENCE_DEADLINE_BOOST |
-			ADRENO_TSENSE_DYNAMIC_PERIOD | ADRENO_GMU_THINMEM_CFG,
+			ADRENO_TSENSE_DYNAMIC_PERIOD | ADRENO_GMU_THINMEM_CFG |
+			ADRENO_GMU_DYNAMIC_CTX_PRIORITY,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_2_x_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -4689,7 +4690,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_1 = {
 			ADRENO_DEFER_GMEM_ALLOC | ADRENO_GMU_FAST_CONTEXT_DESTROY |
 			ADRENO_ACD | ADRENO_GMU_AB | ADRENO_HW_FENCE | ADRENO_GMU_SPEL |
 			ADRENO_AHB_TIMEOUT_RECOVERY | ADRENO_FENCE_DEADLINE_BOOST |
-			ADRENO_TSENSE_DYNAMIC_PERIOD | ADRENO_GMU_THINMEM_CFG,
+			ADRENO_TSENSE_DYNAMIC_PERIOD | ADRENO_GMU_THINMEM_CFG |
+			ADRENO_GMU_DYNAMIC_CTX_PRIORITY,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_2_x_perfcounters,
 		.uche_gmem_alignment = SZ_64M,

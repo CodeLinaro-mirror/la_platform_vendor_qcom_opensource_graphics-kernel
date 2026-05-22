@@ -166,12 +166,13 @@ void kgsl_drawobj_log_hw_syncobj(struct kgsl_device *device, struct kgsl_drawobj
 		bool kgsl = is_kgsl_fence(fence);
 		bool signaled = test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
 		char value[32] = "unknown";
+		bool cmdbatch = test_bit(KGSL_SYNCOBJ_HAS_CMDBATCH, &syncobj->flags);
 
 		kgsl_fence_timeline_value_str(fence, value, sizeof(value));
 
 		dev_err(device->dev,
-			"dma fence[%d] signaled:%d kgsl:%d ctx:%llu seqno:%llu value:%s\n",
-			i++, signaled, kgsl, fence->context, fence->seqno, value);
+			"dma fence[%d] signaled:%d kgsl:%d ctx:%llu seqno:%llu value:%s cmdbatch:%d\n",
+			i++, signaled, kgsl, fence->context, fence->seqno, value, cmdbatch);
 	}
 }
 

@@ -2787,6 +2787,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 	struct hfi_syncobj_legacy *obj = NULL;
 	struct kgsl_drawobj_sync_hw_fence *hw_fence;
 	u32 seqnum;
+	int ret = 0;
 
 	/* Add hfi_syncobj struct for sync object */
 	cmd_sizebytes = sizeof(*cmd) +
@@ -2808,7 +2809,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 		if (is_kgsl_fence(fence)) {
 			populate_kgsl_fence(hw_fence, obj);
 		} else {
-			int ret = adreno_hwsched_import_external_fence_legacy(adreno_dev,
+			ret = adreno_hwsched_import_external_fence_legacy(adreno_dev,
 					fence, syncobj, obj);
 
 			if (ret)
@@ -2836,8 +2837,17 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_ISSUE_SYNCOBJ, HFI_MSG_CMD);
 	cmd->hdr = MSG_HDR_SET_SEQNUM_SIZE(cmd->hdr, seqnum, cmd_sizebytes >> 2);
 
-	return adreno_gmu_context_queue_write(adreno_dev, &drawctxt->gmu_context_queue,
+	ret = adreno_gmu_context_queue_write(adreno_dev, &drawctxt->gmu_context_queue,
 			(u32 *)cmd, cmd_sizebytes, drawobj, NULL);
+	if (ret)
+		return ret;
+
+	/* Raise the dispatch interrupt if there is no cmdbatch following this sync object */
+	if (!test_bit(KGSL_SYNCOBJ_HAS_CMDBATCH, &syncobj->flags))
+		gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN8_GMUCX_HOST2GMU_INTR_SET,
+			DISPQ_SYNC_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
+
+	return ret;
 }
 
 int gen7_hwsched_check_context_inflight_hw_fences(struct adreno_device *adreno_dev,

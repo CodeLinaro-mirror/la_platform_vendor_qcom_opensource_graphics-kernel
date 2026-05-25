@@ -77,6 +77,7 @@
 #define KGSL_CONTEXT_INVALIDATE_ON_FAULT 0x10000000
 #define KGSL_CONTEXT_LPAC 0x20000000
 #define KGSL_CONTEXT_FAULT_INFO	  0x40000000
+#define KGSL_CONTEXT_FAULT_SNAPSHOT	0x80000000
 
 #define KGSL_CONTEXT_INVALID 0xffffffff
 
@@ -2101,7 +2102,8 @@ struct kgsl_fault {
  * KGSL_FAULT_TYPE_*
  * @faultsize: Size of each entry in @faultlist in bytes
  * @context_id: ID of a KGSL context
- *
+ * @snapshot_size: Size of the captured snpashot due to fault
+ * @snapshot_addr: User memory pointer to snapshot buffer
  * Returns a list of GPU faults for a context identified by @context_id. If the user specifies
  * @context_id only, then KGSL will set the @faultnents to the number of fault types it has
  * for that context.
@@ -2117,8 +2119,8 @@ struct kgsl_fault_report {
 	__u32 faultnents;
 	__u32 faultsize;
 	__u32 context_id;
-	/* private: padding for 64 bit compatibility */
-	__u32 padding;
+	__u32 snapshot_size;
+	__u64 snapshot_addr;
 };
 
 #define IOCTL_KGSL_GET_FAULT_REPORT \

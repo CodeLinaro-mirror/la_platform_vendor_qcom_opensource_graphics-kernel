@@ -2553,10 +2553,12 @@ static void adreno_hwsched_work(struct kthread_work *work)
 	if (hwsched->inflight == 0) {
 		hwsched_power_down(adreno_dev);
 	} else {
-		kgsl_mutex_lock(&device->mutex);
-		kgsl_pwrscale_update(device);
+		if (device->host_based_dcvs) {
+			kgsl_mutex_lock(&device->mutex);
+			kgsl_pwrscale_update(device);
+			kgsl_mutex_unlock(&device->mutex);
+		}
 		kgsl_start_idle_timer(device);
-		kgsl_mutex_unlock(&device->mutex);
 	}
 
 	kgsl_mutex_unlock(&hwsched->mutex);

@@ -80,6 +80,16 @@ ifeq ($(CONFIG_ARCH_SM6150), y)
 	include $(KGSL_PATH)/config/gki_sm6150.conf
 	subdir-ccflags-y += $(LE_EXTRA_CFLAGS)
 endif
+ifeq ($(CONFIG_ARCH_SERAPH), y)
+       include $(KGSL_PATH)/config/gki_seraph.conf
+endif
+
+ifdef SOC_REPO
+LINUXINCLUDE := \
+  -I$(SOC_REPO)/include \
+  -I$(SOC_REPO)/include/uapi \
+  $(LINUXINCLUDE)
+endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq
 

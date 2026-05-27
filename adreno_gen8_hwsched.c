@@ -796,7 +796,7 @@ static int gen8_gmu_warmboot_init(struct adreno_device *adreno_dev)
 
 	if (IS_ERR_OR_NULL(gmu->gmu_init_scratch)) {
 		gmu->gmu_init_scratch = gmu_core_reserve_kernel_block(device, 0,
-				SZ_4K, GMU_CACHE, 0);
+				SZ_8K, GMU_CACHE, 0);
 		ret = PTR_ERR_OR_ZERO(gmu->gmu_init_scratch);
 		if (ret)
 			return ret;

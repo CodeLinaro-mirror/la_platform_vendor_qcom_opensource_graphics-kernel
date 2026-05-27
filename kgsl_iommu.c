@@ -314,6 +314,58 @@ flush:
 	return 0;
 }
 
+#if (PAGE_SIZE == SZ_4K)
+static size_t _iopgtbl_map_pages(struct kgsl_iommu_pt *pt, u64 gpuaddr, phys_addr_t phys,
+		size_t size, int prot)
+{
+	struct io_pgtable_ops *ops = pt->pgtbl_ops;
+	size_t map_size = 0;
+	int ret;
+
+	ret = ops->map_pages(ops, gpuaddr, phys, PAGE_SIZE, size >> PAGE_SHIFT,
+				prot, GFP_KERNEL, &map_size);
+
+	return ret ? 0 : map_size;
+}
+#else
+static size_t _iopgtbl_map_pages(struct kgsl_iommu_pt *pt, u64 gpuaddr, phys_addr_t phys,
+		size_t size, int prot)
+{
+	struct io_pgtable_ops *ops = pt->pgtbl_ops;
+	size_t mapped = 0;
+	u64 addr = gpuaddr;
+
+	/*
+	 * The given range to be mapped may be multiple pages long and hence may not be able to
+	 * be mapped in a single map_pages() API call. In each iteration, find out the largest
+	 * pgsize that can be used based on the virtual and physical addresses. Keep going until
+	 * we map the entire range.
+	 */
+	while (size) {
+		int ret;
+		size_t count = 0, map_size = 0;
+		size_t size_to_map;
+
+		/* Find the largest pgsize we can use to map the remaining size */
+		size_to_map = iommu_pgsize(pt->info.cfg.pgsize_bitmap, addr, phys, size, &count);
+
+		ret = ops->map_pages(ops, addr, phys, size_to_map, count,
+					prot, GFP_KERNEL, &map_size);
+
+		if (ret || !map_size) {
+			_iopgtbl_unmap(pt, gpuaddr, mapped);
+			return 0;
+		}
+
+		addr += map_size;
+		phys += map_size;
+		mapped += map_size;
+		size -= map_size;
+	}
+	return mapped;
+}
+#endif
+
 static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 		struct sg_table *sgt, int prot)
 {
@@ -340,16 +392,16 @@ static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 	}
 
 	for_each_sg(sgt->sgl, sg, sgt->nents, i) {
-		size_t size = sg->length, map_size = 0;
+		size_t size = sg->length, map_size;
 		phys_addr_t phys = sg_phys(sg);
 
-		ret = ops->map_pages(ops, addr, phys, PAGE_SIZE, size >> PAGE_SHIFT,
-				     prot, GFP_KERNEL, &map_size);
-		if (ret) {
+		map_size = _iopgtbl_map_pages(pt, addr, phys, size, prot);
+
+		if (!map_size) {
 			_iopgtbl_unmap(pt, gpuaddr, mapped);
 			return 0;
 		}
-		addr += size;
+		addr += map_size;
 		mapped += map_size;
 	}
 
@@ -422,27 +474,36 @@ kgsl_iopgtbl_unmap_range(struct kgsl_pagetable *pt, struct kgsl_memdesc *memdesc
 			length);
 }
 
-static size_t _iopgtbl_map_page_to_range(struct kgsl_iommu_pt *pt,
-		struct page *page, u64 gpuaddr, size_t range, int prot)
+static size_t _iopgtbl_map_prr_page_to_range(struct kgsl_iommu_pt *pt,
+		u64 gpuaddr, size_t range, int prot)
 {
-	struct io_pgtable_ops *ops = pt->pgtbl_ops;
 	size_t mapped = 0;
 	u64 addr = gpuaddr;
-	int ret;
+	struct page *page = kgsl_vbo_zero_page;
+	phys_addr_t phys;
+
+	if (WARN_ON(!page))
+		return 0;
+
+	phys = page_to_phys(page);
 
 	while (range) {
-		size_t map_size = 0;
+		size_t map_size;
 
-		ret = ops->map_pages(ops, addr, page_to_phys(page), PAGE_SIZE,
-				     1, prot, GFP_KERNEL, &map_size);
-		if (ret) {
+		/*
+		 * The PRR register sets up a 4K page. Map this 4K page multiple times to the
+		 * given range.
+		 */
+		map_size = _iopgtbl_map_pages(pt, addr, phys, SZ_4K, prot);
+
+		if (!map_size) {
 			_iopgtbl_unmap(pt, gpuaddr, mapped);
 			return 0;
 		}
 
 		mapped += map_size;
-		addr += PAGE_SIZE;
-		range -= PAGE_SIZE;
+		addr += map_size;
+		range -= map_size;
 	}
 
 	return mapped;
@@ -460,20 +521,38 @@ static int kgsl_iopgtbl_map_zero_page_to_range(struct kgsl_pagetable *pt,
 	 */
 	u32 flags = IOMMU_READ | IOMMU_WRITE | IOMMU_NOEXEC | get_llcc_flags(pt->mmu);
 	struct kgsl_iommu_pt *iommu_pt = to_iommu_pt(pt);
-	struct page *page = kgsl_vbo_zero_page;
-
-	if (WARN_ON(!page))
-		return -ENODEV;
 
 	if (WARN_ON((offset >= memdesc->size) ||
 		(offset + length) > memdesc->size))
 		return -ERANGE;
 
-	if (!_iopgtbl_map_page_to_range(iommu_pt, page, memdesc->gpuaddr + offset,
-		length, flags))
+	if (!_iopgtbl_map_prr_page_to_range(iommu_pt, memdesc->gpuaddr + offset, length, flags))
 		return -ENOMEM;
 
 	return 0;
+}
+
+static size_t _iopgtbl_map_page_to_range(struct kgsl_iommu_pt *pt,
+		struct page *page, u64 gpuaddr, size_t range, int prot)
+{
+	size_t mapped = 0;
+	u64 addr = gpuaddr;
+	phys_addr_t phys = page_to_phys(page);
+
+	while (range) {
+		size_t map_size = _iopgtbl_map_pages(pt, addr, phys, PAGE_SIZE, prot);
+
+		if (!map_size) {
+			_iopgtbl_unmap(pt, gpuaddr, mapped);
+			return 0;
+		}
+
+		mapped += map_size;
+		addr += map_size;
+		range -= map_size;
+	}
+
+	return mapped;
 }
 
 static int kgsl_iopgtbl_map(struct kgsl_pagetable *pagetable,

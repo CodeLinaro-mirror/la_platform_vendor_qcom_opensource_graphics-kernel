@@ -592,19 +592,34 @@ static void _pop_drawobj(struct adreno_context *drawctxt)
 static int _retire_syncobj(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj_sync *syncobj, struct adreno_context *drawctxt)
 {
+	if (test_bit(KGSL_SYNCOBJ_HW, &syncobj->flags)) {
+		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+		/*
+		 * If hardware fences are enabled, and this SYNCOBJ is backed by hardware fences,
+		 * send it to the GMU
+		 */
+		if (gmu_core_is_hw_fencing_enabled(device))
+			return 1;
+
+		/*
+		 * If hardware fencing got disabled after setting up the sync object (as
+		 * a hardware sync object), then add callbacks to these hardware fences.
+		 * If we fail to add callbacks, then destroy the draw object.
+		 */
+		if (kgsl_drawobj_sync_add_callbacks(device, syncobj)) {
+			_pop_drawobj(drawctxt);
+			kgsl_drawobj_destroy(DRAWOBJ(syncobj));
+			return 0;
+		}
+		clear_bit(KGSL_SYNCOBJ_HW, &syncobj->flags);
+	}
+
 	if (!kgsl_drawobj_events_pending(syncobj)) {
 		_pop_drawobj(drawctxt);
 		kgsl_drawobj_destroy(DRAWOBJ(syncobj));
 		return 0;
 	}
-
-	/*
-	 * If hardware fences are enabled, and this SYNCOBJ is backed by hardware fences,
-	 * send it to the GMU
-	 */
-	if (gmu_core_is_hw_fencing_enabled(KGSL_DEVICE(adreno_dev)) &&
-		test_bit(KGSL_SYNCOBJ_HW, &syncobj->flags))
-		return 1;
 
 	/*
 	 * If we got here, there are pending events for sync object.
@@ -813,6 +828,20 @@ static inline int hwsched_dispatcher_requeue_drawobj(
 		struct kgsl_drawobj *drawobj)
 {
 	unsigned int prev;
+
+	/*
+	 * If a sync object got re-queued, add callbacks if this can no longer be sent to hardware
+	 */
+	if (drawobj->type == SYNCOBJ_TYPE) {
+		struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
+
+		if (!test_bit(KGSL_SYNCOBJ_HW, &syncobj->flags)) {
+			/* If we fail to add a callback, then destroy the draw object */
+			if (kgsl_drawobj_sync_add_callbacks(drawobj->device, syncobj))
+				kgsl_drawobj_destroy(drawobj);
+			return 0;
+		}
+	}
 
 	spin_lock(&drawctxt->lock);
 
@@ -1639,35 +1668,13 @@ void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj)
 	}
 }
 
-static void adreno_hwsched_hw_syncobj_cancel_callbacks(struct kgsl_drawobj_sync *syncobj)
-{
-	u32 i;
-
-	for (i = 0; i < syncobj->numsyncs; i++) {
-		struct kgsl_drawobj_sync_event *event = &syncobj->synclist[i];
-
-		if (event->type != KGSL_CMD_SYNCPOINT_TYPE_FENCE)
-			continue;
-
-		kgsl_sync_fence_async_cancel(event->handle);
-
-		/*
-		 * Now that we know the callback is removed, we can safely put back the
-		 * refcount if it isn't already put back
-		 */
-		if (test_and_clear_bit(i, &syncobj->pending))
-			kgsl_drawobj_put(DRAWOBJ(syncobj));
-	}
-}
-
 static void adreno_hwsched_hw_syncobj_destroy(struct kgsl_drawobj *drawobj)
 {
-	/*
-	 * It is still possible that the dma fence callbacks may not yet have
-	 * been invoked. Make sure we cancel the callbacks before we destroy the sync object
-	 */
-	adreno_hwsched_hw_syncobj_cancel_callbacks(SYNCOBJ(drawobj));
 	adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
+	/*
+	 * It is safe to destroy the hw sync object as it is guaranteed to have no dm-fence
+	 * callbacks
+	 */
 	kgsl_drawobj_destroy(drawobj);
 }
 

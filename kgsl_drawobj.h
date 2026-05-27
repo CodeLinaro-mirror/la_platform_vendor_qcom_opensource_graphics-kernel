@@ -212,13 +212,15 @@ struct kgsl_drawobj_sync_event {
 	void *priv;
 	/**
 	 * @fence: Pointer to a dma fence for KGSL_CMD_SYNCPOINT_TYPE_TIMELINE
-	 * events
+	 * or KGSL_CMD_SYNCPOINT_TYPE_FENCE events
 	 */
 	struct dma_fence *fence;
 	/** @cb: Callback struct for KGSL_CMD_SYNCPOINT_TYPE_TIMELINE */
 	struct dma_fence_cb cb;
 	/** @work : work_struct for KGSL_CMD_SYNCPOINT_TYPE_TIMELINE */
 	struct work_struct work;
+	/** @defer_hw_fence_cb: Add callback to the hardware fence later if required */
+	bool defer_hw_fence_cb;
 };
 
 #define KGSL_DRAWOBJ_FLAGS \
@@ -362,4 +364,13 @@ int kgsl_drawobj_add_timeline(struct kgsl_device_private *dev_priv,
 		struct kgsl_drawobj_timeline *timelineobj,
 		void __user *src, u64 cmdsize);
 
+/**
+ * kgsl_drawobj_sync_add_callbacks - Add callbacks to hardware fences in this sync object
+ * @device: Pointer to kgsl device
+ * @syncobj: Pointer to the sync object
+ *
+ * Return: 0 on success or negative on failure
+ */
+int kgsl_drawobj_sync_add_callbacks(struct kgsl_device *device,
+	struct kgsl_drawobj_sync *syncobj);
 #endif /* __KGSL_DRAWOBJ_H */

@@ -721,6 +721,19 @@ static void adreno_build_opp_table(struct device *dev, struct kgsl_pwrctrl *pwr)
 		dev_pm_opp_add(dev, pwr->pwrlevels[i].gpu_freq, 0);
 }
 
+static void adreno_of_get_acd_avg_data(struct adreno_device *adreno_dev,
+		struct device_node *node, u32 *acd_avg_data, size_t size, bool *en_flag)
+{
+	if (!adreno_is_acd_avg_feature_set(adreno_dev))
+		return;
+
+	if (of_property_read_u32_array(node, "qcom,acd-avg-data", acd_avg_data, size))
+		return;
+
+	*en_flag = true;
+	adreno_dev->acd_avg_enabled = true;
+}
+
 static int adreno_of_parse_pwrlevels(struct adreno_device *adreno_dev,
 		struct device_node *node)
 {
@@ -786,6 +799,9 @@ static int adreno_of_parse_pwrlevels(struct adreno_device *adreno_dev,
 
 		of_property_read_u32(child, "qcom,acd-level",
 			&level->acd_level);
+
+		adreno_of_get_acd_avg_data(adreno_dev, child, level->acd_avg_data,
+			ARRAY_SIZE(level->acd_avg_data), &level->acd_avg_level_enable);
 
 		of_property_read_u32(child, "qcom,cx-level",
 			&level->cx_level);
@@ -872,6 +888,10 @@ static int adreno_of_get_legacy_pwrlevels(struct adreno_device *adreno_dev,
 	if (!ret) {
 		adreno_of_get_initial_pwrlevels(&device->pwrctrl, parent);
 		adreno_of_get_limits(adreno_dev, parent);
+		adreno_of_get_acd_avg_data(adreno_dev, parent,
+			device->pwrctrl.acd_avg_global_data,
+			ARRAY_SIZE(device->pwrctrl.acd_avg_global_data),
+			&device->pwrctrl.acd_avg_global_override);
 	}
 
 	of_node_put(node);
@@ -939,6 +959,11 @@ static int adreno_of_get_pwrlevels(struct adreno_device *adreno_dev,
 			 */
 			adreno_of_get_limits(adreno_dev, parent);
 			adreno_of_get_limits(adreno_dev, child);
+
+			adreno_of_get_acd_avg_data(adreno_dev, child,
+				device->pwrctrl.acd_avg_global_data,
+				ARRAY_SIZE(device->pwrctrl.acd_avg_global_data),
+				&device->pwrctrl.acd_avg_global_override);
 
 			of_node_put(child);
 			return 0;
@@ -2659,6 +2684,8 @@ static int adreno_prop_u32(struct kgsl_device *device,
 		val = adreno_dev->viz_flush_draw_count;
 	else if (param->type == KGSL_PROP_VIZ_FLUSH_PRIM_COUNT)
 		val = adreno_dev->viz_flush_prim_count;
+	else if (param->type == KGSL_PROP_IS_MALU_ENABLED)
+		val = adreno_dev->malu_enabled ? 1 : 0;
 
 	return copy_prop(param, &val, sizeof(val));
 }
@@ -3631,7 +3658,7 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
 
 			/* Only allow mALU submissions if hardware supports mALU */
 			if ((drawobj[i]->flags & KGSL_DRAWOBJ_USES_MALU) &&
-				!test_bit(ADRENO_DEVICE_ALLOW_MALU_WORKLOAD, &adreno_dev->priv)) {
+				!adreno_dev->malu_enabled) {
 				dev_err_once(device->dev, "mALU workload isn't supported\n");
 				return -EINVAL;
 			}

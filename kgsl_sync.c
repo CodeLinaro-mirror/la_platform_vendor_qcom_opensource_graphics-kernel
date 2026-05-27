@@ -834,7 +834,7 @@ void kgsl_hw_fence_put(struct kgsl_sync_fence *kfence)
 		kref_put(&kfence->hw_refcount, kgsl_hw_fence_destroy);
 }
 
-static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct dma_fence *fence)
+static void _kgsl_populate_hw_fence(struct kgsl_drawobj_sync_event *event, struct dma_fence *fence)
 {
 	struct kgsl_drawobj_sync *syncobj = event->syncobj;
 	u32 max_hw_fence = event->device->max_syncobj_hw_fence_count;
@@ -921,6 +921,26 @@ void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size)
 
 }
 
+void kgsl_populate_hw_fences(struct kgsl_drawobj_sync_event *event)
+{
+	unsigned int num_fences;
+	struct dma_fence **fences;
+	struct dma_fence_array *array;
+	int i;
+
+	array = to_dma_fence_array(event->fence);
+	if (array != NULL) {
+		num_fences = array->num_fences;
+		fences = array->fences;
+	} else {
+		num_fences = 1;
+		fences = &event->fence;
+	}
+
+	for (i = 0; i < num_fences; i++)
+		_kgsl_populate_hw_fence(event, fences[i]);
+}
+
 void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event)
 {
 	unsigned int num_fences;
@@ -928,6 +948,9 @@ void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event)
 	struct dma_fence_array *array;
 	struct event_fence_info *info_ptr = event->priv;
 	int i;
+
+	if (!info_ptr)
+		return;
 
 	fence = event->handle->fence;
 
@@ -940,13 +963,10 @@ void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event)
 		fences = &fence;
 	}
 
-	if (!info_ptr)
-		goto count;
-
 	info_ptr->fences = kcalloc(num_fences, sizeof(struct fence_info),
 			GFP_KERNEL);
 	if (info_ptr->fences == NULL)
-		goto count;
+		return;
 
 	info_ptr->num_fences = num_fences;
 
@@ -955,31 +975,23 @@ void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event)
 		struct fence_info *fi = &info_ptr->fences[i];
 
 		kgsl_get_fence_name(f, fi->name, sizeof(fi->name));
-
-		kgsl_count_hw_fences(event, f);
 	}
-
-	return;
-count:
-	for (i = 0; i < num_fences; i++)
-		kgsl_count_hw_fences(event, fences[i]);
 }
 
-struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait(int fd,
+struct dma_fence *kgsl_sync_file_get_fence(int fd)
+{
+	return sync_file_get_fence(fd);
+}
+
+struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait_fence(struct dma_fence *fence,
 	bool (*func)(void *priv), void *priv)
 {
 	struct kgsl_sync_fence_cb *kcb;
-	struct dma_fence *fence;
 	int status;
-
-	fence = sync_file_get_fence(fd);
-	if (fence == NULL)
-		return ERR_PTR(-EINVAL);
 
 	/* create the callback */
 	kcb = kzalloc(sizeof(*kcb), GFP_KERNEL);
 	if (kcb == NULL) {
-		dma_fence_put(fence);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -997,8 +1009,23 @@ struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait(int fd,
 			kcb = ERR_PTR(status);
 		else
 			kcb = NULL;
-		dma_fence_put(fence);
 	}
+
+	return kcb;
+}
+
+struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait(int fd,
+	bool (*func)(void *priv), void *priv)
+{
+	struct kgsl_sync_fence_cb *kcb;
+	struct dma_fence *fence = sync_file_get_fence(fd);
+
+	if (fence == NULL)
+		return ERR_PTR(-EINVAL);
+
+	kcb = kgsl_sync_fence_async_wait_fence(fence, func, priv);
+	if (IS_ERR_OR_NULL(kcb))
+		dma_fence_put(fence);
 
 	return kcb;
 }

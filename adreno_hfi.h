@@ -110,6 +110,7 @@ enum hfi_table_type {
 	HFI_TABLE_SYS_TIME_DATA	= 8,
 	HFI_TABLE_GMU_SCALING_DATA	= 9,
 	HFI_TABLE_LIMITS_MITIGATION	= 10,
+	HFI_TABLE_ACD_AVG	= 11,
 	HFI_TABLE_MAX,
 };
 
@@ -638,6 +639,9 @@ struct hfi_table_entry {
 	u32 data[];
 } __packed;
 
+#define HFI_TABLE_ENTRY_SIZE_DWORDS(count, stride) \
+	((sizeof(struct hfi_table_entry) / sizeof(u32)) + (count * stride))
+
 struct hfi_table_cmd {
 	u32 hdr;
 	u32 version;
@@ -657,6 +661,23 @@ struct hfi_acd_table_cmd {
 	u32 num_levels;
 	u32 data[MAX_ACD_NUM_LEVELS * MAX_ACD_STRIDE];
 } __packed;
+
+/*
+ * HFI_TABLE_ACD_AVG - Table for ACD AVG configuration data
+ * Data format:
+ *   entry[0] = Globals
+ *     .count = 1
+ *     .stride = 2
+ *     .data[] = <enable_by_level reserved>
+ *   entry[1] = Config
+ *     .count = num_lvl
+ *     .stride = dwords per DCVS level = KGSL_MAX_ACD_AVG_STRIDE
+ *     .data[] = data[num_lvl]
+ */
+#define MAX_ACD_AVG_CMD_DWORDS \
+	((sizeof(struct hfi_table_cmd) / sizeof(u32))\
+	+ HFI_TABLE_ENTRY_SIZE_DWORDS(1, 2)\
+	+ HFI_TABLE_ENTRY_SIZE_DWORDS(KGSL_MAX_PWRLEVELS, KGSL_MAX_ACD_AVG_STRIDE))
 
 #define CLX_DOMAINS_V2 2
 struct clx_domain_v2 {

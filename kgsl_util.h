@@ -9,6 +9,10 @@
 
 #include <linux/version.h>
 
+#ifndef __CHAR_BIT__
+#define __CHAR_BIT__ 8
+#endif
+
 #define KGSL_DRIVER "kgsl_driver"
 #define KGSL_ADRENO_DEVICE "kgsl_adreno_device"
 #define KGSL_A6XX_DEVICE "kgsl_a6xx_device"

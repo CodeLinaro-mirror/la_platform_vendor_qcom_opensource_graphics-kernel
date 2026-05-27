@@ -2653,12 +2653,110 @@ static int gen8_hfi_send_spel_feature_ctrl(struct adreno_device *adreno_dev)
 	return gen8_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
 }
 
+static int gen8_hfi_send_acd_avg_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct kgsl_pwrlevel *pwrlevel = &pwr->pwrlevels[pwr->num_pwrlevels - 1];
+	struct hfi_table_cmd *cmd;
+	struct hfi_table_entry *entry;
+	u32 cmd_buf[MAX_ACD_AVG_CMD_DWORDS] = {0};
+	u32 cmd_off = 0, data_off = 0;
+	u32 size_base_dwords = sizeof(struct hfi_table_cmd) / sizeof(u32);
+	u32 count_globals = 1, stride_globals = 2;
+	u32 size_globals_dwords = HFI_TABLE_ENTRY_SIZE_DWORDS(count_globals, stride_globals);
+	u32 count_config = (pwr->acd_avg_global_override) ? 1 : (pwr->num_pwrlevels + 1);
+	u32 stride_config = KGSL_MAX_ACD_AVG_STRIDE;
+	u32 size_config_dwords = HFI_TABLE_ENTRY_SIZE_DWORDS(count_config, stride_config);
+	u32 size_cmd_dwords = size_base_dwords + size_globals_dwords + size_config_dwords;
+	int ret, i;
+
+	if (!adreno_dev->acd_avg_enabled)
+		return 0;
+
+	if (size_cmd_dwords > ARRAY_SIZE(cmd_buf)) {
+		dev_err_ratelimited(device->dev,
+			"ACD AVG HFI command too big: %u dwords (max %zu)\n",
+			size_cmd_dwords, ARRAY_SIZE(cmd_buf));
+		return -EMSGSIZE;
+	}
+
+	/* Ensure that the enable info for all power levels can be represented */
+	if (pwr->num_pwrlevels >= (sizeof(u32) * __CHAR_BIT__)) {
+		dev_err_ratelimited(GMU_PDEV_DEV(device),
+			"ACD AVG enablement is limited to %zu power levels\n",
+			sizeof(u32) * __CHAR_BIT__);
+		return -EINVAL;
+	}
+
+	/* Set up HFI table command */
+	cmd = (struct hfi_table_cmd *)&cmd_buf[cmd_off];
+	ret = CMD_MSG_HDR(*cmd, H2F_MSG_TABLE);
+	if (ret)
+		return ret;
+
+	cmd->version = 1;
+	cmd->type = HFI_TABLE_ACD_AVG;
+	cmd_off += size_base_dwords;
+
+	/* Globals */
+	entry = (struct hfi_table_entry *)&cmd_buf[cmd_off];
+	entry->count = count_globals;
+	entry->stride = stride_globals;
+
+	/*
+	 * Power levels are reversed since lower enable bits correspond to lower frequencies
+	 * Enable bit 0 is reserved for the 0 frequency
+	 */
+	for (i = 0; i < pwr->num_pwrlevels; i++) {
+		if (pwr->acd_avg_global_override || pwrlevel->acd_avg_level_enable)
+			entry->data[data_off] |= BIT(i + 1);
+
+		pwrlevel--;
+	}
+	data_off++;
+
+	entry->data[data_off++] = 0; /* Reserved */
+	cmd_off += size_globals_dwords;
+
+	/* ACD AVG Config */
+	entry = (struct hfi_table_entry *)&cmd_buf[cmd_off];
+	entry->count = count_config;
+	entry->stride = stride_config;
+
+	/*
+	 * Power levels are reversed since lower data indices correspond to lower frequencies
+	 * Index 0 is reserved for the 0 frequency / the global configuration
+	 */
+	data_off = 0;
+	if (pwr->acd_avg_global_override) {
+		memcpy(&entry->data[data_off], pwr->acd_avg_global_data,
+			sizeof(pwr->acd_avg_global_data));
+	} else {
+		data_off += entry->stride;
+		pwrlevel = &pwr->pwrlevels[pwr->num_pwrlevels - 1];
+		for (i = 0; i < pwr->num_pwrlevels; i++) {
+			memcpy(&entry->data[data_off], pwrlevel->acd_avg_data,
+				sizeof(pwrlevel->acd_avg_data));
+			data_off += entry->stride;
+			pwrlevel--;
+		}
+	}
+	cmd_off += size_config_dwords;
+
+	return gen8_hfi_send_generic_req(adreno_dev, cmd, cmd_off << 2);
+}
+
 static int gen8_hwsched_feature_ctrl(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	int ret;
 
 	ret = gen8_hfi_send_acd_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
+
+	ret = gen8_hfi_send_acd_avg_feature_ctrl(adreno_dev);
 	if (ret)
 		goto err;
 

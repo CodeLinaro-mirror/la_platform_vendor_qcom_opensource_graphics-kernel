@@ -798,6 +798,7 @@ struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
 	{ GEN8_SP_HLSQ_DBG_ECO_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_HLSQ_DBG_ECO_CNTL_2, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_SP_HLSQ_DBG_ECO_CNTL_3, BIT(PIPE_NONE), 0, 0, 1, },
+	{ GEN8_SP_L0_HW_DEBUG, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_L0_PERF_TUNE, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_DBG_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_TPL1_NC_MODE_CNTL, BIT(PIPE_NONE), 0, 0, 0, },

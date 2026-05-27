@@ -1189,6 +1189,7 @@
 #define GEN8_SP_CHICKEN_BITS_3                   0xae0a
 #define GEN8_SP_CHICKEN_BITS_4                   0xae0b
 #define GEN8_SP_STATUS                           0xae0c
+#define GEN8_SP_L0_HW_DEBUG                      0xae0d
 #define GEN8_SP_L0_PERF_TUNE                     0xae0e
 #define GEN8_SP_PERFCTR_SHADER_MASK              0xae0f
 #define GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_LO        0xae10

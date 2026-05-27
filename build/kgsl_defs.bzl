@@ -155,6 +155,13 @@ def define_target_variant_module(target, variant):
 
     ext_deps = external_deps(target, variant)
 
+    smci_dep = []
+    if target == "hamoa":
+        smci_dep = [
+            "//soc-repo:{}/drivers/firmware/qcom/qcom_scm_smci".format(tv),
+            "//soc-repo:{}/drivers/firmware/qcom/si_core/si_core_module".format(tv),
+        ]
+
     ddk_deps = select({
         "//build/qcom_build_extensions:qtisocrepo_true": [
             "//soc-repo:all_headers",
@@ -177,7 +184,7 @@ def define_target_variant_module(target, variant):
             "//soc-repo:{}/drivers/soc/qcom/socinfo".format(tv),
             "//soc-repo:{}/kernel/msm_sysstats".format(tv),
             #"//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
-        ],
+        ] + smci_dep,
         "//build/qcom_build_extensions:qtisocrepo_false": ["//msm-kernel:all_headers"],
     })
 

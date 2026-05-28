@@ -843,6 +843,9 @@ int adreno_sysfs_init(struct adreno_device *adreno_dev)
 	if (gmu_core_isenabled(device)) {
 		gmu_dev =  GMU_PDEV_DEV(device);
 		WARN_ON(sysfs_create_link(&device->dev->kobj, &gmu_dev->kobj, "gmu"));
+
+		/* Notify userspace */
+		kobject_uevent(&gmu_dev->kobj, KOBJ_ADD);
 	}
 	return ret;
 }

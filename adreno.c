@@ -1378,6 +1378,7 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 	mutex_init(&adreno_dev->dev.file_mutex);
 	mutex_init(&adreno_dev->fault_recovery_mutex);
 	mutex_init(&adreno_dev->dcvs_tuning_mutex);
+	mutex_init(&adreno_dev->dev.fault_report_mutex);
 	INIT_LIST_HEAD(&adreno_dev->dev.globals);
 
 	/* Set the fault tolerance policy to replay, skip, throttle */
@@ -4139,6 +4140,18 @@ static bool adreno_is_first_boot_done(struct kgsl_device *device)
 	return test_bit(ADRENO_DEVICE_FIRST_BOOT_DONE, &adreno_dev->priv);
 }
 
+static bool adreno_context_is_guilty(struct kgsl_context *context)
+{
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(context->device);
+	const struct adreno_dispatch_ops *dispatch_ops = adreno_dev->dispatch_ops;
+
+	if (dispatch_ops && dispatch_ops->context_is_guilty)
+		return dispatch_ops->context_is_guilty(drawctxt);
+
+	return false;
+}
+
 static const struct kgsl_functable adreno_functable = {
 	/* Mandatory functions */
 	.check_idle = adreno_check_idle,
@@ -4184,6 +4197,7 @@ static const struct kgsl_functable adreno_functable = {
 	.set_thermal_index = adreno_set_thermal_index,
 	.alloc_dcvs_profile_memory = adreno_alloc_dcvs_profile_memory,
 	.is_first_boot_done = adreno_is_first_boot_done,
+	.context_is_guilty = adreno_context_is_guilty,
 };
 
 static const struct component_master_ops adreno_ops = {

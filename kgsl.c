@@ -41,6 +41,7 @@
 #include "kgsl_sysfs.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
+#include "kgsl_snapshot.h"
 /* Instantiate tracepoints */
 #define CREATE_TRACE_POINTS
 #include "kgsl_power_trace.h"
@@ -903,6 +904,7 @@ kgsl_context_destroy(struct kref *kref)
 		context->id = KGSL_CONTEXT_INVALID;
 	}
 	write_unlock(&device->context_lock);
+	kgsl_free_context_snapshot(device, context);
 	kgsl_process_private_put(context->proc_priv);
 
 	device->ftbl->drawctxt_destroy(context);
@@ -4081,13 +4083,18 @@ long kgsl_ioctl_get_fault_report(struct kgsl_device_private *dev_priv,
 	struct kgsl_fault_report *param = data;
 	u32 size = min_t(u32, sizeof(struct kgsl_fault), param->faultsize);
 	void __user *ptr = u64_to_user_ptr(param->faultlist);
+	void __user *snapshot_ptr = NULL;
 	struct kgsl_context *context;
+	struct kgsl_device *device;
 	int i, ret = 0;
+	u64 total_snapshot_size, addr;
+	struct kgsl_snapshot *snapshot;
 
 	context = kgsl_context_get_owner(dev_priv, param->context_id);
 	if (!context)
 		return -EINVAL;
 
+	device = context->device;
 	/* This IOCTL is valid for invalidated contexts only */
 	if (!(context->flags & KGSL_CONTEXT_FAULT_INFO) ||
 		!kgsl_context_invalid(context)) {
@@ -4098,8 +4105,7 @@ long kgsl_ioctl_get_fault_report(struct kgsl_device_private *dev_priv,
 	/* Return the number of fault types */
 	if (!param->faultlist) {
 		param->faultnents = KGSL_FAULT_TYPE_MAX;
-		kgsl_context_put(context);
-		return 0;
+		goto process_snapshot;
 	}
 
 	/* Check if it's a request to get fault counts or to fill the fault information */
@@ -4126,6 +4132,57 @@ long kgsl_ioctl_get_fault_report(struct kgsl_device_private *dev_priv,
 		ret = kgsl_update_fault_details(context, ptr, param->faultnents,
 			param->faultsize);
 
+process_snapshot:
+	mutex_lock(&device->fault_report_mutex);
+	snapshot = device->secondary_snapshot;
+	if (!snapshot || (snapshot->owner != context))
+		goto unlock;
+
+	ret = wait_for_completion_interruptible(&snapshot->dump_gate);
+	if (ret)
+		goto unlock;
+
+	snapshot_ptr = u64_to_user_ptr(param->snapshot_addr);
+	total_snapshot_size = snapshot->size + snapshot->mempool_size;
+
+	if (!snapshot_ptr) {
+		param->snapshot_size = total_snapshot_size;
+		goto unlock;
+	}
+
+	if (param->snapshot_size < total_snapshot_size) {
+		ret = -ERANGE;
+		goto unlock;
+	}
+
+	if (copy_to_user(snapshot_ptr, snapshot->start,
+		snapshot->size)) {
+		ret = -EFAULT;
+		goto unlock;
+	}
+
+	if (!snapshot->mempool_size)
+		goto unlock;
+
+	if (check_add_overflow(param->snapshot_addr, snapshot->size, &addr)) {
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	if (copy_to_user(u64_to_user_ptr(addr),
+		snapshot->mempool, snapshot->mempool_size)) {
+		ret = -EFAULT;
+		goto unlock;
+	}
+
+	kgsl_free_snapshot(snapshot);
+	device->secondary_snapshot = NULL;
+	mutex_unlock(&device->fault_report_mutex);
+	kgsl_context_put(context);
+	return 0;
+
+unlock:
+	mutex_unlock(&device->fault_report_mutex);
 err:
 	kgsl_context_put(context);
 	return ret;

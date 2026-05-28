@@ -352,4 +352,6 @@ struct kgsl_process_private;
 void kgsl_snapshot_push_object(struct kgsl_device *device,
 		struct kgsl_process_private *process,
 		uint64_t gpuaddr, uint64_t dwords);
+void kgsl_free_snapshot(struct kgsl_snapshot *snapshot);
+void kgsl_free_context_snapshot(struct kgsl_device *device, struct kgsl_context *context);
 #endif

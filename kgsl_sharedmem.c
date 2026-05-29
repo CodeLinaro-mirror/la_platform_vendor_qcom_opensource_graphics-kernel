@@ -1576,9 +1576,9 @@ static int _kgsl_alloc_pages(struct kgsl_memdesc *memdesc,
 	if (check_mul_overflow((size_t)npages, sizeof(*local), &size))
 		return -ENOMEM;
 
-	/* Use vcalloc for large arrays to avoid high-order kmalloc pressure */
+	/* Use vzalloc for large arrays to avoid high-order kmalloc pressure */
 	if (size > PAGE_SIZE)
-		local = vcalloc(npages, sizeof(*local));
+		local = vzalloc(size);
 	else
 		local = kcalloc(npages, sizeof(*local), GFP_KERNEL);
 

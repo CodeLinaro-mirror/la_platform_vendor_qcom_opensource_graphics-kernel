@@ -114,48 +114,48 @@ static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_sel_a, &gen8_coresight_regs[0]);
 static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_sel_b, &gen8_coresight_regs[1]);
 static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_sel_c, &gen8_coresight_regs[2]);
 static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_sel_d, &gen8_coresight_regs[3]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_cntlt, &gen8_coresight_regs[4]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_cntlm, &gen8_coresight_regs[5]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_opl, &gen8_coresight_regs[6]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ope, &gen8_coresight_regs[7]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivtl_0, &gen8_coresight_regs[8]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivtl_1, &gen8_coresight_regs[9]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivtl_2, &gen8_coresight_regs[10]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivtl_3, &gen8_coresight_regs[11]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maskl_0, &gen8_coresight_regs[12]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maskl_1, &gen8_coresight_regs[13]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maskl_2, &gen8_coresight_regs[14]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maskl_3, &gen8_coresight_regs[15]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_bytel_0, &gen8_coresight_regs[16]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_bytel_1, &gen8_coresight_regs[17]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivte_0, &gen8_coresight_regs[18]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivte_1, &gen8_coresight_regs[19]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivte_2, &gen8_coresight_regs[20]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivte_3, &gen8_coresight_regs[21]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maske_0, &gen8_coresight_regs[22]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maske_1, &gen8_coresight_regs[23]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maske_2, &gen8_coresight_regs[24]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maske_3, &gen8_coresight_regs[25]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_nibblee, &gen8_coresight_regs[26]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ptrc0, &gen8_coresight_regs[27]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ptrc1, &gen8_coresight_regs[28]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_loadreg, &gen8_coresight_regs[29]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_idx, &gen8_coresight_regs[30]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_clrc, &gen8_coresight_regs[31]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_loadivt, &gen8_coresight_regs[32]);
-static ADRENO_CORESIGHT_ATTR(vbif_dbg_cntl, &gen8_coresight_regs[33]);
-static ADRENO_CORESIGHT_ATTR(dbg_lo_hi_gpio, &gen8_coresight_regs[34]);
-static ADRENO_CORESIGHT_ATTR(ext_trace_bus_cntl, &gen8_coresight_regs[35]);
-static ADRENO_CORESIGHT_ATTR(read_ahb_through_dbg, &gen8_coresight_regs[36]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_trace_buf1, &gen8_coresight_regs[37]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_trace_buf2, &gen8_coresight_regs[38]);
-static ADRENO_CORESIGHT_ATTR(evt_cfg, &gen8_coresight_regs[39]);
-static ADRENO_CORESIGHT_ATTR(evt_intf_sel_0, &gen8_coresight_regs[40]);
-static ADRENO_CORESIGHT_ATTR(evt_intf_sel_1, &gen8_coresight_regs[41]);
-static ADRENO_CORESIGHT_ATTR(eco_cntl, &gen8_coresight_regs[42]);
-static ADRENO_CORESIGHT_ATTR(ahb_dbg_cntl, &gen8_coresight_regs[43]);
-static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_misc_mode, &gen8_coresight_regs[44]);
-static ADRENO_CORESIGHT_ATTR(cfg_smmu_fault_block_halt, &gen8_coresight_regs[45]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_cntlt, &gen8_coresight_regs[5]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_cntlm, &gen8_coresight_regs[6]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_opl, &gen8_coresight_regs[7]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ope, &gen8_coresight_regs[8]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivtl_0, &gen8_coresight_regs[9]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivtl_1, &gen8_coresight_regs[10]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivtl_2, &gen8_coresight_regs[11]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivtl_3, &gen8_coresight_regs[12]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maskl_0, &gen8_coresight_regs[13]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maskl_1, &gen8_coresight_regs[14]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maskl_2, &gen8_coresight_regs[15]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maskl_3, &gen8_coresight_regs[16]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_bytel_0, &gen8_coresight_regs[17]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_bytel_1, &gen8_coresight_regs[18]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivte_0, &gen8_coresight_regs[19]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivte_1, &gen8_coresight_regs[20]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivte_2, &gen8_coresight_regs[21]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ivte_3, &gen8_coresight_regs[22]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maske_0, &gen8_coresight_regs[23]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maske_1, &gen8_coresight_regs[24]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maske_2, &gen8_coresight_regs[25]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_maske_3, &gen8_coresight_regs[26]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_nibblee, &gen8_coresight_regs[27]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ptrc0, &gen8_coresight_regs[28]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_ptrc1, &gen8_coresight_regs[29]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_loadreg, &gen8_coresight_regs[30]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_idx, &gen8_coresight_regs[31]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_clrc, &gen8_coresight_regs[32]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_loadivt, &gen8_coresight_regs[33]);
+static ADRENO_CORESIGHT_ATTR(vbif_dbg_cntl, &gen8_coresight_regs[34]);
+static ADRENO_CORESIGHT_ATTR(dbg_lo_hi_gpio, &gen8_coresight_regs[35]);
+static ADRENO_CORESIGHT_ATTR(ext_trace_bus_cntl, &gen8_coresight_regs[36]);
+static ADRENO_CORESIGHT_ATTR(read_ahb_through_dbg, &gen8_coresight_regs[37]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_trace_buf1, &gen8_coresight_regs[38]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_trace_buf2, &gen8_coresight_regs[39]);
+static ADRENO_CORESIGHT_ATTR(evt_cfg, &gen8_coresight_regs[40]);
+static ADRENO_CORESIGHT_ATTR(evt_intf_sel_0, &gen8_coresight_regs[41]);
+static ADRENO_CORESIGHT_ATTR(evt_intf_sel_1, &gen8_coresight_regs[42]);
+static ADRENO_CORESIGHT_ATTR(eco_cntl, &gen8_coresight_regs[43]);
+static ADRENO_CORESIGHT_ATTR(ahb_dbg_cntl, &gen8_coresight_regs[44]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_misc_mode, &gen8_coresight_regs[45]);
+static ADRENO_CORESIGHT_ATTR(cfg_smmu_fault_block_halt, &gen8_coresight_regs[46]);
 
 /*CX debug registers*/
 static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_sel_a,
@@ -167,89 +167,89 @@ static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_sel_c,
 static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_sel_d,
 				&gen8_coresight_regs_cx[3]);
 static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_cntlt,
-				&gen8_coresight_regs_cx[4]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_cntlm,
 				&gen8_coresight_regs_cx[5]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_opl,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_cntlm,
 				&gen8_coresight_regs_cx[6]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ope,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_opl,
 				&gen8_coresight_regs_cx[7]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivtl_0,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ope,
 				&gen8_coresight_regs_cx[8]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivtl_1,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivtl_0,
 				&gen8_coresight_regs_cx[9]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivtl_2,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivtl_1,
 				&gen8_coresight_regs_cx[10]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivtl_3,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivtl_2,
 				&gen8_coresight_regs_cx[11]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maskl_0,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivtl_3,
 				&gen8_coresight_regs_cx[12]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maskl_1,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maskl_0,
 				&gen8_coresight_regs_cx[13]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maskl_2,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maskl_1,
 				&gen8_coresight_regs_cx[14]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maskl_3,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maskl_2,
 				&gen8_coresight_regs_cx[15]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_bytel_0,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maskl_3,
 				&gen8_coresight_regs_cx[16]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_bytel_1,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_bytel_0,
 				&gen8_coresight_regs_cx[17]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivte_0,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_bytel_1,
 				&gen8_coresight_regs_cx[18]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivte_1,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivte_0,
 				&gen8_coresight_regs_cx[19]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivte_2,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivte_1,
 				&gen8_coresight_regs_cx[20]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivte_3,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivte_2,
 				&gen8_coresight_regs_cx[21]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maske_0,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ivte_3,
 				&gen8_coresight_regs_cx[22]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maske_1,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maske_0,
 				&gen8_coresight_regs_cx[23]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maske_2,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maske_1,
 				&gen8_coresight_regs_cx[24]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maske_3,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maske_2,
 				&gen8_coresight_regs_cx[25]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_nibblee,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_maske_3,
 				&gen8_coresight_regs_cx[26]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ptrc0,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_nibblee,
 				&gen8_coresight_regs_cx[27]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ptrc1,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ptrc0,
 				&gen8_coresight_regs_cx[28]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_loadreg,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_ptrc1,
 				&gen8_coresight_regs_cx[29]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_idx,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_loadreg,
 				&gen8_coresight_regs_cx[30]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_clrc,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_idx,
 				&gen8_coresight_regs_cx[31]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_loadivt,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_clrc,
 				&gen8_coresight_regs_cx[32]);
-static ADRENO_CORESIGHT_ATTR(cx_vbif_dbg_cntl,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_loadivt,
 				&gen8_coresight_regs_cx[33]);
-static ADRENO_CORESIGHT_ATTR(cx_dbg_lo_hi_gpio,
+static ADRENO_CORESIGHT_ATTR(cx_vbif_dbg_cntl,
 				&gen8_coresight_regs_cx[34]);
-static ADRENO_CORESIGHT_ATTR(cx_ext_trace_bus_cntl,
+static ADRENO_CORESIGHT_ATTR(cx_dbg_lo_hi_gpio,
 				&gen8_coresight_regs_cx[35]);
-static ADRENO_CORESIGHT_ATTR(cx_read_ahb_through_dbg,
+static ADRENO_CORESIGHT_ATTR(cx_ext_trace_bus_cntl,
 				&gen8_coresight_regs_cx[36]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_trace_buf1,
+static ADRENO_CORESIGHT_ATTR(cx_read_ahb_through_dbg,
 				&gen8_coresight_regs_cx[37]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_trace_buf2,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_trace_buf1,
 				&gen8_coresight_regs_cx[38]);
-static ADRENO_CORESIGHT_ATTR(cx_evt_cfg,
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_trace_buf2,
 				&gen8_coresight_regs_cx[39]);
-static ADRENO_CORESIGHT_ATTR(cx_evt_intf_sel_0,
+static ADRENO_CORESIGHT_ATTR(cx_evt_cfg,
 				&gen8_coresight_regs_cx[40]);
-static ADRENO_CORESIGHT_ATTR(cx_evt_intf_sel_1,
+static ADRENO_CORESIGHT_ATTR(cx_evt_intf_sel_0,
 				&gen8_coresight_regs_cx[41]);
-static ADRENO_CORESIGHT_ATTR(cx_perf_atb_cfg,
+static ADRENO_CORESIGHT_ATTR(cx_evt_intf_sel_1,
 				&gen8_coresight_regs_cx[42]);
-static ADRENO_CORESIGHT_ATTR(cx_eco_cntl,
+static ADRENO_CORESIGHT_ATTR(cx_perf_atb_cfg,
 				&gen8_coresight_regs_cx[43]);
-static ADRENO_CORESIGHT_ATTR(cx_ahb_dbg_cntl,
+static ADRENO_CORESIGHT_ATTR(cx_eco_cntl,
 				&gen8_coresight_regs_cx[44]);
-static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_misc_mode,
+static ADRENO_CORESIGHT_ATTR(cx_ahb_dbg_cntl,
 				&gen8_coresight_regs_cx[45]);
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_misc_mode,
+				&gen8_coresight_regs_cx[46]);
 
 static struct attribute *gen8_coresight_attrs[] = {
 	&coresight_attr_cfg_dbgbus_sel_a.attr.attr,

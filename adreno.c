@@ -183,6 +183,7 @@ int adreno_get_firmware(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct firmware *fw = NULL;
 	int ret;
+	u64 memflags = KGSL_MEMFLAGS_GPUREADONLY;
 
 	if (!IS_ERR_OR_NULL(firmware->memdesc))
 		return 0;
@@ -195,8 +196,11 @@ int adreno_get_firmware(struct adreno_device *adreno_dev,
 		return ret;
 	}
 
+	if (adreno_is_a622(adreno_dev))
+		memflags |= FIELD_PREP(KGSL_CACHEMODE_MASK, KGSL_CACHEMODE_WRITEBACK);
+
 	firmware->memdesc = kgsl_allocate_global(device, fw->size - 4, 0,
-				KGSL_MEMFLAGS_GPUREADONLY, KGSL_MEMDESC_UCODE,
+				memflags, KGSL_MEMDESC_UCODE,
 				"ucode");
 
 	ret = PTR_ERR_OR_ZERO(firmware->memdesc);

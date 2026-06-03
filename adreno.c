@@ -3994,15 +3994,15 @@ static void adreno_deassert_gbif_halt(struct kgsl_device *device)
 		gpudev->deassert_gbif_halt(adreno_dev);
 }
 
-static void adreno_create_hw_fence(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+static void adreno_setup_fence(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
 	if (WARN_ON(!adreno_dev->dispatch_ops))
 		return;
 
-	if (adreno_dev->dispatch_ops->create_hw_fence)
-		adreno_dev->dispatch_ops->create_hw_fence(adreno_dev, kfence);
+	if (adreno_dev->dispatch_ops->setup_fence)
+		adreno_dev->dispatch_ops->setup_fence(adreno_dev, kfence);
 }
 
 u64 adreno_read_cx_timer(struct adreno_device *adreno_dev)
@@ -4159,7 +4159,7 @@ static const struct kgsl_functable adreno_functable = {
 	.queue_recurring_cmd = adreno_queue_recurring_cmd,
 	.dequeue_recurring_cmd = adreno_dequeue_recurring_cmd,
 	.set_isdb_breakpoint_registers = adreno_set_isdb_breakpoint_registers,
-	.create_hw_fence = adreno_create_hw_fence,
+	.setup_fence = adreno_setup_fence,
 	.gmu_based_dcvs_pwr_ops = adreno_gmu_based_dcvs_pwr_ops,
 	.set_thermal_index = adreno_set_thermal_index,
 	.alloc_dcvs_profile_memory = adreno_alloc_dcvs_profile_memory,

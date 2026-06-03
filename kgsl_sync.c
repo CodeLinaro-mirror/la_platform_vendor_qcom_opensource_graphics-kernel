@@ -802,7 +802,7 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 	}
 
 	if (!retired)
-		device->ftbl->create_hw_fence(device, kfence);
+		device->ftbl->setup_fence(device, kfence);
 
 	fd_install(priv.fence_fd, kfence->sync_file->file);
 

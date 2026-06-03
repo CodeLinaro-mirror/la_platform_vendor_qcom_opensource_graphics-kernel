@@ -621,8 +621,8 @@ struct adreno_dispatch_ops {
 			struct adreno_context *drawctxt);
 	int (*setup_context)(struct adreno_device *adreno_dev,
 			struct adreno_context *drawctxt);
-	/* @create_hw_fence: Create a hardware fence */
-	void (*create_hw_fence)(struct adreno_device *adreno_dev, struct kgsl_sync_fence *kfence);
+	/* @setup_fence: Setup a fence */
+	void (*setup_fence)(struct adreno_device *adreno_dev, struct kgsl_sync_fence *kfence);
 };
 
 /**

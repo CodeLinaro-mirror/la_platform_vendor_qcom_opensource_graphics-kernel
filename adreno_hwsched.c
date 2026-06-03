@@ -2562,7 +2562,7 @@ static void adreno_hwsched_work(struct kthread_work *work)
 	kgsl_mutex_unlock(&hwsched->mutex);
 }
 
-static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
+static void adreno_hwsched_setup_fence(struct adreno_device *adreno_dev,
 	struct kgsl_sync_fence *kfence)
 {
 	struct kgsl_sync_timeline *ktimeline = kfence->parent;
@@ -2590,7 +2590,7 @@ static const struct adreno_dispatch_ops hwsched_ops = {
 	.close = adreno_hwsched_dispatcher_close,
 	.queue_cmds = adreno_hwsched_queue_cmds,
 	.queue_context = adreno_hwsched_queue_context,
-	.create_hw_fence = adreno_hwsched_create_hw_fence,
+	.setup_fence = adreno_hwsched_setup_fence,
 	.setup_context = adreno_hwsched_setup_context,
 };
 

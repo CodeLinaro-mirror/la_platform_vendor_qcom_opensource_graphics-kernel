@@ -200,8 +200,8 @@ struct kgsl_functable {
 		struct kgsl_context *context);
 	/** set_isdb_breakpoint_registers: Program isdb registers to issue break command */
 	void (*set_isdb_breakpoint_registers)(struct kgsl_device *device);
-	/** @create_hw_fence: Create a hardware fence */
-	void (*create_hw_fence)(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
+	/** @setup_fence: Setup a fence */
+	void (*setup_fence)(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
 	/** @gmu_based_dcvs_pwr_ops: Function ops for GMU based DCVS power operations */
 	int (*gmu_based_dcvs_pwr_ops)(struct kgsl_device *device, u32 arg,
 		enum gpu_pwrlevel_op op);

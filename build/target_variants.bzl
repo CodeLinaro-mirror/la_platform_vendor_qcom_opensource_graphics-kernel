@@ -54,6 +54,7 @@ le_targets = [
     # keep sorted
     "bengal-le",
     "vienna-le",
+    "alor-le",
 ]
 
 le_variants = [

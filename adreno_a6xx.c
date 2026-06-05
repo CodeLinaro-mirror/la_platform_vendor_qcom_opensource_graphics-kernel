@@ -197,7 +197,8 @@ int a6xx_init(struct adreno_device *adreno_dev)
 			adreno_is_a642l(adreno_dev) ||
 			adreno_is_a643(adreno_dev) ||
 			adreno_is_a662(adreno_dev) ||
-			adreno_is_gen6_3_26_0(adreno_dev))
+			adreno_is_gen6_3_26_0(adreno_dev) ||
+			adreno_is_a619_bourtzi(adreno_dev))
 			adreno_dev->highest_bank_bit = 14;
 		else if ((adreno_is_a650(adreno_dev) ||
 				adreno_is_a660(adreno_dev)))

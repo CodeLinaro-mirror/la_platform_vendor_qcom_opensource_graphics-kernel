@@ -201,6 +201,8 @@
 #define ADRENO_SYNX BIT_ULL(33)
 /* Enable tracking and handling of fence deadlines */
 #define ADRENO_FENCE_DEADLINE_BOOST BIT_ULL(34)
+/* GMU supports thinmem_cfg feature */
+#define ADRENO_GMU_THINMEM_CFG BIT_ULL(35)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds

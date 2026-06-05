@@ -242,6 +242,8 @@ struct adreno_gen8_core {
 	bool malu;
 	/** @dynamic_bcl_lut: Lookup table for bcl throttling */
 	const struct gen8_dynamic_bcl_entry *dynamic_bcl_lut;
+	/** @thinmem_cfg_data: Data to enable the thinmem_cfg feature */
+	u32 thinmem_cfg_data;
 };
 
 /**

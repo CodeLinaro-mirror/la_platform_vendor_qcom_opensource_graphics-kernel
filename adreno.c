@@ -1335,6 +1335,8 @@ const char *hfi_feature_to_string(u32 feature)
 		return "AQE";
 	case HFI_FEATURE_FAST_CONTEXT_DESTROY:
 		return "FAST_CONTEXT_DESTROY";
+	case HFI_FEATURE_THINMEM_CFG:
+		return "THINMEM_CFG";
 	}
 	return "unknown";
 }

@@ -1636,6 +1636,25 @@ static int enable_preemption(struct adreno_device *adreno_dev)
 
 }
 
+static void gen8_hfi_send_thinmem_cfg_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	u32 thinmem_cfg_data = gen8_core->thinmem_cfg_data;
+	u32 data;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_THINMEM_CFG) || !thinmem_cfg_data)
+		return;
+
+	/* THINMEM_CFG is available on GMU version 5.06.09 and later */
+	if (KGSL_DEVICE(adreno_dev)->gmu_core.ver.core < GMU_VERSION(5, 6, 9))
+		return;
+
+	/* Bits [7:4] contains the thinmem_cfg data to add */
+	data = FIELD_PREP(GENMASK(7, 4), thinmem_cfg_data);
+
+	gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_THINMEM_CFG, 1, data);
+}
+
 static int enable_gmu_stats(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -2844,6 +2863,8 @@ static int gen8_hwsched_feature_ctrl(struct adreno_device *adreno_dev)
 	if (gmu->log_group_mask)
 		gen8_hfi_send_set_value(adreno_dev,
 			HFI_VALUE_LOG_GROUP, 0, gmu->log_group_mask);
+
+	gen8_hfi_send_thinmem_cfg_feature_ctrl(adreno_dev);
 
 	ret = gen8_hfi_send_spel_feature_ctrl(adreno_dev);
 	if (ret)

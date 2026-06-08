@@ -267,6 +267,14 @@ static void gen8_hwsched_init_spel_config(struct adreno_device *adreno_dev)
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_LONG_DESIRED_PWR_EN, 1);
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_CDYN_HIST_EN, 1);
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_MIN_PERF_LEVEL, 1);
+	spel->config[2] |= FIELD_PREP(GMU_PWR_BUDGET_NUM_SAMPLES, 5);
+	spel->config[2] |= FIELD_PREP(GMU_PWR_BUDGET_CDYN_SCALE_FACTOR_EN, 1);
+	spel->config[2] |= FIELD_PREP(GMU_PWR_BUDGET_NUM_SAMPLES_2, 10);
+	spel->config[3] |= FIELD_PREP(GMU_PWR_BUDGET_FORCED_TIME_CONST_MUL_1, 1);
+	spel->config[3] |= FIELD_PREP(GMU_PWR_BUDGET_FORCED_TIME_CONST_MUL_2, 26);
+	spel->config[3] |= FIELD_PREP(GMU_PWR_BUDGET_SKIP_DELAYED_GX_VOTE, 1);
+	spel->config[5] |= FIELD_PREP(GMU_PWR_BUDGET_FORCED_LONG_TIME_CONST, 46);
+	spel->config[6] |= FIELD_PREP(GMU_PWR_BUDGET_FORCED_SHORT_BUDGET, 0xFFFFFF);
 }
 
 /* Register offsets within the SPEL_APPS_CONFIG region */

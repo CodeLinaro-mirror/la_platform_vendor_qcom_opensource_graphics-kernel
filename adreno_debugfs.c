@@ -1378,8 +1378,8 @@ static int spel_config_show(struct seq_file *s, void *unused)
 
 	raw = spel->config[2];
 	seq_printf(s, "RAW[2] = 0x%08x\n", raw);
-	seq_printf(s, "    reserved_2                = 0x%lx\n",
-		FIELD_GET(GMU_PWR_BUDGET_RESERVED_2, raw));
+	seq_printf(s, "    num_samples_2             = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_NUM_SAMPLES_2, raw));
 	seq_printf(s, "    cdyn_accum_config_0       = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_CDYN_ACCUM_CONFIG_0, raw));
 	seq_printf(s, "    cdyn_hist_alpha           = %lu\n",
@@ -1394,6 +1394,20 @@ static int spel_config_show(struct seq_file *s, void *unused)
 	seq_printf(s, "RAW[3] = 0x%08x\n", raw);
 	seq_printf(s, "    reserved_3                = 0x%lx\n",
 		FIELD_GET(GMU_PWR_BUDGET_RESERVED_3, raw));
+	seq_printf(s, "    use_static_cdyn_bp        = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_USE_STATIC_CDYN_BP, raw));
+	seq_printf(s, "    sys_fw_vote_enforce       = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_SYS_FW_VOTE_ENFORCE, raw));
+	seq_printf(s, "    skip_delayed_gx_vote      = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_SKIP_DELAYED_GX_VOTE, raw));
+	seq_printf(s, "    pwr_limits_mode_val       = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_PWR_LIMITS_MODE_VAL, raw));
+	seq_printf(s, "    pwr_limits_mode_en        = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_PWR_LIMITS_MODE_EN, raw));
+	seq_printf(s, "    forced_time_const_mul_2   = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_FORCED_TIME_CONST_MUL_2, raw));
+	seq_printf(s, "    forced_time_const_mul_1   = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_FORCED_TIME_CONST_MUL_1, raw));
 	seq_puts(s, "\n");
 
 	raw = spel->config[4];

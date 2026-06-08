@@ -1323,16 +1323,31 @@ struct hfi_profile_register {
  *       [6:0] DES_PWR_ALPHA             - Alpha, out of 127, to be used for desired power EWMA
  *                                         calculations. If 0, assume 50% alpha
  * DATA[2]
- *     [31:27] RESERVED_2                - Reserved field
+ *     [31:27] NUM_SAMPLES_2             - Number of samples in the running sum buffer 2 (sustained
+ *                                         perf)
  *     [26:15] CDYN_ACCUM_CONFIG_0       - Value for GMUCX_CDYN_ACCUM_CONFIG_0 for Cdyn histogram.
  *                                         If 0, 10 will be used as default value
  *      [14:8] CDYN_HIST_ALPHA           - Alpha, out of 127, to be used for cdyn histogram EWMA
  *                                         calculations. If 0, assume 50% alpha
  *       [7:7] CDYN_SCALE_FACTOR_EN      - Scale the boot table Cdyn by a factor before making DCVS
  *                                         decisions
- *       [6:0] NUM_SAMPLES               - Number of samples in the running sum buffer
+ *       [6:0] NUM_SAMPLES               - Number of samples in the running sum buffer (battery
+ *                                         limits)
  * DATA[3]
- *      [31:0] RESERVED_3                - Reserved field
+ *     [31:15] RESERVED_3                - Reserved field
+ *     [14:14] USE_STATIC_CDYN_BP        - For battery limits, use static cdyn instead of histogram
+ *                                         cdyn value
+ *     [13:13] SYS_FW_VOTE_ENFORCE       - Switching to new vote managed by power limits or SysFW
+ *                                         0: Power limits enforces DCVS switching
+ *                                         1: Power limits suggests vote to KMD and KMD should
+ *                                            enforce it
+ *     [12:12] SKIP_DELAYED_GX_VOTE      - Process incoming GX vote immediately instead of at the
+ *                                         sample period boundary
+ *     [11:11] PWR_LIMITS_MODE_VAL       - Battery limits or sustained perf
+ *     [10:10] PWR_LIMITS_MODE_EN        - Use HFI to determine whether battery limits or sustained
+ *                                         perf window should be applied
+ *       [9:3] FORCED_TIME_CONST_MUL_2   - Multiplier for second long window (typically 26)
+ *       [2:0] FORCED_TIME_CONST_MUL_1   - Multiplier for first long window
  * DATA[4]
  *      [31:0] FORCED_LONG_BUDGET        - Forced long power budget in mW. If non-zero, use only
  *                                         the forced value
@@ -1362,12 +1377,19 @@ struct hfi_profile_register {
 #define GMU_PWR_BUDGET_MAX_BUDGET_CDYN_GFX_SHORT	GENMASK(19, 13)
 #define GMU_PWR_BUDGET_MAX_BUDGET_CDYN_GFX		GENMASK(12, 7)
 #define GMU_PWR_BUDGET_DES_PWR_ALPHA			GENMASK(6, 0)
-#define GMU_PWR_BUDGET_RESERVED_2			GENMASK(31, 27)
+#define GMU_PWR_BUDGET_NUM_SAMPLES_2			GENMASK(31, 27)
 #define GMU_PWR_BUDGET_CDYN_ACCUM_CONFIG_0		GENMASK(26, 15)
 #define GMU_PWR_BUDGET_CDYN_HIST_ALPHA			GENMASK(14, 8)
 #define GMU_PWR_BUDGET_CDYN_SCALE_FACTOR_EN		GENMASK(7, 7)
 #define GMU_PWR_BUDGET_NUM_SAMPLES			GENMASK(6, 0)
-#define GMU_PWR_BUDGET_RESERVED_3			GENMASK(31, 0)
+#define GMU_PWR_BUDGET_RESERVED_3			GENMASK(31, 15)
+#define GMU_PWR_BUDGET_USE_STATIC_CDYN_BP		GENMASK(14, 14)
+#define GMU_PWR_BUDGET_SYS_FW_VOTE_ENFORCE		GENMASK(13, 13)
+#define GMU_PWR_BUDGET_SKIP_DELAYED_GX_VOTE		GENMASK(12, 12)
+#define GMU_PWR_BUDGET_PWR_LIMITS_MODE_VAL		GENMASK(11, 11)
+#define GMU_PWR_BUDGET_PWR_LIMITS_MODE_EN		GENMASK(10, 10)
+#define GMU_PWR_BUDGET_FORCED_TIME_CONST_MUL_2		GENMASK(9, 3)
+#define GMU_PWR_BUDGET_FORCED_TIME_CONST_MUL_1		GENMASK(2, 0)
 #define GMU_PWR_BUDGET_FORCED_LONG_BUDGET		GENMASK(31, 0)
 #define GMU_PWR_BUDGET_FORCED_LONG_TIME_CONST		GENMASK(31, 0)
 #define GMU_PWR_BUDGET_FORCED_SHORT_BUDGET		GENMASK(31, 0)

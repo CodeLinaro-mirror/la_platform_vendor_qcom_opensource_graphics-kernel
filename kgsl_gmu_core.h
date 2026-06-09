@@ -266,7 +266,7 @@ enum gmu_vrb_idx {
  * readindex, If it's not moved since last timer fired, GMU will send the f2h message to
  * drain trace packets. GMU Trace Timer will be restarted if the readindex is moving.
  */
-#define TRACE_TIMEOUT_MSEC	5
+#define TRACE_TIMEOUT_MSEC	20
 
 /* Trace metadata defines */
 /* Trace drop mode hint for GMU to drop trace packets when trace buffer is full */

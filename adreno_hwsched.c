@@ -652,7 +652,9 @@ static bool _marker_expired(struct kgsl_drawobj_cmd *markerobj)
 {
 	struct kgsl_drawobj *drawobj = DRAWOBJ(markerobj);
 
+	/* Markers that are not EOFs can be retired on the CPU */
 	return (drawobj->flags & KGSL_DRAWOBJ_MARKER) &&
+		!(drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME) &&
 		kgsl_check_timestamp(drawobj->device, drawobj->context,
 		markerobj->marker_timestamp);
 }
@@ -1443,11 +1445,14 @@ static int _queue_markerobj(struct adreno_device *adreno_dev,
 		return ret;
 
 	/*
-	 * See if we can fastpath this thing - if nothing is queued
-	 * and nothing is inflight retire without bothering the GPU
+	 * See if we can fastpath non-EOF markers - if nothing is queued
+	 * and nothing is inflight retire without bothering the GPU.
+	 * EOF markers must always be queued and eventually submitted.
 	 */
-	if (!drawctxt->queued && kgsl_check_timestamp(drawobj->device,
+	if (!(drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME) && !drawctxt->queued &&
+		kgsl_check_timestamp(drawobj->device,
 		drawobj->context, drawctxt->queued_timestamp)) {
+		drawctxt->queued_timestamp = *timestamp;
 		_retire_timestamp(drawobj);
 		return 1;
 	}
@@ -1459,6 +1464,13 @@ static int _queue_markerobj(struct adreno_device *adreno_dev,
 	 */
 	 markerobj->marker_timestamp = drawctxt->queued_timestamp;
 	 drawctxt->queued_timestamp = *timestamp;
+
+	/*
+	 * EOF marker objs must be submitted to the GPU. Set the SKIP bit to ensure
+	 * the dispatcher submits it as an NOP.
+	 */
+	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME)
+		set_bit(CMDOBJ_SKIP, &markerobj->priv);
 
 	_queue_drawobj(drawctxt, drawobj);
 

@@ -273,7 +273,7 @@ static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_en
 	u32 page_count = 0;
 	struct page **pages = NULL;
 	struct file *shmem_filp = NULL;
-	int i = 0;
+	int i = 0, j, count;
 	int ret = 1;
 	int page_size = PAGE_SIZE;
 	struct page **old_pages;
@@ -296,7 +296,7 @@ static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_en
 		goto cleanup_pages;
 
 	/* Allocate replacement shmem pages */
-	for (i = 0; i < memdesc->page_count; i++) {
+	for (i = 0; i < memdesc->page_count; i += ret) {
 		ret = kgsl_alloc_shmem_page(memdesc, shmem_filp, &page_size, &pages[i], NULL, i);
 		if (ret <= 0) {
 			pr_err_ratelimited(
@@ -327,7 +327,6 @@ static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_en
 	for (i = 0; i < memdesc->page_count; ) {
 		struct page *p;
 		int n;
-		int count;
 
 		p = memdesc->pages[i];
 		count = 1 << compound_order(p);
@@ -372,8 +371,10 @@ static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_en
 	return page_count;
 
 cleanup_shmem:
-	for (i--; i >= 0; i--)
-		put_page(pages[i]);
+	for (j = 0; j < i; j += count) {
+		count = 1 << compound_order(pages[j]);
+		put_page(pages[j]);
+	}
 
 	kgsl_memdesc_pagelist_cleanup(shmem_filp, memdesc);
 	SHMEM_I(shmem_filp->f_mapping->host)->android_vendor_data1 = 0;

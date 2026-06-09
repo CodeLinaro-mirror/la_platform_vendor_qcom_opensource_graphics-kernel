@@ -83,6 +83,16 @@ config QCOM_KGSL_USE_SHMEM
 	  But using shmem will help in making kgsl pages available for
 	  reclaiming.
 
+config QCOM_KGSL_USE_SHMEM_MTHP
+	bool "Enable shmem mTHP support for memory allocations"
+	depends on QCOM_KGSL_USE_SHMEM
+	depends on TRANSPARENT_HUGEPAGE
+	help
+	  Enable multi-size Transparent Huge Page (mTHP) support for KGSL driver.
+	  This allows the kernel to back KGSL shmem buffers with larger folios
+	  instead of only base pages. This reduces allocation overhead, improves
+	  TLB efficiency, and minimizes page management cost.
+
 config QCOM_KGSL_PROCESS_RECLAIM
 	bool "Make driver pages available for reclaim"
 	select QCOM_KGSL_USE_SHMEM

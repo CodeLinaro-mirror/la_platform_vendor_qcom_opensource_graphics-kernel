@@ -1816,11 +1816,6 @@ static int gen7_gmu_acd_set(struct kgsl_device *device, bool val)
 	return adreno_power_cycle(adreno_dev, set_acd, &val);
 }
 
-#define BCL_RESP_TYPE_MASK   BIT(0)
-#define BCL_SID0_MASK        GENMASK(7, 1)
-#define BCL_SID1_MASK        GENMASK(14, 8)
-#define BCL_SID2_MASK        GENMASK(21, 15)
-
 static int gen7_bcl_sid_set(struct kgsl_device *device, u32 sid_id, u64 sid_val)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);

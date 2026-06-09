@@ -376,6 +376,11 @@ struct adreno_gpudev;
 #define PREEMPT_SCRATCH_ADDR(dev, id) \
 	((dev)->preempt.scratch->gpuaddr + PREEMPT_SCRATCH_OFFSET(id))
 
+#define BCL_RESP_TYPE_MASK   BIT(0)
+#define BCL_SID0_MASK        GENMASK(7, 1)
+#define BCL_SID1_MASK        GENMASK(14, 8)
+#define BCL_SID2_MASK        GENMASK(21, 15)
+
 /**
  * enum adreno_preempt_states
  * ADRENO_PREEMPT_NONE: No preemption is scheduled

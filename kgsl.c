@@ -2221,6 +2221,7 @@ long kgsl_ioctl_submit_commands(struct kgsl_device_private *dev_priv,
 	unsigned int type;
 	long result;
 	unsigned int i = 0;
+	struct kgsl_drawobj_sync *syncobj = NULL;
 
 	type = _process_command_input(device, param->flags, param->numcmds, 0,
 			param->numsyncs);
@@ -2232,8 +2233,7 @@ long kgsl_ioctl_submit_commands(struct kgsl_device_private *dev_priv,
 		return -EINVAL;
 
 	if (type & SYNCOBJ_TYPE) {
-		struct kgsl_drawobj_sync *syncobj =
-				kgsl_drawobj_sync_create(device, context);
+		syncobj = kgsl_drawobj_sync_create(device, context);
 		if (IS_ERR(syncobj)) {
 			result = PTR_ERR(syncobj);
 			goto done;
@@ -2281,6 +2281,9 @@ long kgsl_ioctl_submit_commands(struct kgsl_device_private *dev_priv,
 			if (result)
 				goto done;
 		}
+
+		if (syncobj)
+			set_bit(KGSL_SYNCOBJ_HAS_CMDBATCH, &syncobj->flags);
 	}
 
 	result = device->ftbl->queue_cmds(dev_priv, context, drawobj,
@@ -2306,6 +2309,7 @@ long kgsl_ioctl_gpu_command(struct kgsl_device_private *dev_priv,
 	struct kgsl_gpu_command *param = data;
 	struct kgsl_device *device = dev_priv->device;
 	struct kgsl_context *context;
+	struct kgsl_drawobj_sync *syncobj = NULL;
 	struct kgsl_drawobj *drawobj[2];
 	unsigned int type;
 	long result;
@@ -2321,8 +2325,7 @@ long kgsl_ioctl_gpu_command(struct kgsl_device_private *dev_priv,
 		return -EINVAL;
 
 	if (type & SYNCOBJ_TYPE) {
-		struct kgsl_drawobj_sync *syncobj =
-				kgsl_drawobj_sync_create(device, context);
+		syncobj = kgsl_drawobj_sync_create(device, context);
 
 		if (IS_ERR(syncobj)) {
 			result = PTR_ERR(syncobj);
@@ -2343,7 +2346,6 @@ long kgsl_ioctl_gpu_command(struct kgsl_device_private *dev_priv,
 		result = _enable_hw_syncobj(device, syncobj);
 		if (result)
 			goto done;
-
 	}
 
 	if (type & (CMDOBJ_TYPE | MARKEROBJ_TYPE)) {
@@ -2381,6 +2383,9 @@ long kgsl_ioctl_gpu_command(struct kgsl_device_private *dev_priv,
 			if (result)
 				goto done;
 		}
+
+		if (syncobj)
+			set_bit(KGSL_SYNCOBJ_HAS_CMDBATCH, &syncobj->flags);
 	}
 
 	result = device->ftbl->queue_cmds(dev_priv, context, drawobj,

@@ -95,6 +95,8 @@ struct kgsl_drawobj_cmd {
 #define KGSL_SYNCOBJ_HW 1
 /* This hw sync object has been assigned a timestamp */
 #define KGSL_SYNCOBJ_HW_TS 2
+/* This sync object has a cmdbatch */
+#define KGSL_SYNCOBJ_HAS_CMDBATCH 3
 
 struct kgsl_drawobj_sync_hw_fence {
 	/** @fence: Pointer to hardware fence */

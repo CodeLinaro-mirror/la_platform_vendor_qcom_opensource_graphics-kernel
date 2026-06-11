@@ -1716,7 +1716,7 @@ int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 			qcom_clk_dump(NULL, pwr->cx_regulator, false);
 		} else {
 			dev_err(device->dev, "GPU CX wait timeout\n");
-#if (KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE)
+#ifdef CONFIG_QCOM_KGSL_GENPD_DUMP
 			qcom_gdsc_genpd_dump(pwr->cx_pd);
 #endif
 			dump_cx_gdsc_timeout_reg(device);

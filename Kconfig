@@ -162,3 +162,16 @@ config QCOM_KGSL_RESTRICT_CONTEXT_PRIORITY
 	  non-RB0 level, limiting those to lower priority levels. This reserves
 	  the highest priority levels for critical system tasks such as
 	  compositors like SurfaceFlinger.
+
+config QCOM_KGSL_GENPD_DUMP
+	bool "Use genpd clk dump interface"
+	depends on PM_GENERIC_DOMAINS
+	help
+	  Say 'Y' to enable support for dumping the state of GENPD
+	  and GDSC regulators used by the Qualcomm KGSL driver.
+	  When enabled, this option allows the driver to call
+	  qcom_gdsc_genpd_dump() to print clock and power domain state
+	  information for debugging and diagnostics purposes.
+	  This feature depends on the generic power domain (GENPD)
+	  framework and requires additional downstream debug support
+	  for GENPD to provide meaningful output.

@@ -820,6 +820,25 @@ err_clk_put:
 	clk_put(clk);
 }
 
+static size_t gen8_snapshot_rbbm_status(struct kgsl_device *device, u8 *buf,
+		size_t remain, void *priv)
+{
+	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
+	u32 *data = (u32 *)(buf + sizeof(*header));
+
+	if (remain < DEBUG_SECTION_SZ(1)) {
+		SNAPSHOT_ERR_NOMEM(device, "RBBM STATUS");
+		return 0;
+	}
+
+	/* Dump the rbbm status information */
+	header->type = SNAPSHOT_DEBUG_RBBM_STATUS;
+	header->size = 1;
+	kgsl_regread(device, GEN8_RBBM_STATUS, data);
+
+	return DEBUG_SECTION_SZ(1);
+}
+
 static size_t gen8_snapshot_slice_mask(struct kgsl_device *device, u8 *buf,
 		size_t remain, void *priv)
 {
@@ -980,7 +999,7 @@ static bool gen8_snapshot_mempool(struct kgsl_device *device,
 	}
 
 	/* Clear aperture register */
-	gen8_host_aperture_set(ADRENO_DEVICE(device), 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 
 	return ret;
 }
@@ -1385,6 +1404,12 @@ static void gen8_cx_gc_us_i_0_debugbus_read(struct kgsl_device *device,
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_C, reg_val);
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_D, reg_val);
 
+	/*
+	 * Workaround for GEN8_2_0, GEN8_9_0 and GEN8_11_0 target, to flush
+	 * the last segment twice as per recommendation
+	 */
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_D, reg_val);
+
 	udelay(1);
 
 	/*
@@ -1419,6 +1444,12 @@ static void gen8_dbgc_debug_bus_read(struct kgsl_device *device,
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_A, reg);
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_B, reg);
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_C, reg);
+	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_D, reg);
+
+	/*
+	 * Workaround for GEN8_2_0, GEN8_9_0 and GEN8_11_0 target, to flush
+	 * the last segment twice as per recommendation
+	 */
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_D, reg);
 
 	/*
@@ -1468,6 +1499,12 @@ static void gen8_dbgc_side_debug_bus_read(struct kgsl_device *device,
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_D, reg);
 
 	/*
+	 * Workaround for GEN8_2_0, GEN8_9_0 and GEN8_11_0 target, to flush
+	 * the last segment twice as per recommendation
+	 */
+	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_D, reg);
+
+	/*
 	 * There needs to be a delay of 1 us to ensure enough time for correct
 	 * data is funneled into the trace buffer
 	 */
@@ -1513,6 +1550,12 @@ static void gen8_cx_debug_bus_read(struct kgsl_device *device,
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_A, reg);
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_B, reg);
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_C, reg);
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_D, reg);
+
+	/*
+	 * Workaround for GEN8_2_0, GEN8_9_0 and GEN8_11_0 target, to flush
+	 * the last segment twice as per recommendation
+	 */
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_D, reg);
 
 	/*
@@ -1577,6 +1620,12 @@ static void gen8_cx_side_debug_bus_read(struct kgsl_device *device,
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_A, reg);
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_B, reg);
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_C, reg);
+	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_D, reg);
+
+	/*
+	 * Workaround for GEN8_2_0, GEN8_9_0 and GEN8_11_0 target, to flush
+	 * the last segment twice as per recommendation
+	 */
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_D, reg);
 
 	/*
@@ -1960,6 +2009,9 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, gen8_snapshot_slice_mask, NULL);
 
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, gen8_snapshot_rbbm_status, NULL);
+
 	gen8_snapshot_cx_debugbus(adreno_dev, snapshot);
 
 	if (!gen8_gmu_rpmh_pwr_state_is_active(device) ||
@@ -2005,7 +2057,7 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	}
 
 	/* Clear aperture register */
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 
 	slice_mask = gen8_get_slice_mask(adreno_dev);
 

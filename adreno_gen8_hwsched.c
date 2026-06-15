@@ -994,10 +994,6 @@ static int gen8_hwsched_first_boot(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_ACTIVE);
 
-	ret = gen8_perfcounter_reserve(adreno_dev);
-	if (ret)
-		return ret;
-
 	ret = gen8_hwsched_gmu_first_boot(adreno_dev);
 	if (ret)
 		return ret;

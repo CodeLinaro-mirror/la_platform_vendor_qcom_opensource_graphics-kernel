@@ -380,11 +380,4 @@ int gen8_gmu_set_non_bufferable_carveout(struct adreno_device *adreno_dev);
  */
 bool gen8_gmu_malu_is_on(struct adreno_device *adreno_dev);
 
-/**
- * gen8_perfcounter_reserve: Reserve kernel perfcounters
- * @adreno_dev: Pointer to the adreno device
- *
- * Returns: 0 on success or negative error on failure
- */
-int gen8_perfcounter_reserve(struct adreno_device *adreno_dev);
 #endif

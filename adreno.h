@@ -928,18 +928,6 @@ struct adreno_device {
 	u32 viz_flush_draw_count;
 	/** @viz_flush_prim_count: Prim count to flush visibility stream **/
 	u32 viz_flush_prim_count;
-	/** @gpu_busy_lo: Performance counter address for gpu busy cycle */
-	u32 gpu_busy_lo;
-	/** @ifpc_lo: Performance counter address for ifpc count */
-	u32 ifpc_lo;
-	/** @bcl_throttle_lo_0: Performance counter address for sid 0 bcl throttle */
-	u32 bcl_throttle_lo_0;
-	/** @bcl_throttle_lo_1: Performance counter address for sid 1 bcl throttle */
-	u32 bcl_throttle_lo_1;
-	/** @bcl_throttle_lo_2: Performance counter address for sid 2 bcl throttle */
-	u32 bcl_throttle_lo_2;
-	/** @bcl_throttle_time_lo: Performance counter address for bcl throttling time */
-	u32 bcl_throttle_time_lo;
 };
 
 /* Time to wait for suspend recovery gate to complete */

@@ -2078,6 +2078,15 @@ int gen8_start(struct adreno_device *adreno_dev)
 		kgsl_regwrite(device, GEN8_RBBM_SLICE_PERFCTR_CNTL, 0x1);
 	}
 
+	/* Turn on the IFPC counter (countable 4 on XOCLK4) */
+	kgsl_regwrite(device, GEN8_GMUCX_POWER_COUNTER_SELECT_XOCLK_1,
+			FIELD_PREP(GENMASK(7, 0), 0x4));
+
+	/* Turn on counter to count total time spent in BCL throttle */
+	if (adreno_dev->bcl_enabled)
+		kgsl_regrmw(device, GEN8_GMUCX_POWER_COUNTER_SELECT_XOCLK_1, GENMASK(15, 8),
+				FIELD_PREP(GENMASK(15, 8), 0x26));
+
 	if (of_property_read_u32(device->pdev->dev.of_node, "qcom,min-access-length", &mal))
 		mal = 32;
 
@@ -2176,8 +2185,10 @@ int gen8_start(struct adreno_device *adreno_dev)
 		gen8_host_aperture_clear(adreno_dev);
 	}
 
-	/* Set GPU busy mask for gpu busy counter */
+	/* Enable GMU power counter 0 to count GPU busy */
 	kgsl_regwrite(device, GEN8_GMUAO_GPU_CX_BUSY_MASK, 0xff000000);
+	kgsl_regrmw(device, GEN8_GMUCX_POWER_COUNTER_SELECT_XOCLK_0, 0xFF, 0x20);
+	kgsl_regwrite(device, GEN8_GMUCX_POWER_COUNTER_ENABLE, 0x1);
 
 	gen8_protect_init(adreno_dev);
 
@@ -3628,7 +3639,9 @@ static void gen8_power_feature_stats(struct adreno_device *adreno_dev)
 	struct adreno_busy_data *busy = &adreno_dev->busy_data;
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_IFPC)) {
-		u32 ifpc = counter_delta(device, adreno_dev->ifpc_lo, &busy->num_ifpc);
+		u32 ifpc = counter_delta(device,
+			GEN8_GMUCX_POWER_COUNTER_XOCLK_L_4,
+			&busy->num_ifpc);
 
 		adreno_dev->ifpc_count += ifpc;
 		if (ifpc > 0)
@@ -3638,20 +3651,20 @@ static void gen8_power_feature_stats(struct adreno_device *adreno_dev)
 	if (adreno_dev->bcl_enabled) {
 		u32 a, b, c, bcl_throttle;
 
-		a = counter_delta(device, adreno_dev->bcl_throttle_lo_0,
+		a = counter_delta(device, GEN8_GMUCX_POWER_COUNTER_XOCLK_L_1,
 			&busy->throttle_cycles[0]);
 
-		b = counter_delta(device, adreno_dev->bcl_throttle_lo_1,
+		b = counter_delta(device, GEN8_GMUCX_POWER_COUNTER_XOCLK_L_2,
 			&busy->throttle_cycles[1]);
 
-		c = counter_delta(device, adreno_dev->bcl_throttle_lo_2,
+		c = counter_delta(device, GEN8_GMUCX_POWER_COUNTER_XOCLK_L_3,
 			&busy->throttle_cycles[2]);
 
 		if (a || b || c)
 			trace_kgsl_bcl_clock_throttling(a, b, c);
 
 		bcl_throttle = counter_delta(device,
-					adreno_dev->bcl_throttle_time_lo, &busy->bcl_throttle);
+					GEN8_GMUCX_POWER_COUNTER_XOCLK_L_5, &busy->bcl_throttle);
 		/*
 		 * This counts number of cycles throttled in XO cycles. Convert it to
 		 * micro seconds by dividing by XO freq which is 19.2MHz.
@@ -3668,7 +3681,8 @@ static void gen8_power_stats(struct adreno_device *adreno_dev,
 	u64 gpu_busy;
 
 	/* Set the GPU busy counter for frequency scaling */
-	gpu_busy = counter_delta(device, adreno_dev->gpu_busy_lo, &busy->gpu_busy);
+	gpu_busy = counter_delta(device, GEN8_GMUCX_POWER_COUNTER_XOCLK_L_0,
+		&busy->gpu_busy);
 
 	stats->busy_time = gpu_busy * 10;
 	do_div(stats->busy_time, 192);

@@ -76,8 +76,10 @@ struct kgsl_sync_fence {
 	struct list_head child_list;
 	u32 context_id;
 	unsigned int timestamp;
-	/** @hw_handle: hw handle backing this dma fence */
-	u64 hw_handle;
+	/** @synx_handle: synx handle backing this dma fence */
+	u64 synx_handle;
+	/** @hw_fence_handle: Hw fence handle backing this dma fence */
+	u64 hw_fence_handle;
 	/** @hw_fence_list: Global list of hw fences */
 	struct list_head hw_fence_list;
 	/**
@@ -336,7 +338,8 @@ int kgsl_hw_fence_init(struct kgsl_device *device);
 
 void kgsl_hw_fence_close(struct kgsl_device *device);
 
-int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
+int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_context *context,
+	struct kgsl_sync_fence *kfence);
 
 int kgsl_external_fence_import(struct kgsl_device *device,
 	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index);
@@ -355,7 +358,10 @@ int kgsl_hw_fence_register(struct kgsl_device *device, struct kgsl_memdesc *md);
 
 void kgsl_hw_fence_deregister(struct kgsl_device *device, struct kgsl_memdesc *md);
 
-int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
+void kgsl_synx_deregister(struct kgsl_device *device, struct kgsl_memdesc *synx_md);
+
+int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_context *context,
+	struct kgsl_sync_fence *kfence);
 
 void kgsl_synx_import_release(struct kgsl_device *device, u32 handle);
 
@@ -382,7 +388,7 @@ static inline void kgsl_hw_fence_close(struct kgsl_device *device)
 }
 
 static inline int kgsl_hw_fence_create(struct kgsl_device *device,
-		struct kgsl_sync_fence *kfence)
+		struct kgsl_context *context, struct kgsl_sync_fence *kfence)
 {
 	return -EINVAL;
 }
@@ -424,7 +430,8 @@ static inline void kgsl_hw_fence_deregister(struct kgsl_device *device, struct k
 {
 }
 
-int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_context *context,
+	struct kgsl_sync_fence *kfence)
 {
 	return -EINVAL;
 }

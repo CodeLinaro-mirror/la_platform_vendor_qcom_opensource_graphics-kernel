@@ -3831,18 +3831,21 @@ static inline int setup_hw_fence_info_cmd(struct adreno_device *adreno_dev,
 	if (ret)
 		return ret;
 
-	ret = kgsl_hw_fence_create(device, kfence);
+	ret = kgsl_hw_fence_create(device, &entry->drawctxt->base, kfence);
 	if (ret)
 		return ret;
 
-	if (kgsl_is_synx_native_fence(&kfence->fence))
+	/* Send synx handle to GMU if this is a synx/hybrid handle */
+	if (kfence->synx_handle) {
 		entry->cmd.flags |= HW_FENCE_FLAG_SYNX_HANDLE;
+		entry->cmd.hash_index = kfence->synx_handle;
+	} else {
+		entry->cmd.hash_index = kfence->hw_fence_handle;
+	}
 
 	entry->cmd.gmu_ctxt_id = entry->drawctxt->base.id;
 	entry->cmd.ctxt_id = kfence->fence.context;
 	entry->cmd.ts = kfence->fence.seqno;
-
-	entry->cmd.hash_index = kfence->hw_handle;
 
 	return 0;
 }

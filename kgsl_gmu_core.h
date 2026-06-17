@@ -54,6 +54,7 @@ enum gmu_platform_capabilities {
 	FAC_POWER_CONTROL_WA = 8,
 	FAC_SYNX = 9,
 	FAC_DYNAMIC_CTX_PRI_UPDATE = 10,
+	FAC_HYBRID_FENCE = 12,
 };
 
 /*

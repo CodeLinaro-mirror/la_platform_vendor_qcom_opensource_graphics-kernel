@@ -253,8 +253,7 @@ static int _synx_create(struct kgsl_device *device, struct kgsl_sync_fence *kfen
 
 	ret = synx_import(kgsl_synx.synx_session, &params);
 	if (!ret) {
-		kfence->hw_handle = handle;
-		add_hw_fence(kfence);
+		kfence->synx_handle = handle;
 		return 0;
 	}
 
@@ -262,41 +261,82 @@ static int _synx_create(struct kgsl_device *device, struct kgsl_sync_fence *kfen
 		dev_err(device->dev, "Failed to create ctx:%d ts:%d synx handle:%d\n",
 			kfence->context_id, kfence->timestamp, ret);
 
-	return -EINVAL;
+	kfence->synx_handle = 0;
+
+	return ret;
 }
 
 static int _hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
 {
+	u32 handle = 0;
 	struct synx_create_params params = {
 		.fence = &kfence->fence,
-		.h_synx = (u32 *)&kfence->hw_handle,
+		.h_synx = &handle,
 		.flags = SYNX_CREATE_DMA_FENCE,
 	};
 	int ret;
 
 	ret = synx_create(kgsl_synx.hw_fence_session, &params);
 	if (!ret) {
-		add_hw_fence(kfence);
+		kfence->hw_fence_handle = handle;
 		return 0;
 	}
+
+	kfence->hw_fence_handle = 0;
 
 	if (__ratelimit(&_rs))
 		dev_err(device->dev, "Failed to create ctx:%d ts:%d hardware fence:%d\n",
 			kfence->context_id, kfence->timestamp, ret);
 
-	return -EINVAL;
+	return ret;
 }
 
-int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+static void _set_output_fence_type(struct kgsl_device *device, struct kgsl_context *context,
+	struct kgsl_sync_fence *kfence)
+{
+	bool hybrid = device->gmu_core.output_fence_type ==
+		(KGSL_OUTPUT_FENCE_TYPE_HW_FENCE | KGSL_OUTPUT_FENCE_TYPE_SYNX_FENCE);
+
+	/*
+	 * If both synx and hw fence type output fences are supported, then create hybrid output
+	 * fences for processes that require hybrid output fences. For all other processes, default
+	 * to hw fence type output fences
+	 */
+	if (hybrid && (!context->proc_priv->hybrid_output_fence))
+		kfence->fence_type = KGSL_OUTPUT_FENCE_TYPE_HW_FENCE;
+	else
+		kfence->fence_type = device->gmu_core.output_fence_type;
+}
+
+int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_context *context,
+	struct kgsl_sync_fence *kfence)
 {
 	int ret = 0;
 
-	kfence->fence_type = device->gmu_core.output_fence_type;
+	_set_output_fence_type(device, context, kfence);
+
+	/* Return error if fencing got disabled in the meanwhile */
+	if (!kfence->fence_type)
+		return -EINVAL;
+
+	/*
+	 * If the fence type is hybrid, we must first create the hw fence handle, and then create
+	 * the synx handle
+	 */
+	if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_HW_FENCE) {
+		ret = _hw_fence_create(device, kfence);
+		if (ret)
+			goto done;
+	}
 
 	if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_SYNX_FENCE)
 		ret = _synx_create(device, kfence);
-	else if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_HW_FENCE)
-		ret = _hw_fence_create(device, kfence);
+
+done:
+	if (ret)
+		_hw_fence_destroy(kfence);
+	else
+		add_hw_fence(kfence);
 
 	return ret;
 }
@@ -401,19 +441,21 @@ static int _external_synx_fence_import(struct kgsl_device *device,
 static void _set_input_fence_type(struct kgsl_device *device,
 	struct kgsl_drawobj_sync_input_fence *input_fence)
 {
-	bool _hw_fence = !test_bit(GMU_HWSCHED_SYNX, &device->gmu_core.flags) ||
-		(gmu_core_is_hw_fencing_enabled(device) &&
-		test_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &input_fence->fence->flags));
+	bool hybrid = device->gmu_core.input_fence_type == (KGSL_INPUT_FENCE_TYPE_HW_FENCE |
+		KGSL_INPUT_FENCE_TYPE_SYNX_FENCE);
+
+	if (!hybrid) {
+		input_fence->fence_type = device->gmu_core.input_fence_type;
+		return;
+	}
 
 	/*
-	 * Import this input fence using hw fence session if -
-	 * 1. synx is not enabled
-	 * 2. hw fence is enabled and this fence is a hw fence
+	 * If both synx and hw fence type are enabled, then import based on the type of input fence
 	 */
-	if (_hw_fence)
+	if (test_bit(SYNX_NATIVE_FENCE_FLAG_ENABLED_BIT, &input_fence->fence->flags))
+		input_fence->fence_type = KGSL_INPUT_FENCE_TYPE_SYNX_FENCE;
+	else if (test_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &input_fence->fence->flags))
 		input_fence->fence_type = KGSL_INPUT_FENCE_TYPE_HW_FENCE;
-	else
-		input_fence->fence_type = device->gmu_core.input_fence_type;
 }
 
 int kgsl_external_fence_import(struct kgsl_device *device,
@@ -460,13 +502,10 @@ bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, u32 pending_hw_
 
 static void _hw_fence_destroy(struct kgsl_sync_fence *kfence)
 {
-	if (!kfence->hw_handle)
-		return;
-
-	if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_SYNX_FENCE)
-		synx_release(kgsl_synx.synx_session, kfence->hw_handle);
-	else if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_HW_FENCE)
-		synx_release(kgsl_synx.hw_fence_session, kfence->hw_handle);
+	if (kfence->hw_fence_handle)
+		synx_release(kgsl_synx.hw_fence_session, kfence->hw_fence_handle);
+	if (kfence->synx_handle)
+		synx_release(kgsl_synx.synx_session, kfence->synx_handle);
 }
 
 void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
@@ -475,11 +514,11 @@ void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fenc
 	WARN_RATELIMIT(!test_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags),
 		"signaling hw fence via cpu without soccp powered up\n");
 
-	if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_SYNX_FENCE)
-		synx_signal(kgsl_synx.synx_session, (u32)kfence->hw_handle,
+	if (kfence->synx_handle)
+		synx_signal(kgsl_synx.synx_session, (u32)kfence->synx_handle,
 			SYNX_STATE_SIGNALED_SUCCESS);
-	else if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_HW_FENCE)
-		synx_signal(kgsl_synx.hw_fence_session, (u32)kfence->hw_handle,
+	if (kfence->hw_fence_handle)
+		synx_signal(kgsl_synx.hw_fence_session, (u32)kfence->hw_fence_handle,
 			SYNX_STATE_SIGNALED_SUCCESS);
 }
 
@@ -572,7 +611,7 @@ int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfe
 {
 	struct msm_hw_fence_create_params params = {
 		.fence = &kfence->fence,
-		.handle = &kfence->hw_handle,
+		.handle = &kfence->hw_fence_handle,
 	};
 	int ret;
 
@@ -643,7 +682,7 @@ static void _hw_fence_destroy(struct kgsl_sync_fence *kfence)
 #define IPCC_GPU_PHYS_ID 4
 void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
 {
-	int ret = msm_hw_fence_update_txq(kgsl_msm_hw_fence.handle, kfence->hw_handle,
+	int ret = msm_hw_fence_update_txq(kgsl_msm_hw_fence.handle, kfence->hw_fence_handle,
 				0, 0);
 	if (ret) {
 		dev_err_ratelimited(device->dev,
@@ -1266,6 +1305,10 @@ static void _kgsl_populate_hw_fence(struct kgsl_drawobj_sync_event *event, struc
 	input_fence->handle = 0;
 	INIT_LIST_HEAD(&input_fence->node);
 	list_add_tail(&input_fence->node, &syncobj->hw_fence_list);
+
+	/* Make sure all output fences for this process are hybrid fences */
+	if (test_bit(SYNX_NATIVE_FENCE_FLAG_ENABLED_BIT, &fence->flags))
+		syncobj->base.context->proc_priv->hybrid_output_fence = true;
 }
 
 static void kgsl_syncsource_fence_value_str(struct dma_fence *fence, char *str, int size)

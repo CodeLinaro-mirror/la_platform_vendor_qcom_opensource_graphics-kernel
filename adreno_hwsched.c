@@ -3206,6 +3206,8 @@ static void _synx_register(struct adreno_device *adreno_dev)
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	bool caps = gmu_core_capabilities_enabled(&device->gmu_core.platform_caps, FAC_SYNX) &&
+		gmu_core_capabilities_enabled(&device->gmu_core.platform_caps, FAC_HYBRID_FENCE);
 
 	if (test_bit(GMU_HWSCHED_SYNX, &device->gmu_core.flags))
 		return;
@@ -3213,8 +3215,7 @@ static void _synx_register(struct adreno_device *adreno_dev)
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_SYNX))
 		return;
 
-	if (!gmu_core_capabilities_enabled(&device->gmu_core.platform_caps,
-					   FAC_SYNX))
+	if (!caps)
 		return;
 
 	if (kgsl_synx_register(device, &hwsched->hw_fence.synx_md))

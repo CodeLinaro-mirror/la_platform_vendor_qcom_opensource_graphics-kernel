@@ -2971,7 +2971,7 @@ static inline int setup_hw_fence_info_cmd(struct adreno_device *adreno_dev,
 	if (ret)
 		return ret;
 
-	ret = kgsl_hw_fence_create(KGSL_DEVICE(adreno_dev), kfence);
+	ret = kgsl_hw_fence_create(KGSL_DEVICE(adreno_dev), &entry->drawctxt->base, kfence);
 	if (ret)
 		return ret;
 
@@ -2979,7 +2979,7 @@ static inline int setup_hw_fence_info_cmd(struct adreno_device *adreno_dev,
 	entry->cmd.ctxt_id = kfence->fence.context;
 	entry->cmd.ts = kfence->fence.seqno;
 
-	entry->cmd.hash_index = kfence->hw_handle;
+	entry->cmd.hash_index = kfence->hw_fence_handle;
 
 	return 0;
 }

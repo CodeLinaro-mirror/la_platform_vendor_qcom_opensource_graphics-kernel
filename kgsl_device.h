@@ -667,6 +667,8 @@ struct kgsl_process_private {
 	u64 elapsed_ns;
 	/* @cycles: The total GPU cycles elapsed for this context */
 	u64 cycles;
+	/** @hybrid_output_fence: Create hybrid output fences for this process */
+	bool hybrid_output_fence;
 };
 
 struct kgsl_device_private {

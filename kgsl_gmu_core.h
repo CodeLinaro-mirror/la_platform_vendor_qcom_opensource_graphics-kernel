@@ -736,6 +736,16 @@ struct gmu_core_device {
 	struct kgsl_gmu_spel spel;
 	/* @spel_trace: gmu trace container for power level clamp events */
 	struct kgsl_gmu_trace spel_trace;
+	/**
+	 * @output_fence_type: This is to track whether to create a synx fence or hw fence for
+	 * backing output fences
+	 */
+	u32 output_fence_type;
+	/**
+	 * @input_fence_type: This is to track whether to import external fences using synx session
+	 * or hw fence session
+	 */
+	u32 input_fence_type;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -1203,5 +1213,11 @@ bool gmu_core_is_hw_fencing_enabled(struct kgsl_device *device);
  * Return: Boolean to indicate if hw fences or synx is enabled or not
  */
 bool gmu_core_is_gmu_fencing_enabled(struct kgsl_device *device);
+
+/**
+ * gmu_core_set_fence_type() - Set the input and output fence type
+ * @device: Pointer to the kgsl device
+ */
+void gmu_core_set_fence_type(struct kgsl_device *device);
 
 #endif /* __KGSL_GMU_CORE_H */

@@ -98,7 +98,7 @@ struct kgsl_drawobj_cmd {
 /* This sync object has a cmdbatch */
 #define KGSL_SYNCOBJ_HAS_CMDBATCH 3
 
-struct kgsl_drawobj_sync_hw_fence {
+struct kgsl_drawobj_sync_input_fence {
 	/** @fence: Pointer to hardware fence */
 	struct dma_fence *fence;
 	/**
@@ -109,6 +109,8 @@ struct kgsl_drawobj_sync_hw_fence {
 	struct list_head node;
 	/** @handle: hw handle backing this fence */
 	u64 handle;
+	/*** @fence_type: Type of external fence */
+	u32 fence_type;
 };
 
 /**

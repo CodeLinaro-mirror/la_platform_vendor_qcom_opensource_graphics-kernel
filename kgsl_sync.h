@@ -7,7 +7,6 @@
 #define __KGSL_SYNC_H
 
 #include <linux/dma-fence.h>
-#define INVALID_HW_FENCE_HANDLE UINT_MAX
 
 /**
  * struct kgsl_sync_timeline - A sync timeline associated with a kgsl context
@@ -51,6 +50,15 @@ struct kgsl_sync_timeline {
  */
 #define KGSL_FENCE_FLAG_TIMER_TRIGGERED 1
 
+#define KGSL_FENCE_TYPE_HW_FENCE BIT(0)
+#define KGSL_FENCE_TYPE_SYNX_FENCE BIT(1)
+
+#define KGSL_INPUT_FENCE_TYPE_HW_FENCE KGSL_FENCE_TYPE_HW_FENCE
+#define KGSL_INPUT_FENCE_TYPE_SYNX_FENCE KGSL_FENCE_TYPE_SYNX_FENCE
+
+#define KGSL_OUTPUT_FENCE_TYPE_HW_FENCE KGSL_FENCE_TYPE_HW_FENCE
+#define KGSL_OUTPUT_FENCE_TYPE_SYNX_FENCE KGSL_FENCE_TYPE_SYNX_FENCE
+
 /**
  * struct kgsl_sync_fence - A struct containing a fence and other data
  *				associated with it
@@ -87,6 +95,8 @@ struct kgsl_sync_fence {
 	ktime_t deadline;
 	/** @signaled: Kernel time when the fence was signaled */
 	ktime_t signaled;
+	/** @fence_type: Type of output fence */
+	u32 fence_type;
 };
 
 /**
@@ -328,7 +338,8 @@ void kgsl_hw_fence_close(struct kgsl_device *device);
 
 int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
 
-int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index);
+int kgsl_external_fence_import(struct kgsl_device *device,
+	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index);
 
 bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, u32 pending_hw_fence_count);
 
@@ -346,7 +357,10 @@ void kgsl_hw_fence_deregister(struct kgsl_device *device, struct kgsl_memdesc *m
 
 int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
 
-int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index);
+void kgsl_synx_import_release(struct kgsl_device *device, u32 handle);
+
+int kgsl_external_fence_import(struct kgsl_device *device,
+	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index);
 
 bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, u32 pending_hw_fence_count);
 
@@ -373,8 +387,8 @@ static inline int kgsl_hw_fence_create(struct kgsl_device *device,
 	return -EINVAL;
 }
 
-static inline int kgsl_hw_fence_add_waiter(struct kgsl_device *device,
-		struct dma_fence *fence, u32 *hash_index)
+static inline int kgsl_external_fence_import(struct kgsl_device *device,
+	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index)
 {
 	return -EINVAL;
 }
@@ -407,6 +421,30 @@ static inline int kgsl_hw_fence_register(struct kgsl_device *device, struct kgsl
 }
 
 static inline void kgsl_hw_fence_deregister(struct kgsl_device *device, struct kgsl_memdesc *md)
+{
+}
+
+int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+{
+	return -EINVAL;
+}
+
+int kgsl_external_fence_import(struct kgsl_device *device,
+	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index)
+{
+	return -EINVAL;
+}
+
+void kgsl_synx_import_release(struct kgsl_device *device, u32 handle)
+{
+}
+
+bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, u32 pending_hw_fence_count)
+{
+	return false;
+}
+
+void kgsl_hw_fence_put(struct kgsl_sync_fence *kfence)
 {
 }
 

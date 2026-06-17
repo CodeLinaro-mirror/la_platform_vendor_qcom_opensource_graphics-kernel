@@ -167,7 +167,6 @@ static int _get_global_synx_mem_mapping(struct kgsl_device *device)
 	struct resource r;
 	int ret = 0;
 
-	dev_err(dev, "synx-memory-region mapping enter\n");
 	np = of_parse_phandle(dev->of_node, "synx-memory-region", 0);
 	if (!np) {
 		dev_err(dev, "synx-memory-region not found\n");
@@ -241,7 +240,7 @@ void kgsl_synx_deregister(struct kgsl_device *device, struct kgsl_memdesc *synx_
 	_kgsl_synx_session_deregister(kgsl_synx.synx_session, synx_md);
 }
 
-static int kgsl_synx_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+static int _synx_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
 {
 	u32 handle = 0;
 	struct synx_import_params params = {
@@ -266,17 +265,14 @@ static int kgsl_synx_create(struct kgsl_device *device, struct kgsl_sync_fence *
 	return -EINVAL;
 }
 
-int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+static int _hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
 {
-	struct synx_create_params params = {0};
+	struct synx_create_params params = {
+		.fence = &kfence->fence,
+		.h_synx = (u32 *)&kfence->hw_handle,
+		.flags = SYNX_CREATE_DMA_FENCE,
+	};
 	int ret;
-
-	if (test_bit(GMU_HWSCHED_SYNX, &device->gmu_core.flags))
-		return kgsl_synx_create(device, kfence);
-
-	params.fence = &kfence->fence;
-	params.h_synx = (u32 *)&kfence->hw_handle;
-	params.flags = SYNX_CREATE_DMA_FENCE;
 
 	ret = synx_create(kgsl_synx.hw_fence_session, &params);
 	if (!ret) {
@@ -289,6 +285,20 @@ int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfe
 			kfence->context_id, kfence->timestamp, ret);
 
 	return -EINVAL;
+}
+
+int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+{
+	int ret = 0;
+
+	kfence->fence_type = device->gmu_core.output_fence_type;
+
+	if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_SYNX_FENCE)
+		ret = _synx_create(device, kfence);
+	else if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_HW_FENCE)
+		ret = _hw_fence_create(device, kfence);
+
+	return ret;
 }
 
 int kgsl_synx_import(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index)
@@ -326,35 +336,97 @@ void kgsl_synx_import_release(struct kgsl_device *device, u32 handle)
 			ret, handle);
 }
 
-int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index)
+static int _external_hw_fence_import(struct kgsl_device *device, struct dma_fence *fence,
+	u32 *hash_index)
 {
-	struct synx_import_params params;
 	u32 handle = 0;
+	struct synx_import_params params = {
+		.indv.fence = fence,
+		.type = SYNX_IMPORT_INDV_PARAMS,
+		.indv.new_h_synx = &handle,
+		.indv.flags = SYNX_IMPORT_DMA_FENCE,
+	};
 	int ret;
-
-	params.indv.fence = fence;
-	params.type = SYNX_IMPORT_INDV_PARAMS;
-	params.indv.new_h_synx = &handle;
-	params.indv.flags = SYNX_IMPORT_DMA_FENCE;
 
 	ret = synx_import(kgsl_synx.hw_fence_session, &params);
 	if (ret) {
 		dev_err_ratelimited(device->dev,
-			"Failed to add GMU as waiter ret:%d fence ctx:%llu ts:%llu\n",
-			ret, fence->context, fence->seqno);
+			"Failed to import fence ctx:%llu ts:%llu ret:%d\n",
+			fence->context, fence->seqno, ret);
 		return ret;
 	}
 
-	/* release reference held by synx_import */
+	/* release reference held by synx_import when importing as a hw fence client */
 	ret = synx_release(kgsl_synx.hw_fence_session, handle);
 	if (ret) {
 		dev_err_ratelimited(device->dev,
-			"Failed to release wait fences ret:%d fence ctx:%llu ts:%llu\n",
+			"Failed to release wait fence ret:%d fence ctx:%llu ts:%llu\n",
 			ret, fence->context, fence->seqno);
 	} else {
 		if (hash_index)
 			*hash_index = handle;
 	}
+
+	return ret;
+}
+
+static int _external_synx_fence_import(struct kgsl_device *device,
+	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index)
+{
+	u32 handle = 0;
+	struct synx_import_params params = {
+		.indv.fence = input_fence->fence,
+		.type = SYNX_IMPORT_INDV_PARAMS,
+		.indv.new_h_synx = &handle,
+		.indv.flags = SYNX_IMPORT_DMA_FENCE | SYNX_IMPORT_GLOBAL_FENCE,
+	};
+	int ret;
+
+	ret = synx_import(kgsl_synx.synx_session, &params);
+	if (ret) {
+		dev_err_ratelimited(device->dev,
+			"Failed to import fence ctx:%llu ts:%llu ret:%d\n",
+			input_fence->fence->context, input_fence->fence->seqno, ret);
+		return ret;
+	}
+
+	if (hash_index)
+		*hash_index = handle;
+
+	input_fence->handle = handle;
+
+	return ret;
+}
+
+static void _set_input_fence_type(struct kgsl_device *device,
+	struct kgsl_drawobj_sync_input_fence *input_fence)
+{
+	bool _hw_fence = !test_bit(GMU_HWSCHED_SYNX, &device->gmu_core.flags) ||
+		(gmu_core_is_hw_fencing_enabled(device) &&
+		test_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &input_fence->fence->flags));
+
+	/*
+	 * Import this input fence using hw fence session if -
+	 * 1. synx is not enabled
+	 * 2. hw fence is enabled and this fence is a hw fence
+	 */
+	if (_hw_fence)
+		input_fence->fence_type = KGSL_INPUT_FENCE_TYPE_HW_FENCE;
+	else
+		input_fence->fence_type = device->gmu_core.input_fence_type;
+}
+
+int kgsl_external_fence_import(struct kgsl_device *device,
+	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index)
+{
+	int ret = 0;
+
+	_set_input_fence_type(device, input_fence);
+
+	if (input_fence->fence_type  == KGSL_INPUT_FENCE_TYPE_SYNX_FENCE)
+		ret = _external_synx_fence_import(device, input_fence, hash_index);
+	else if (input_fence->fence_type == KGSL_INPUT_FENCE_TYPE_HW_FENCE)
+		ret = _external_hw_fence_import(device, input_fence->fence, hash_index);
 
 	return ret;
 }
@@ -391,9 +463,9 @@ static void _hw_fence_destroy(struct kgsl_sync_fence *kfence)
 	if (!kfence->hw_handle)
 		return;
 
-	if (kgsl_synx.synx_session != NULL)
+	if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_SYNX_FENCE)
 		synx_release(kgsl_synx.synx_session, kfence->hw_handle);
-	else if (kgsl_synx.hw_fence_session != NULL)
+	else if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_HW_FENCE)
 		synx_release(kgsl_synx.hw_fence_session, kfence->hw_handle);
 }
 
@@ -403,12 +475,10 @@ void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fenc
 	WARN_RATELIMIT(!test_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags),
 		"signaling hw fence via cpu without soccp powered up\n");
 
-	if (test_bit(SYNX_NATIVE_FENCE_FLAG_ENABLED_BIT, &kfence->fence.flags) &&
-		(kgsl_synx.synx_session != NULL))
+	if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_SYNX_FENCE)
 		synx_signal(kgsl_synx.synx_session, (u32)kfence->hw_handle,
 			SYNX_STATE_SIGNALED_SUCCESS);
-	else if (test_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &kfence->fence.flags) &&
-		(kgsl_synx.hw_fence_session != NULL))
+	else if (kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_HW_FENCE)
 		synx_signal(kgsl_synx.hw_fence_session, (u32)kfence->hw_handle,
 			SYNX_STATE_SIGNALED_SUCCESS);
 }
@@ -519,16 +589,17 @@ int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfe
 	return 0;
 }
 
-int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index)
+int kgsl_external_fence_import(struct kgsl_device *device,
+	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index)
 {
 	u64 handle = 0;
-	int ret = msm_hw_fence_wait_update_v2(kgsl_msm_hw_fence.handle, &fence, &handle, NULL, 1,
-			true);
+	int ret = msm_hw_fence_wait_update_v2(kgsl_msm_hw_fence.handle, &input_fence->fence,
+			&handle, NULL, 1, true);
 
 	if (ret)
 		dev_err_ratelimited(device->dev,
-			"Failed to add GMU as waiter ret:%d fence ctx:%llu ts:%llu\n",
-			ret, fence->context, fence->seqno);
+			"Failed to import external fence ctx:%llu ts:%llu ret:%d\n",
+			ret, input_fence->fence->context, input_fence->fence->seqno);
 	else {
 		if (hash_index)
 			*hash_index = (u32)handle;
@@ -1162,7 +1233,7 @@ void kgsl_hw_fence_put(struct kgsl_sync_fence *kfence)
 static void _kgsl_populate_hw_fence(struct kgsl_drawobj_sync_event *event, struct dma_fence *fence)
 {
 	struct kgsl_drawobj_sync *syncobj = event->syncobj;
-	struct kgsl_drawobj_sync_hw_fence *hw_fence;
+	struct kgsl_drawobj_sync_input_fence *input_fence;
 	struct kgsl_device *device = event->device;
 	u32 max_hw_fence = device->max_syncobj_hw_fence_count;
 
@@ -1184,17 +1255,17 @@ static void _kgsl_populate_hw_fence(struct kgsl_drawobj_sync_event *event, struc
 		return;
 	}
 
-	hw_fence = kmem_cache_zalloc(device->syncobj_hw_fence_cache, GFP_KERNEL);
-	if (!hw_fence) {
+	input_fence = kmem_cache_zalloc(device->syncobj_hw_fence_cache, GFP_KERNEL);
+	if (!input_fence) {
 		set_bit(KGSL_SYNCOBJ_SW, &syncobj->flags);
 		return;
 	}
 
 	syncobj->num_hw_fence++;
-	hw_fence->fence = fence;
-	hw_fence->handle = INVALID_HW_FENCE_HANDLE;
-	INIT_LIST_HEAD(&hw_fence->node);
-	list_add_tail(&hw_fence->node, &syncobj->hw_fence_list);
+	input_fence->fence = fence;
+	input_fence->handle = 0;
+	INIT_LIST_HEAD(&input_fence->node);
+	list_add_tail(&input_fence->node, &syncobj->hw_fence_list);
 }
 
 static void kgsl_syncsource_fence_value_str(struct dma_fence *fence, char *str, int size)

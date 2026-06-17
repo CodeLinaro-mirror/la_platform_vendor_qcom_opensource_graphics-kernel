@@ -698,7 +698,7 @@ static void gen7_syncobj_query_reply(struct adreno_device *adreno_dev,
 	int i = 0;
 	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
-	struct kgsl_drawobj_sync_hw_fence *hw_fence;
+	struct kgsl_drawobj_sync_input_fence *hw_fence;
 
 	list_for_each_entry(hw_fence, &syncobj->hw_fence_list, node) {
 		struct dma_fence *fence = hw_fence->fence;
@@ -2719,7 +2719,7 @@ static u32 get_irq_bit(struct adreno_device *adreno_dev, struct kgsl_drawobj *dr
 	return 0;
 }
 
-static bool _is_kgsl_hw_fence_signaled(struct kgsl_drawobj_sync_hw_fence *hw_fence)
+static bool _is_kgsl_hw_fence_signaled(struct kgsl_drawobj_sync_input_fence *hw_fence)
 {
 	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)hw_fence->fence;
 	struct kgsl_sync_timeline *ktimeline = kfence->parent;
@@ -2737,7 +2737,7 @@ static bool _is_kgsl_hw_fence_signaled(struct kgsl_drawobj_sync_hw_fence *hw_fen
 	return false;
 }
 
-static void populate_kgsl_fence(struct kgsl_drawobj_sync_hw_fence *hw_fence,
+static void populate_kgsl_fence(struct kgsl_drawobj_sync_input_fence *hw_fence,
 	struct hfi_syncobj_legacy *obj)
 {
 	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)hw_fence->fence;
@@ -2767,7 +2767,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
 	struct hfi_submit_syncobj *cmd;
 	struct hfi_syncobj_legacy *obj = NULL;
-	struct kgsl_drawobj_sync_hw_fence *hw_fence;
+	struct kgsl_drawobj_sync_input_fence *hw_fence;
 	u32 seqnum;
 	int ret = 0;
 
@@ -2792,7 +2792,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 			populate_kgsl_fence(hw_fence, obj);
 		} else {
 			ret = adreno_hwsched_import_external_fence_legacy(adreno_dev,
-					fence, syncobj, obj);
+					hw_fence, syncobj, obj);
 
 			if (ret)
 				return ret;

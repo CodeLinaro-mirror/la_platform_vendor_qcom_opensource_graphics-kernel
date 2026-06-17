@@ -41,7 +41,7 @@ static struct kmem_cache *memobjs_cache;
 static void syncobj_destroy_object(struct kgsl_drawobj *drawobj)
 {
 	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
-	struct kgsl_drawobj_sync_hw_fence *hw_fence, *tmp;
+	struct kgsl_drawobj_sync_input_fence *hw_fence, *tmp;
 	int i;
 
 	for (i = 0; i < syncobj->numsyncs; i++) {
@@ -75,7 +75,8 @@ static void syncobj_destroy_object(struct kgsl_drawobj *drawobj)
 	list_for_each_entry_safe(hw_fence, tmp, &syncobj->hw_fence_list, node) {
 		kgsl_context_put(hw_fence->context);
 		list_del_init(&hw_fence->node);
-		if (hw_fence->handle != INVALID_HW_FENCE_HANDLE)
+		/* release reference held by synx_import if this was imported as a synx client */
+		if (hw_fence->fence_type == KGSL_INPUT_FENCE_TYPE_SYNX_FENCE)
 			kgsl_synx_import_release(drawobj->device, hw_fence->handle);
 		kmem_cache_free(drawobj->device->syncobj_hw_fence_cache, hw_fence);
 	}
@@ -158,7 +159,7 @@ void kgsl_dump_syncpoints(struct kgsl_device *device,
 
 void kgsl_drawobj_log_hw_syncobj(struct kgsl_device *device, struct kgsl_drawobj_sync *syncobj)
 {
-	struct kgsl_drawobj_sync_hw_fence *hw_fence;
+	struct kgsl_drawobj_sync_input_fence *hw_fence;
 	int i = 0;
 
 	list_for_each_entry(hw_fence, &syncobj->hw_fence_list, node) {

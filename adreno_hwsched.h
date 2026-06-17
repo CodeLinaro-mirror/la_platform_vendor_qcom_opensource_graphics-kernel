@@ -487,7 +487,7 @@ int adreno_hwsched_context_init(struct adreno_context *drawctxt);
  * adreno_hwsched_import_external_fence - Function for importing external
  * fences so that they can be dispatched to GMU
  * @adreno-dev: Pointer to the adreno device
- * @hw_fence: Pointer to the hardware fence
+ * @input_fence: Pointer to the input fence
  * @syncobj: Pointer to the sync object
  * obj@: Pointer to the hfi syncobj for this fence
  *
@@ -496,14 +496,14 @@ int adreno_hwsched_context_init(struct adreno_context *drawctxt);
  * Return: Zero on success or negative error on failure
  */
 int adreno_hwsched_import_external_fence(struct adreno_device *adreno_dev,
-	struct kgsl_drawobj_sync_hw_fence *hw_fence, struct kgsl_drawobj_sync *syncobj,
+	struct kgsl_drawobj_sync_input_fence *input_fence, struct kgsl_drawobj_sync *syncobj,
 	struct hfi_syncobj *obj);
 
 /**
  * adreno_hwsched_import_external_fence_legacy - Legacy function for importing external
  * fences so that they can be dispatched to GMU
  * @adreno-dev: Pointer to the adreno device
- * @fence: Pointer to the dma fence
+ * @input_fence: Pointer to the input fence
  * @syncobj: Pointer to the sync object
  * obj@: Pointer to the hfi syncobj for this fence
  *
@@ -512,7 +512,8 @@ int adreno_hwsched_import_external_fence(struct adreno_device *adreno_dev,
  * Return: Zero on success or negative error on failure
  */
 int adreno_hwsched_import_external_fence_legacy(struct adreno_device *adreno_dev,
-	struct dma_fence *fence, struct kgsl_drawobj_sync *syncobj, struct hfi_syncobj_legacy *obj);
+	struct kgsl_drawobj_sync_input_fence *input_fence, struct kgsl_drawobj_sync *syncobj,
+	struct hfi_syncobj_legacy *obj);
 /**
  * adreno_hwsched_enable_gmu_fencing - Register GPU as a synx client and hw fence client
  * @adreno_dev: pointer to the adreno device

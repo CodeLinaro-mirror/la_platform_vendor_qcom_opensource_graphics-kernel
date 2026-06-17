@@ -1602,3 +1602,18 @@ bool gmu_core_is_gmu_fencing_enabled(struct kgsl_device *device)
 	return test_bit(GMU_HWSCHED_HW_FENCE, &device->gmu_core.flags) ||
 	test_bit(GMU_HWSCHED_SYNX, &device->gmu_core.flags);
 }
+
+void gmu_core_set_fence_type(struct kgsl_device *device)
+{
+	device->gmu_core.input_fence_type = 0;
+	device->gmu_core.output_fence_type = 0;
+
+	if (test_bit(GMU_HWSCHED_HW_FENCE, &device->gmu_core.flags)) {
+		device->gmu_core.input_fence_type |= KGSL_INPUT_FENCE_TYPE_HW_FENCE;
+		device->gmu_core.output_fence_type |= KGSL_OUTPUT_FENCE_TYPE_HW_FENCE;
+	}
+	if (test_bit(GMU_HWSCHED_SYNX, &device->gmu_core.flags)) {
+		device->gmu_core.input_fence_type |= KGSL_INPUT_FENCE_TYPE_SYNX_FENCE;
+		device->gmu_core.output_fence_type |= KGSL_OUTPUT_FENCE_TYPE_SYNX_FENCE;
+	}
+}

@@ -241,18 +241,15 @@ int gen8_receive_ack_cmd(struct gen8_gmu_device *gmu, void *rcvd,
 	u32 hdr = ack[0];
 	u32 req_hdr = ack[1];
 
-	if (ret_cmd == NULL)
-		return -EINVAL;
-
-	if (CMP_HFI_ACK_HDR(ret_cmd->sent_hdr, req_hdr)) {
+	if (ret_cmd && CMP_HFI_ACK_HDR(ret_cmd->sent_hdr, req_hdr)) {
 		memcpy(&ret_cmd->results, ack, MSG_HDR_GET_SIZE(hdr) << 2);
 		return 0;
 	}
 
 	/* Didn't find the sender, list the waiter */
 	dev_err_ratelimited(GMU_PDEV_DEV(device),
-		"HFI ACK: Cannot find sender for 0x%8.8x Waiter: 0x%8.8x\n",
-		req_hdr, ret_cmd->sent_hdr);
+		"HFI ACK: 0x%8.8x Cannot find sender for 0x%8.8x Waiter: 0x%8.8x\n",
+		hdr, req_hdr, ret_cmd ? ret_cmd->sent_hdr : 0);
 	gmu_core_fault_snapshot(device, GMU_FAULT_HFI_RECIVE_ACK);
 
 	return -ENODEV;
@@ -534,7 +531,7 @@ int gen8_hfi_process_queue(struct gen8_gmu_device *gmu,
 
 		/* ACK Handler */
 		if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
-			int ret = gen8_receive_ack_cmd(gmu, rcvd, ret_cmd);
+			int ret = gen8_receive_ack_cmd(gmu, rcvd, retry_for_ack ? ret_cmd : NULL);
 
 			if (ret)
 				return ret;

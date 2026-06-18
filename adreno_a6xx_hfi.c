@@ -237,18 +237,15 @@ int a6xx_receive_ack_cmd(struct a6xx_gmu_device *gmu, void *rcvd,
 	uint32_t hdr = ack[0];
 	uint32_t req_hdr = ack[1];
 
-	if (ret_cmd == NULL)
-		return -EINVAL;
-
-	if (CMP_HFI_ACK_HDR(ret_cmd->sent_hdr, req_hdr)) {
+	if (ret_cmd && CMP_HFI_ACK_HDR(ret_cmd->sent_hdr, req_hdr)) {
 		memcpy(&ret_cmd->results, ack, MSG_HDR_GET_SIZE(hdr) << 2);
 		return 0;
 	}
 
 	/* Didn't find the sender, list the waiter */
 	dev_err_ratelimited(GMU_PDEV_DEV(device),
-		"HFI ACK: Cannot find sender for 0x%8.8x Waiter: 0x%8.8x\n",
-		req_hdr, ret_cmd->sent_hdr);
+		"HFI ACK: 0x%8.8x Cannot find sender for 0x%8.8x Waiter: 0x%8.8x\n",
+		hdr, req_hdr, ret_cmd ? ret_cmd->sent_hdr : 0);
 
 	gmu_core_fault_snapshot(device, GMU_FAULT_HFI_RECIVE_ACK);
 
@@ -521,6 +518,7 @@ int a6xx_hfi_process_queue(struct a6xx_gmu_device *gmu,
 {
 	struct kgsl_device *device = KGSL_DEVICE(a6xx_gmu_to_adreno(gmu));
 	uint32_t rcvd[MAX_RCVD_SIZE];
+	bool retry_for_ack = true;
 
 	while (!adreno_hfi_is_queue_empty(ADRENO_DEVICE(device), gmu->hfi.hfi_mem, queue_idx)) {
 
@@ -535,10 +533,12 @@ int a6xx_hfi_process_queue(struct a6xx_gmu_device *gmu,
 
 		/* V2 ACK Handler */
 		if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
-			int ret = a6xx_receive_ack_cmd(gmu, rcvd, ret_cmd);
+			int ret = a6xx_receive_ack_cmd(gmu, rcvd, retry_for_ack ? ret_cmd : NULL);
 
 			if (ret)
 				return ret;
+
+			retry_for_ack = false;
 			continue;
 		}
 

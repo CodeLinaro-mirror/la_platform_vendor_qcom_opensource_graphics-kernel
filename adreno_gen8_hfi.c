@@ -46,11 +46,7 @@ int gen8_hfi_queue_read(struct gen8_gmu_device *gmu, u32 queue_idx,
 	u32 size;
 	int result = 0;
 
-	if (hdr->status == HFI_QUEUE_STATUS_DISABLED)
-		return -EINVAL;
-
-	if (hdr->read_index == hdr->write_index)
-		return -ENODATA;
+	WARN_RATELIMIT(hdr->read_index == hdr->write_index, "Reading an empty queue\n");
 
 	/* Clear the output data before populating */
 	memset(output, 0, max_size);
@@ -531,7 +527,11 @@ int gen8_hfi_process_queue(struct gen8_gmu_device *gmu,
 	u32 rcvd[MAX_RCVD_SIZE];
 	bool retry_for_ack = true;
 
-	while (gen8_hfi_queue_read(gmu, queue_idx, rcvd, sizeof(rcvd)) > 0) {
+	while (!adreno_hfi_is_queue_empty(adreno_dev, gmu->hfi.hfi_mem, queue_idx)) {
+
+		if  (gen8_hfi_queue_read(gmu, queue_idx, rcvd, sizeof(rcvd)) < 0)
+			break;
+
 		/* ACK Handler */
 		if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
 			int ret = gen8_receive_ack_cmd(gmu, rcvd, ret_cmd);

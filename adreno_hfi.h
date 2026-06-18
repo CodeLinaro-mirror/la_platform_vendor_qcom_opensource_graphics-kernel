@@ -1822,4 +1822,26 @@ static inline int hfi_get_minidump_string(u32 mem_kind, char *hfi_minidump_str,
  * If the feature is unknown, the function returns "unknown".
  */
 const char *hfi_feature_to_string(u32 feature);
+
+static inline bool adreno_hfi_is_queue_empty(struct adreno_device *adreno_dev,
+	struct kgsl_memdesc *hfi_mem, u32 queue_idx)
+{
+	struct hfi_queue_table *tbl = hfi_mem->hostptr;
+	struct hfi_queue_header *hdr = &tbl->qhdr[queue_idx];
+
+	if (hdr->status == HFI_QUEUE_STATUS_DISABLED)
+		return true;
+
+	if (hdr->read_index == hdr->write_index)
+		return true;
+
+	/*
+	 * This is to ensure that the queue is not read speculatively before the queue empty
+	 * condition is evaluated
+	 */
+	rmb();
+
+	return false;
+}
+
 #endif

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/delay.h>
@@ -41,11 +41,7 @@ int a6xx_hfi_queue_read(struct a6xx_gmu_device *gmu, uint32_t queue_idx,
 	uint32_t size;
 	int result = 0;
 
-	if (hdr->status == HFI_QUEUE_STATUS_DISABLED)
-		return -EINVAL;
-
-	if (hdr->read_index == hdr->write_index)
-		return -ENODATA;
+	WARN_RATELIMIT(hdr->read_index == hdr->write_index, "Reading an empty queue\n");
 
 	/* Clear the output data before populating */
 	memset(output, 0, max_size);
@@ -526,7 +522,11 @@ int a6xx_hfi_process_queue(struct a6xx_gmu_device *gmu,
 	struct kgsl_device *device = KGSL_DEVICE(a6xx_gmu_to_adreno(gmu));
 	uint32_t rcvd[MAX_RCVD_SIZE];
 
-	while (a6xx_hfi_queue_read(gmu, queue_idx, rcvd, sizeof(rcvd)) > 0) {
+	while (!adreno_hfi_is_queue_empty(ADRENO_DEVICE(device), gmu->hfi.hfi_mem, queue_idx)) {
+
+		if (a6xx_hfi_queue_read(gmu, queue_idx, rcvd, sizeof(rcvd)) < 0)
+			break;
+
 		/* Special case if we're v1 */
 		if (GMU_VER_MAJOR(device->gmu_core.ver.hfi) < 2) {
 			a6xx_hfi_v1_receiver(gmu, rcvd, ret_cmd);

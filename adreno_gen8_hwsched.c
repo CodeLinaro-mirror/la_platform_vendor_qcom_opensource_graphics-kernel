@@ -2409,6 +2409,9 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 
 	WARN_ON(sysfs_create_file(&gmu_dev->kobj, &dev_attr_thermal_mitigation.attr));
 
+	/* Notify userspace to explicitly apply correct policies */
+	kobject_uevent(&gmu_dev->kobj, KOBJ_ADD);
+
 	return ret;
 }
 

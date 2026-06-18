@@ -2824,6 +2824,10 @@ int gen7_gmu_device_probe(struct platform_device *pdev,
 		adreno_dev->dms_enabled = true;
 	}
 
+	/* Notify userspace to explicitly apply correct policies */
+	if (gmu_core_isenabled(device))
+		kobject_uevent(&GMU_PDEV_DEV(device)->kobj, KOBJ_ADD);
+
 	return 0;
 }
 

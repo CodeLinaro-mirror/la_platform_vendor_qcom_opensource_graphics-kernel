@@ -1598,6 +1598,9 @@ int gen7_hwsched_probe(struct platform_device *pdev,
 	if (ret)
 		dev_err(&pdev->dev, "adreno hardware scheduler init failed ret %d\n", ret);
 
+	/* Notify userspace to explicitly apply correct policies */
+	kobject_uevent(&GMU_PDEV_DEV(device)->kobj, KOBJ_ADD);
+
 	return ret;
 }
 

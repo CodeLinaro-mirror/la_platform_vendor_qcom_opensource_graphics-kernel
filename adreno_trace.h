@@ -1280,6 +1280,26 @@ TRACE_EVENT(adreno_hwsched_mem_alloc,
 	)
 );
 
+TRACE_EVENT(adreno_spel_cap_pwrlevel,
+	TP_PROTO(u64 ticks, u32 pwrlevel, u32 freq),
+	TP_ARGS(ticks, pwrlevel, freq),
+	TP_STRUCT__entry(
+		__field(u64, ticks)
+		__field(u32, pwrlevel)
+		__field(u32, freq)
+	),
+	TP_fast_assign(
+		__entry->ticks = ticks;
+		__entry->pwrlevel = pwrlevel;
+		__entry->freq = freq;
+	),
+	TP_printk("ticks=%llu pwrlevel=%u freq=%u",
+		__entry->ticks,
+		__entry->pwrlevel,
+		__entry->freq
+	)
+);
+
 #endif /* _ADRENO_TRACE_H */
 
 /* This part must be outside protection */

@@ -1543,6 +1543,10 @@ poll:
 	case F2H_MSG_PROCESS_TRACE:
 		rc = 0;
 		gmu_core_process_trace_data(device, GMU_PDEV_DEV(device), &device->gmu_core.trace);
+		if (!IS_ERR_OR_NULL(device->gmu_core.spel_trace.md)) {
+			gmu_core_process_trace_data(device, GMU_PDEV_DEV(device),
+				&device->gmu_core.spel_trace);
+		}
 		break;
 	case F2H_MSG_PLATFORM_LA:
 		rc = gen8_hwsched_process_f2h_platform_msg(adreno_dev, rcvd);
@@ -2732,6 +2736,40 @@ static int gen8_allocate_pwr_limits_trace_buf(struct adreno_device *adreno_dev)
 			device->gmu_core.pwr_limits_trace.md->gmuaddr);
 }
 
+static int gen8_allocate_spel_trace_buf(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
+	struct kgsl_gmu_spel *spel = &device->gmu_core.spel;
+	int ret;
+
+	/* Do not allocate if SPEL feature is disabled */
+	if (!spel->enabled)
+		return 0;
+
+	if (device->gmu_core.spel_trace.md)
+		return 0;
+
+	device->gmu_core.spel_trace.md = gmu_core_reserve_kernel_block(device, 0,
+				GMU_TRACE_SIZE, GMU_NONCACHED_KERNEL, 0);
+
+	if (IS_ERR_OR_NULL(device->gmu_core.spel_trace.md)) {
+		ret = PTR_ERR(device->gmu_core.spel_trace.md);
+		if (!ret)
+			ret = -ENOMEM;
+
+		dev_err(gmu_pdev_dev, "GMU SPEL trace buf allocation failed: %d\n", ret);
+		device->gmu_core.spel_trace.md = NULL;
+		return ret;
+	}
+
+	gmu_core_trace_header_init(&device->gmu_core.spel_trace,
+		TRACE_LOGTYPE_POWER_BUDGETING, TRACE_MODE_FREERUN);
+
+	return gmu_core_set_vrb_register(device->gmu_core.vrb, VRB_SPEL_TRACE_BUFFER_ADDR_IDX,
+			device->gmu_core.spel_trace.md->gmuaddr);
+}
+
 static int gen8_hfi_send_spel_feature_ctrl(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -3016,6 +3054,10 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	ret = gen8_allocate_spel_trace_buf(adreno_dev);
+	if (ret)
+		goto err;
+
 	if (pwr->update_dcvs_table) {
 		ret = gen8_build_rpmh_tables(adreno_dev);
 		if (ret)
@@ -3197,6 +3239,9 @@ static int hfi_f2h_main(void *arg)
 			  !is_queue_empty(adreno_dev, HFI_MSG_ID)) ||
 			 /* Trace buffer has messages to process */
 			 !gmu_core_is_trace_empty(device->gmu_core.trace.md->hostptr) ||
+			 /* SPEL Trace buffer has messages to process */
+			 (!IS_ERR_OR_NULL(device->gmu_core.spel_trace.md) &&
+			  !gmu_core_is_trace_empty(device->gmu_core.spel_trace.md->hostptr)) ||
 			 /* Dbgq has messages to process */
 			 !is_queue_empty(adreno_dev, HFI_DBG_ID)));
 
@@ -3206,6 +3251,10 @@ static int hfi_f2h_main(void *arg)
 		gen8_hwsched_process_msgq(adreno_dev);
 		gmu_core_process_trace_data(KGSL_DEVICE(adreno_dev),
 				gmu_pdev_dev, &device->gmu_core.trace);
+		if (!IS_ERR_OR_NULL(device->gmu_core.spel_trace.md)) {
+			gmu_core_process_trace_data(KGSL_DEVICE(adreno_dev),
+					gmu_pdev_dev, &device->gmu_core.spel_trace);
+		}
 		gen8_hwsched_process_dbgq(adreno_dev, true);
 	}
 

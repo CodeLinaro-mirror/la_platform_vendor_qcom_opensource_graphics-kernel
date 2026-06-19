@@ -261,6 +261,8 @@ enum gmu_vrb_idx {
 	 * that GMU doesn't hardcode it.
 	 */
 	VRB_IPCC_SIZE_BYTES = 23,
+	/* Contains the address of SPEL trace buffer */
+	VRB_SPEL_TRACE_BUFFER_ADDR_IDX = 24,
 };
 
 /* For GMU Trace */
@@ -366,6 +368,7 @@ enum gmu_trace_id {
 	GMU_TRACE_CTX_PRI_UPDATE_REQ      = 11,
 	GMU_TRACE_CTX_PRI_UPDATE_DONE     = 12,
 	GMU_TRACE_CTX_PRI_REQ_DEFERRED    = 13,
+	GMU_TRACE_SPEL_CAP_PWRLEVEL       = 14,
 	GMU_TRACE_MAX,
 };
 
@@ -390,6 +393,10 @@ struct trace_ext_hw_fence_signal {
 struct trace_syncobj_retire {
 	u32 gmu_ctxt_id;
 	u32 timestamp;
+} __packed;
+
+struct trace_spel_cap_pwrlevel {
+	u32 pwrlevel;
 } __packed;
 
 #define TRACE_FLAG_BIT_DCVS_VOTE	0
@@ -727,6 +734,8 @@ struct gmu_core_device {
 	u32 gmu_pwr_limits_trace_buf_size;
 	/** @spel: Container for SPEL related data */
 	struct kgsl_gmu_spel spel;
+	/* @spel_trace: gmu trace container for power level clamp events */
+	struct kgsl_gmu_trace spel_trace;
 };
 
 extern struct platform_driver a6xx_gmu_driver;

@@ -991,6 +991,15 @@ static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packe
 			data->last_ts, pkt->ticks);
 		break;
 		}
+	case GMU_TRACE_SPEL_CAP_PWRLEVEL: {
+		struct trace_spel_cap_pwrlevel *data =
+				(struct trace_spel_cap_pwrlevel *)pkt->payload;
+		struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+		trace_adreno_spel_cap_pwrlevel(pkt->ticks, data->pwrlevel,
+			pwr->pwrlevels[data->pwrlevel].gpu_freq);
+		break;
+		}
 	default: {
 		char str[64];
 

@@ -4095,9 +4095,7 @@ long kgsl_ioctl_get_fault_report(struct kgsl_device_private *dev_priv,
 		return -EINVAL;
 
 	device = context->device;
-	/* This IOCTL is valid for invalidated contexts only */
-	if (!(context->flags & KGSL_CONTEXT_FAULT_INFO) ||
-		!kgsl_context_invalid(context)) {
+	if (!(context->flags & KGSL_CONTEXT_FAULT_INFO)) {
 		ret = -EINVAL;
 		goto err;
 	}

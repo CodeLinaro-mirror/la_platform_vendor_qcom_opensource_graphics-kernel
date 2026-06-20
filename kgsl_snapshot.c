@@ -683,8 +683,6 @@ static bool kgsl_context_use_secondary_snapshot(struct kgsl_context *context)
 		return false;
 
 	device = context->device;
-	if (!kgsl_context_invalid(context) && !device->ftbl->context_is_guilty(context))
-		return false;
 
 	mutex_lock(&device->fault_report_mutex);
 	/* Check if secondary snapshot already occupied */

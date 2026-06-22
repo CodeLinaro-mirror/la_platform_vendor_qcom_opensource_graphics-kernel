@@ -1,4 +1,4 @@
-// tatic u32 _context_drawqueue_size = ADRENO_CONTEXT_DRAWQUEUE_SIZE - 1;tatic u32 _context_drawqueue_size = ADRENO_CONTEXT_DRAWQUEUE_SIZE - 1DX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.

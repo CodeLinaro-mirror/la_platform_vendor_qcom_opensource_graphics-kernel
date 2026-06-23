@@ -157,7 +157,7 @@ def define_target_variant_module(target, variant):
     ext_deps = external_deps(target, variant)
 
     smci_dep = []
-    if target == "hamoa":
+    if target in ["hamoa", "glymur"]:
         smci_dep = [
             "//soc-repo:{}/drivers/firmware/qcom/qcom_scm_smci".format(tv),
             "//soc-repo:{}/drivers/firmware/qcom/si_core/si_core_module".format(tv),

@@ -19,7 +19,7 @@
 
 static ssize_t _gpu_model_show(struct kgsl_device *device, char *buf)
 {
-	return scnprintf(buf, PAGE_SIZE, adreno_get_gpu_model(device));
+	return scnprintf(buf, PAGE_SIZE, "%s", adreno_get_gpu_model(device));
 }
 
 static ssize_t gpu_model_show(struct device *dev,

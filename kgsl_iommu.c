@@ -1094,13 +1094,13 @@ static struct kgsl_process_private *kgsl_iommu_get_process(u64 ptbase)
 static void kgsl_iommu_add_fault_info(struct kgsl_context *context,
 		unsigned long addr, int flags)
 {
-	struct kgsl_pagefault_report *report;
+	struct kgsl_fault_entry *report;
 	u32 fault_flag = 0;
 
 	if (!context || !(context->flags & KGSL_CONTEXT_FAULT_INFO))
 		return;
 
-	report = kzalloc(sizeof(struct kgsl_pagefault_report), GFP_KERNEL);
+	report = kzalloc(sizeof(struct kgsl_fault_entry), GFP_KERNEL);
 	if (!report)
 		return;
 

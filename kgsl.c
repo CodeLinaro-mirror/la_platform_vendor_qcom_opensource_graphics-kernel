@@ -3986,11 +3986,11 @@ out:
 }
 
 static int kgsl_update_fault_details(struct kgsl_context *context,
-		void __user *ptr, u32 faultnents, u32 faultsize)
+		void __user *ptr, u32 faultnents, u32 faultsize, u32 *flag)
 {
 	u32 size = min_t(u32, sizeof(struct kgsl_fault), faultsize);
 	u32 cur_idx[KGSL_FAULT_TYPE_MAX] = {0};
-	struct kgsl_fault_node *fault_node;
+	struct kgsl_fault_node *fault_node, *tmp;
 	struct kgsl_fault *faults;
 	int i, ret = 0;
 
@@ -4025,7 +4025,8 @@ static int kgsl_update_fault_details(struct kgsl_context *context,
 
 		switch (fault_type) {
 		case KGSL_FAULT_TYPE_PAGEFAULT:
-			size = sizeof(struct kgsl_pagefault_report);
+		case KGSL_FAULT_TYPE_GPU_FAULT:
+			size = sizeof(struct kgsl_fault_entry);
 		}
 
 		size = min_t(u32, size, faults[fault_type].size);
@@ -4038,6 +4039,17 @@ static int kgsl_update_fault_details(struct kgsl_context *context,
 		}
 
 		cur_idx[fault_type] += 1;
+	}
+
+	list_for_each_entry_safe(fault_node, tmp, &context->faults, node) {
+		list_del(&fault_node->node);
+		kfree(fault_node->priv);
+		kfree(fault_node);
+	}
+
+	if (context->fault_report_overflow) {
+		*flag |= KGSL_FAULT_REPORT_FLAG_OVERFLOW;
+		context->fault_report_overflow = false;
 	}
 
 release_lock:
@@ -4104,6 +4116,10 @@ long kgsl_ioctl_get_fault_report(struct kgsl_device_private *dev_priv,
 		goto err;
 	}
 
+	param->flag = KGSL_FAULT_REPORT_FLAG_NONE;
+	if (kgsl_context_invalid(context))
+		param->flag |= KGSL_FAULT_REPORT_FLAG_INVALID_CTXT;
+
 	/* Return the number of fault types */
 	if (!param->faultlist) {
 		param->faultnents = KGSL_FAULT_TYPE_MAX;
@@ -4132,7 +4148,7 @@ long kgsl_ioctl_get_fault_report(struct kgsl_device_private *dev_priv,
 			param->faultsize);
 	else
 		ret = kgsl_update_fault_details(context, ptr, param->faultnents,
-			param->faultsize);
+			param->faultsize, &param->flag);
 
 process_snapshot:
 	mutex_lock(&device->fault_report_mutex);
@@ -4194,39 +4210,28 @@ int kgsl_add_fault(struct kgsl_context *context, u32 type, void *priv)
 {
 	struct kgsl_fault_node *fault, *p, *tmp;
 	int length = 0;
-	ktime_t tout;
 
 	if (kgsl_context_is_bad(context))
 		return -EINVAL;
 
-	fault = kmalloc(sizeof(struct kgsl_fault_node), GFP_KERNEL);
+	fault = kzalloc(sizeof(struct kgsl_fault_node), GFP_KERNEL);
 	if (!fault)
 		return -ENOMEM;
 
 	fault->type = type;
 	fault->priv = priv;
-	fault->time = ktime_get();
-
-	tout = ktime_sub_ms(ktime_get(), KGSL_MAX_FAULT_TIME_THRESHOLD);
 
 	mutex_lock(&context->fault_lock);
 
-	list_for_each_entry_safe(p, tmp, &context->faults, node) {
-		if (ktime_compare(p->time, tout) > 0) {
-			length++;
-			continue;
-		}
-
-		list_del(&p->node);
-		kfree(p->priv);
-		kfree(p);
-	}
+	list_for_each_entry(p, &context->faults, node)
+		length++;
 
 	if (length == KGSL_MAX_FAULT_ENTRIES) {
 		tmp = list_first_entry(&context->faults, struct kgsl_fault_node, node);
 		list_del(&tmp->node);
 		kfree(tmp->priv);
 		kfree(tmp);
+		context->fault_report_overflow = true;
 	}
 
 	list_add_tail(&fault->node, &context->faults);

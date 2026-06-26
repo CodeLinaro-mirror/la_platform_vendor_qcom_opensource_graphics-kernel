@@ -4862,7 +4862,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_14_0 = {
 			ADRENO_GMU_AB | ADRENO_HW_FENCE | ADRENO_AHB_TIMEOUT_RECOVERY |
 			ADRENO_GMU_THINMEM_CFG | ADRENO_FENCE_DEADLINE_BOOST |
 			ADRENO_TSENSE_DYNAMIC_PERIOD | ADRENO_GMU_DYNAMIC_CTX_PRIORITY |
-			ADRENO_ACD | ADRENO_CLX,
+			ADRENO_ACD | ADRENO_CLX | ADRENO_SYNX,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_2_x_perfcounters,
 		.uche_gmem_alignment = SZ_64M,

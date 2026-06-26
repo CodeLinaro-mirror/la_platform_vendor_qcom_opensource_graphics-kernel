@@ -4873,6 +4873,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_14_0 = {
 	.three_rail_memory = true,
 	.malu = false,
 	.thinmem_cfg_data = 14,
+	.dynamic_bcl_lut = gen8_dynamic_bcl_lut,
 };
 
 static const struct adreno_gen8_core adreno_gpu_core_gen8_17_0 = {

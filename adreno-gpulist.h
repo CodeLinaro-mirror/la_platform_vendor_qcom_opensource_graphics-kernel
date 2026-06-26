@@ -4321,6 +4321,30 @@ static const struct hfi_clx_table_v2_cmd gen8_11_0_clx_table = {
 	},
 };
 
+static const struct hfi_clx_table_v2_cmd gen8_14_0_clx_table = {
+	.version = (2 << 16) | 1,
+	.domain = {
+		/* GFX domain */
+		{
+			.data0 = CLX_DATA(60, 4, 1, 1),
+			.clxt = 10,
+			.clxh = 0,
+			.urgmode = 1,
+			.lkgen = 0,
+			.currbudget = 100,
+		},
+		/* MxG domain */
+		{
+			.data0 = CLX_DATA(60, 1, 1, 1),
+			.clxt = 10,
+			.clxh = 0,
+			.urgmode = 1,
+			.lkgen = 0,
+			.currbudget = 100,
+		},
+	},
+};
+
 static const struct hfi_limits_mit_tbl gen8_11_0_limits_mit_tbl[] = {
 	{
 		.feature_id = GMU_MIT_IFF,
@@ -4838,7 +4862,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_14_0 = {
 			ADRENO_GMU_AB | ADRENO_HW_FENCE | ADRENO_AHB_TIMEOUT_RECOVERY |
 			ADRENO_GMU_THINMEM_CFG | ADRENO_FENCE_DEADLINE_BOOST |
 			ADRENO_TSENSE_DYNAMIC_PERIOD | ADRENO_GMU_DYNAMIC_CTX_PRIORITY |
-			ADRENO_ACD,
+			ADRENO_ACD | ADRENO_CLX,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_2_x_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -4875,6 +4899,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_14_0 = {
 	.malu = false,
 	.thinmem_cfg_data = 14,
 	.dynamic_bcl_lut = gen8_dynamic_bcl_lut,
+	.clx_tbl = &gen8_14_0_clx_table,
 };
 
 static const struct adreno_gen8_core adreno_gpu_core_gen8_17_0 = {

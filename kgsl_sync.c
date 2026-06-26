@@ -376,12 +376,12 @@ void kgsl_synx_import_release(struct kgsl_device *device, u32 handle)
 			ret, handle);
 }
 
-static int _external_hw_fence_import(struct kgsl_device *device, struct dma_fence *fence,
-	u32 *hash_index)
+static int _external_hw_fence_import(struct kgsl_device *device,
+	struct kgsl_drawobj_sync_input_fence *input_fence)
 {
 	u32 handle = 0;
 	struct synx_import_params params = {
-		.indv.fence = fence,
+		.indv.fence = input_fence->fence,
 		.type = SYNX_IMPORT_INDV_PARAMS,
 		.indv.new_h_synx = &handle,
 		.indv.flags = SYNX_IMPORT_DMA_FENCE,
@@ -389,10 +389,10 @@ static int _external_hw_fence_import(struct kgsl_device *device, struct dma_fenc
 	int ret;
 
 	ret = synx_import(kgsl_synx.hw_fence_session, &params);
-	if (ret) {
+	if (ret || !handle) {
 		dev_err_ratelimited(device->dev,
-			"Failed to import fence ctx:%llu ts:%llu ret:%d\n",
-			fence->context, fence->seqno, ret);
+			"Failed to import fence ctx:%llu ts:%llu ret:%d handle:%d\n",
+			input_fence->fence->context, input_fence->fence->seqno, ret, handle);
 		return ret;
 	}
 
@@ -401,17 +401,16 @@ static int _external_hw_fence_import(struct kgsl_device *device, struct dma_fenc
 	if (ret) {
 		dev_err_ratelimited(device->dev,
 			"Failed to release wait fence ret:%d fence ctx:%llu ts:%llu\n",
-			ret, fence->context, fence->seqno);
+			ret, input_fence->fence->context, input_fence->fence->seqno);
 	} else {
-		if (hash_index)
-			*hash_index = handle;
+		input_fence->handle = handle;
 	}
 
 	return ret;
 }
 
 static int _external_synx_fence_import(struct kgsl_device *device,
-	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index)
+	struct kgsl_drawobj_sync_input_fence *input_fence)
 {
 	u32 handle = 0;
 	struct synx_import_params params = {
@@ -423,15 +422,12 @@ static int _external_synx_fence_import(struct kgsl_device *device,
 	int ret;
 
 	ret = synx_import(kgsl_synx.synx_session, &params);
-	if (ret) {
+	if (ret || !handle) {
 		dev_err_ratelimited(device->dev,
-			"Failed to import fence ctx:%llu ts:%llu ret:%d\n",
-			input_fence->fence->context, input_fence->fence->seqno, ret);
+			"Failed to import fence ctx:%llu ts:%llu ret:%d handle:%d\n",
+			input_fence->fence->context, input_fence->fence->seqno, ret, handle);
 		return ret;
 	}
-
-	if (hash_index)
-		*hash_index = handle;
 
 	input_fence->handle = handle;
 
@@ -459,16 +455,20 @@ static void _set_input_fence_type(struct kgsl_device *device,
 }
 
 int kgsl_external_fence_import(struct kgsl_device *device,
-	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index)
+	struct kgsl_drawobj_sync_input_fence *input_fence)
 {
 	int ret = 0;
+
+	/* Import this fence only once */
+	if (input_fence->handle)
+		return 0;
 
 	_set_input_fence_type(device, input_fence);
 
 	if (input_fence->fence_type  == KGSL_INPUT_FENCE_TYPE_SYNX_FENCE)
-		ret = _external_synx_fence_import(device, input_fence, hash_index);
+		ret = _external_synx_fence_import(device, input_fence);
 	else if (input_fence->fence_type == KGSL_INPUT_FENCE_TYPE_HW_FENCE)
-		ret = _external_hw_fence_import(device, input_fence->fence, hash_index);
+		ret = _external_hw_fence_import(device, input_fence);
 
 	return ret;
 }
@@ -629,20 +629,24 @@ int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfe
 }
 
 int kgsl_external_fence_import(struct kgsl_device *device,
-	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index)
+	struct kgsl_drawobj_sync_input_fence *input_fence)
 {
 	u64 handle = 0;
-	int ret = msm_hw_fence_wait_update_v2(kgsl_msm_hw_fence.handle, &input_fence->fence,
-			&handle, NULL, 1, true);
+	int ret;
 
+	/* Import this fence only once */
+	if (input_fence->handle)
+		return 0;
+
+	ret = msm_hw_fence_wait_update_v2(kgsl_msm_hw_fence.handle, &input_fence->fence,
+			&handle, NULL, 1, true);
 	if (ret)
 		dev_err_ratelimited(device->dev,
 			"Failed to import external fence ctx:%llu ts:%llu ret:%d\n",
 			ret, input_fence->fence->context, input_fence->fence->seqno);
-	else {
-		if (hash_index)
-			*hash_index = (u32)handle;
-	}
+	else
+		input_fence->handle = handle;
+
 
 	return ret;
 }

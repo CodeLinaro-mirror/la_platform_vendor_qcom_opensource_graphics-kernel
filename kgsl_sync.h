@@ -342,7 +342,7 @@ int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_context *contex
 	struct kgsl_sync_fence *kfence);
 
 int kgsl_external_fence_import(struct kgsl_device *device,
-	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index);
+	struct kgsl_drawobj_sync_input_fence *input_fence);
 
 bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, u32 pending_hw_fence_count);
 
@@ -380,7 +380,7 @@ static inline int kgsl_hw_fence_create(struct kgsl_device *device,
 }
 
 static inline int kgsl_external_fence_import(struct kgsl_device *device,
-	struct kgsl_drawobj_sync_input_fence *input_fence, u32 *hash_index)
+	struct kgsl_drawobj_sync_input_fence *input_fence)
 {
 	return -EINVAL;
 }

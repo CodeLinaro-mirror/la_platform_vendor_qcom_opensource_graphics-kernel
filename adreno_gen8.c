@@ -1209,6 +1209,8 @@ int gen8_init(struct adreno_device *adreno_dev)
 	adreno_dev->ahb_timeout_val = adreno_get_ahb_timeout_val(adreno_dev,
 			gen8_core->noc_timeout_us);
 	adreno_dev->bcl_data = gen8_core->bcl_data;
+	adreno_dev->tdcvs_enable = gen8_core->tdcvs_enable;
+	adreno_dev->tdcvs_data = gen8_core->tdcvs_data;
 
 	adreno_dev->cooperative_reset = ADRENO_FEATURE(adreno_dev,
 			ADRENO_COOP_RESET);

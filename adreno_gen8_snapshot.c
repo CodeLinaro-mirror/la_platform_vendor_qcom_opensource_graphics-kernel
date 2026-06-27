@@ -861,6 +861,27 @@ err_clk_put:
 	clk_put(clk);
 }
 
+static size_t gen8_snapshot_adreno_err_code(struct kgsl_device *device, u8 *buf,
+		size_t remain, void *priv)
+{
+	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
+	u32 *data = (u32 *)(buf + sizeof(*header));
+
+	if (remain < DEBUG_SECTION_SZ(1)) {
+		SNAPSHOT_ERR_NOMEM(device, "ADRENO ERR STATUS");
+		return 0;
+	}
+
+	/* Dump the kernel error code information */
+	header->type = SNAPSHOT_DEBUG_KERNEL_ERR_CODE;
+	header->size = 1;
+
+	/* Use a generic error code if we haven't stored anything specific */
+	*data = ADRENO_DEVICE(device)->adreno_err_code ?: SNAPSHOT_ERROR_GMU_OTHER;
+
+	return DEBUG_SECTION_SZ(1);
+}
+
 static size_t gen8_snapshot_rbbm_status(struct kgsl_device *device, u8 *buf,
 		size_t remain, void *priv)
 {
@@ -2088,6 +2109,9 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 		if (!gen8_cx_misc_regs_snapshot(device, snapshot))
 			return;
 	}
+
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, gen8_snapshot_adreno_err_code, NULL);
 
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, gen8_snapshot_slice_mask, NULL);

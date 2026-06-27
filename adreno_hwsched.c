@@ -3480,6 +3480,7 @@ bool adreno_hwsched_log_nonfatal_gpu_fault(struct adreno_device *adreno_dev,
 	case GMU_CP_AHB_ERROR: {
 		u32 err_details[2];
 
+		adreno_dev->adreno_err_code = SNAPSHOT_ERROR_AHB_ERROR;
 		adreno_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
 						KEY_CP_AHB_ERROR, err_details, 2);
 		dev_crit_ratelimited(dev,
@@ -3488,20 +3489,24 @@ bool adreno_hwsched_log_nonfatal_gpu_fault(struct adreno_device *adreno_dev,
 		break;
 	}
 	case GMU_ATB_ASYNC_FIFO_OVERFLOW:
+		adreno_dev->adreno_err_code = SNAPSHOT_ERROR_ATB_ASYNC_OVERFLOW;
 		dev_crit_ratelimited(dev, "RBBM: ATB ASYNC overflow\n");
 		break;
 	case GMU_RBBM_ATB_BUF_OVERFLOW:
 		dev_crit_ratelimited(dev, "RBBM: ATB bus overflow\n");
 		break;
 	case GMU_UCHE_OOB_ACCESS:
+		adreno_dev->adreno_err_code = SNAPSHOT_ERROR_OUT_OF_BOUND_ACCESS;
 		dev_crit_ratelimited(dev, "UCHE: Out of bounds access\n");
 		break;
 	case GMU_UCHE_TRAP_INTR:
+		adreno_dev->adreno_err_code = SNAPSHOT_ERROR_UCHE_TRAP;
 		dev_crit_ratelimited(dev, "UCHE: Trap interrupt\n");
 		break;
 	case GMU_TSB_WRITE_ERROR: {
 		u32 addr[2];
 
+		adreno_dev->adreno_err_code = SNAPSHOT_ERROR_TSB_WRITE_ERROR;
 		adreno_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
 						KEY_TSB_WRITE_ERROR, addr, 2);
 		dev_crit_ratelimited(dev, "TSB: Write error interrupt: Address: 0x%lx MID: %lu\n",

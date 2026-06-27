@@ -17,6 +17,7 @@
 #include "kgsl_eventlog.h"
 #include "kgsl_gmu_core.h"
 #include "kgsl_pwrctrl.h"
+#include "kgsl_snapshot.h"
 #include "kgsl_timeline.h"
 #include "kgsl_util.h"
 
@@ -270,6 +271,8 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 {
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
 	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
+	/* Default to CP_HW_ERROR and update for non-CP errors */
+	u32 adreno_err_code = SNAPSHOT_ERROR_CP_HW_ERROR;
 
 	/* Return false for non fatal errors */
 	if (adreno_hwsched_log_nonfatal_gpu_fault(adreno_dev, gmu_pdev_dev, cmd->error))
@@ -277,9 +280,16 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 
 	switch (cmd->error) {
 	case GMU_GPU_HW_HANG:
+		/*
+		 * A GPU page fault may eventually cause the HW hang interrupt to be sent to GMU.
+		 * In such cases, do not overwrite the original GPU page fault error code.
+		 */
+		adreno_err_code = (adreno_dev->adreno_err_code == SNAPSHOT_ERROR_GPU_PAGE_FAULT) ?
+				SNAPSHOT_ERROR_GPU_PAGE_FAULT : SNAPSHOT_ERROR_HW_HANG_DETECTED;
 		dev_crit_ratelimited(gmu_pdev_dev, "MISC: GPU hang detected\n");
 		break;
 	case GMU_GPU_SW_HANG:
+		adreno_err_code = SNAPSHOT_ERROR_SW_TIMEOUT;
 		dev_crit_ratelimited(gmu_pdev_dev, "gpu timeout ctx %u ts %u\n",
 			cmd->gc.ctxt_id, cmd->gc.ts);
 		break;
@@ -314,6 +324,7 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 	case GMU_GPU_PREEMPT_TIMEOUT: {
 		u32 cur, next, cur_rptr, cur_wptr, next_rptr, next_wptr;
 
+		adreno_err_code = SNAPSHOT_ERROR_PREEMPTION_FAULT;
 		cur = gen8_hwsched_lookup_key_value(adreno_dev,
 			PAYLOAD_PREEMPT_TIMEOUT, KEY_PREEMPT_TIMEOUT_CUR_RB_ID);
 		next = gen8_hwsched_lookup_key_value(adreno_dev,
@@ -330,6 +341,7 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 		}
 		break;
 	case GMU_CP_GPC_ERROR:
+		adreno_err_code = SNAPSHOT_ERROR_GPC_ERROR;
 		dev_crit_ratelimited(gmu_pdev_dev, "RBBM: GPC error\n");
 		break;
 	case GMU_CP_BV_OPCODE_ERROR:
@@ -541,6 +553,8 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 			cmd->error);
 		break;
 	}
+
+	adreno_dev->adreno_err_code = adreno_err_code;
 
 	/* Return true for fatal errors to perform recovery sequence */
 	return true;
@@ -1869,6 +1883,15 @@ static int gen8_hfi_send_fast_context_destroy_feature_ctrl(struct adreno_device 
 	return ret;
 }
 
+static int gen8_hfi_send_tdcvs_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_TDCVS))
+		return 0;
+
+	return gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_TDCVS, adreno_dev->tdcvs_enable,
+		adreno_dev->tdcvs_data);
+}
+
 static void gen8_spin_idle_debug_lpac(struct adreno_device *adreno_dev,
 				const char *str)
 {
@@ -2934,6 +2957,10 @@ static int gen8_hwsched_feature_ctrl(struct adreno_device *adreno_dev)
 		goto err;
 
 	ret = gen8_hfi_send_fast_context_destroy_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
+
+	ret = gen8_hfi_send_tdcvs_feature_ctrl(adreno_dev);
 	if (ret)
 		goto err;
 

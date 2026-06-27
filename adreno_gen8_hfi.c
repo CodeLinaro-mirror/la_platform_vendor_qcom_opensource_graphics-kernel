@@ -717,6 +717,15 @@ int gen8_hfi_send_ifpc_feature_ctrl(struct adreno_device *adreno_dev)
 	return 0;
 }
 
+static int gen8_hfi_send_tdcvs_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_TDCVS))
+		return 0;
+
+	return gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_TDCVS, adreno_dev->tdcvs_enable,
+		adreno_dev->tdcvs_data);
+}
+
 static void reset_hfi_queues(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -823,6 +832,10 @@ int gen8_hfi_start(struct adreno_device *adreno_dev)
 		goto err;
 
 	result = gen8_hfi_send_ifpc_feature_ctrl(adreno_dev);
+	if (result)
+		goto err;
+
+	result = gen8_hfi_send_tdcvs_feature_ctrl(adreno_dev);
 	if (result)
 		goto err;
 

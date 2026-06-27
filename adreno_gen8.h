@@ -244,6 +244,10 @@ struct adreno_gen8_core {
 	const struct gen8_dynamic_bcl_entry *dynamic_bcl_lut;
 	/** @thinmem_cfg_data: Data to enable the thinmem_cfg feature */
 	u32 thinmem_cfg_data;
+	/** @tdcvs_enable: Default TDCVS enable value */
+	u32 tdcvs_enable;
+	/** @tdcvs_data: Default TDCVS data value */
+	u32 tdcvs_data;
 };
 
 /**

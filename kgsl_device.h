@@ -212,6 +212,8 @@ struct kgsl_functable {
 		struct kgsl_process_private *proc_priv);
 	/** @is_first_boot_done: Check if the ADRENO device first boot is done */
 	bool (*is_first_boot_done)(struct kgsl_device *device);
+	/** @context_is_guilty: Check if the context is guilty for gpu fault */
+	bool (*context_is_guilty)(struct kgsl_context *context);
 };
 
 struct kgsl_ioctl {
@@ -301,7 +303,13 @@ struct kgsl_device {
 		u32 size;
 	} snapshot_memory;
 
+	struct {
+		void *ptr;
+		u32 size;
+	} secondary_snapshot_memory;
+
 	struct kgsl_snapshot *snapshot;
+	struct kgsl_snapshot *secondary_snapshot;
 	/** @panic_nb: notifier block to capture GPU snapshot on kernel panic */
 	struct notifier_block panic_nb;
 	struct {
@@ -420,6 +428,8 @@ struct kgsl_device {
 	ktime_t prev_deadline_ktime;
 	/** @bootcomplete_ktime: ktime of gpu boot completion */
 	ktime_t bootcomplete_ktime;
+	/** @fault_report_mutex: mutex held while reporting and freeing secondary snapshot */
+	struct mutex fault_report_mutex;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \
@@ -722,6 +732,8 @@ struct kgsl_snapshot {
 	bool first_read;
 	bool recovered;
 	struct kgsl_device *device;
+	struct kgsl_context *owner;
+	bool is_fault_snapshot;
 };
 
 /**

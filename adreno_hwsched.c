@@ -2415,6 +2415,41 @@ static bool context_is_throttled(struct kgsl_device *device,
 	return false;
 }
 
+static bool context_is_guilty(struct kgsl_context *context, u32 error)
+{
+	struct kgsl_device *device = context->device;
+
+	if ((context->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
+		(context->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
+		(error == GMU_GPU_SW_HANG) ||
+		(error == GMU_GPU_SW_FUSE_VIOLATION) ||
+		context_is_throttled(device, context))
+		return true;
+
+	return false;
+}
+
+static bool adreno_hwsched_context_is_guilty(struct adreno_context *drawctxt)
+{
+	struct kgsl_context *context = &drawctxt->base;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(context->device);
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	struct hfi_context_bad_cmd *cmd = hwsched->ctxt_bad;
+	u32 ctxt_id;
+
+	if (!adreno_gpu_fault(adreno_dev))
+		return false;
+
+	if (!cmd)
+		return false;
+
+	ctxt_id = kgsl_context_is_lpac(context) ? cmd->lpac.ctxt_id : cmd->gc.ctxt_id;
+	if (ctxt_id != drawctxt->base.id)
+		return false;
+
+	return context_is_guilty(context, cmd->error);
+}
+
 static void print_fault_syncobj(struct adreno_device *adreno_dev,
 				u32 ctxt_id, u32 ts)
 {
@@ -2494,13 +2529,8 @@ static void adreno_hwsched_snapshot_legacy(struct adreno_device *adreno_dev, int
 
 	force_retire_timestamp(device, drawobj);
 
-	if ((context->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
-		(context->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
-		(cmd->error == GMU_GPU_SW_HANG) ||
-		(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
-		context_is_throttled(device, context)) {
+	if (context_is_guilty(context, cmd->error))
 		adreno_drawctxt_set_guilty(device, context);
-	}
 
 	/*
 	 * Put back the reference which we incremented while trying to find
@@ -2602,13 +2632,8 @@ static int adreno_hwsched_snapshot_and_soft_reset(struct adreno_device *adreno_d
 
 	if (drawobj) {
 		force_retire_timestamp(device, drawobj);
-		if (context && ((context->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
-			(context->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
-			(cmd->error == GMU_GPU_SW_HANG) ||
-			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
-			context_is_throttled(device, context))) {
+		if (context && context_is_guilty(context, cmd->error))
 			ctx_guilty = true;
-		}
 
 		if (gpudev->soft_reset)
 			ret = gpudev->soft_reset(adreno_dev, context, ctx_guilty);
@@ -2625,13 +2650,8 @@ static int adreno_hwsched_snapshot_and_soft_reset(struct adreno_device *adreno_d
 	if (drawobj_lpac) {
 		ctx_guilty = false;
 		force_retire_timestamp(device, drawobj_lpac);
-		if (context_lpac && ((context_lpac->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
-			(context_lpac->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
-			(cmd->error == GMU_GPU_SW_HANG) ||
-			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
-			context_is_throttled(device, context_lpac))) {
+		if (context_lpac && context_is_guilty(context_lpac, cmd->error))
 			ctx_guilty = true;
-		}
 
 		if (gpudev->soft_reset)
 			ret = gpudev->soft_reset(adreno_dev, context_lpac, ctx_guilty);
@@ -2886,6 +2906,7 @@ static const struct adreno_dispatch_ops hwsched_ops = {
 	.queue_context = adreno_hwsched_queue_context,
 	.setup_fence = adreno_hwsched_setup_fence,
 	.setup_context = adreno_hwsched_setup_context,
+	.context_is_guilty = adreno_hwsched_context_is_guilty,
 };
 
 static void hwsched_lsr_check(struct work_struct *work)

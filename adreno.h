@@ -632,6 +632,8 @@ struct adreno_dispatch_ops {
 			struct adreno_context *drawctxt);
 	/* @setup_fence: Setup a fence */
 	void (*setup_fence)(struct adreno_device *adreno_dev, struct kgsl_sync_fence *kfence);
+	/* @context_is_guilty: Check if the context is guilty for the fault */
+	bool (*context_is_guilty)(struct adreno_context *drawctxt);
 };
 
 /**

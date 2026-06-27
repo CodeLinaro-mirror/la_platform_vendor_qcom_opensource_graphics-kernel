@@ -423,7 +423,8 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 		KGSL_CONTEXT_PREEMPT_STYLE_MASK |
 		KGSL_CONTEXT_LPAC |
 		KGSL_CONTEXT_NO_SNAPSHOT |
-		KGSL_CONTEXT_FAULT_INFO);
+		KGSL_CONTEXT_FAULT_INFO |
+		KGSL_CONTEXT_FAULT_SNAPSHOT);
 
 	/* Check for errors before trying to initialize */
 

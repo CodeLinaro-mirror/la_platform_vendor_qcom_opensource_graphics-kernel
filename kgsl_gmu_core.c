@@ -952,6 +952,46 @@ static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packe
 		trace_adreno_gpu_preempt_info(data, pkt->ticks);
 		break;
 		}
+	case GMU_TRACE_CTX_PRI_UPDATE_REQ: {
+		struct trace_ctx_pri_update_req *data =
+				(struct trace_ctx_pri_update_req *)pkt->payload;
+		u32 cur_pri = TRACE_CUR_CTX_PRI(data->prio);
+		u32 new_pri = TRACE_NEW_CTX_PRI(data->prio);
+
+		trace_adreno_ctx_priority_update_request(
+			data->ctx_id, cur_pri, new_pri,
+			KGSL_CTX_PRI_TO_RB_LEVEL(cur_pri),
+			KGSL_CTX_PRI_TO_RB_LEVEL(new_pri),
+			data->flags, data->last_submitted_ts,
+			pkt->ticks);
+		break;
+		}
+	case GMU_TRACE_CTX_PRI_UPDATE_DONE: {
+		struct trace_ctx_pri_update_done *data =
+				(struct trace_ctx_pri_update_done *)pkt->payload;
+		u32 cur_pri = TRACE_CUR_CTX_PRI(data->prio);
+		u32 new_pri = TRACE_NEW_CTX_PRI(data->prio);
+
+		trace_adreno_ctx_priority_update_done(
+			data->ctx_id, cur_pri, new_pri,
+			KGSL_CTX_PRI_TO_RB_LEVEL(cur_pri),
+			KGSL_CTX_PRI_TO_RB_LEVEL(new_pri),
+			pkt->ticks);
+		break;
+		}
+	case GMU_TRACE_CTX_PRI_REQ_DEFERRED: {
+		struct trace_ctx_pri_req_deferred *data =
+				(struct trace_ctx_pri_req_deferred *)pkt->payload;
+		u32 cur_pri = TRACE_CUR_CTX_PRI(data->prio);
+		u32 new_pri = TRACE_NEW_CTX_PRI(data->prio);
+
+		trace_adreno_ctx_pri_update_deferred(
+			data->ctx_id, cur_pri, new_pri,
+			KGSL_CTX_PRI_TO_RB_LEVEL(cur_pri),
+			KGSL_CTX_PRI_TO_RB_LEVEL(new_pri),
+			data->last_ts, pkt->ticks);
+		break;
+		}
 	default: {
 		char str[64];
 

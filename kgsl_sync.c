@@ -452,9 +452,9 @@ static void _set_input_fence_type(struct kgsl_device *device,
 	/*
 	 * If both synx and hw fence type are enabled, then import based on the type of input fence
 	 */
-	if (test_bit(SYNX_NATIVE_FENCE_FLAG_ENABLED_BIT, &input_fence->fence->flags))
+	if (kgsl_is_synx_hw_fence(input_fence->fence))
 		input_fence->fence_type = KGSL_INPUT_FENCE_TYPE_SYNX_FENCE;
-	else if (test_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &input_fence->fence->flags))
+	else if (kgsl_is_synx_native_fence(input_fence->fence))
 		input_fence->fence_type = KGSL_INPUT_FENCE_TYPE_HW_FENCE;
 }
 
@@ -1307,7 +1307,7 @@ static void _kgsl_populate_hw_fence(struct kgsl_drawobj_sync_event *event, struc
 	list_add_tail(&input_fence->node, &syncobj->hw_fence_list);
 
 	/* Make sure all output fences for this process are hybrid fences */
-	if (test_bit(SYNX_NATIVE_FENCE_FLAG_ENABLED_BIT, &fence->flags))
+	if (kgsl_is_synx_native_fence(fence))
 		syncobj->base.context->proc_priv->hybrid_output_fence = true;
 }
 

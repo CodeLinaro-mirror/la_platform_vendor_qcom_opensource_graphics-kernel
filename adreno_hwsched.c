@@ -1117,7 +1117,7 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 	spin_unlock(&device->submit_lock);
 
 	/* If the dispatcher is busy then schedule the work for later */
-	if (!mutex_trylock(&hwsched->mutex)) {
+	if (!kgsl_mutex_trylock(&hwsched->mutex)) {
 		_decrement_submit_now(device);
 		goto done;
 	}
@@ -1132,7 +1132,7 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 		kgsl_mutex_unlock(&device->mutex);
 	}
 
-	mutex_unlock(&hwsched->mutex);
+	kgsl_mutex_unlock(&hwsched->mutex);
 	_decrement_submit_now(device);
 	return;
 
@@ -2411,10 +2411,9 @@ static void adreno_hwsched_work(struct kthread_work *work)
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	mutex_lock(&hwsched->mutex);
-
+	kgsl_mutex_lock(&hwsched->mutex);
 	if (adreno_hwsched_do_fault(adreno_dev)) {
-		mutex_unlock(&hwsched->mutex);
+		kgsl_mutex_unlock(&hwsched->mutex);
 		return;
 	}
 
@@ -2439,7 +2438,7 @@ static void adreno_hwsched_work(struct kthread_work *work)
 		kgsl_mutex_unlock(&device->mutex);
 	}
 
-	mutex_unlock(&hwsched->mutex);
+	kgsl_mutex_unlock(&hwsched->mutex);
 }
 
 static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
@@ -2518,7 +2517,7 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
 		return PTR_ERR(adreno_dev->scheduler_worker);
 	}
 
-	mutex_init(&hwsched->mutex);
+	kgsl_mutex_init(&hwsched->mutex);
 
 	kthread_init_work(&adreno_dev->scheduler_work, adreno_hwsched_work);
 
@@ -2846,14 +2845,18 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 
 int adreno_hwsched_ctxt_unregister_wait_completion(
 	struct adreno_device *adreno_dev,
-	struct device *dev, struct pending_cmd *ack,
+	struct device *dev, struct kgsl_context *context, struct pending_cmd *ack,
 	void (*process_msgq)(struct adreno_device *adreno_dev),
 	struct hfi_unregister_ctxt_cmd *cmd)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	int rb = adreno_get_level(context);
 	int ret;
+	bool fast = adreno_is_fast_context_destroy_enabled(adreno_dev);
 	u64 start, end;
+	char prefix[60];
 
 	start = gpudev->read_alwayson(adreno_dev);
 	kgsl_mutex_unlock(&device->mutex);
@@ -2873,15 +2876,20 @@ int adreno_hwsched_ctxt_unregister_wait_completion(
 	end = gpudev->read_alwayson(adreno_dev);
 
 	if (completion_done(&ack->complete)) {
+		snprintf(prefix, sizeof(prefix),
+			"Ack unprocessed for %scontext unregister", fast ? "fast " : "");
 		dev_err_ratelimited(dev,
-			"Ack unprocessed for context unregister seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
-			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id,
-			cmd->ts, start, end);
+			"%s type: %s rb: %d seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+			prefix, kgsl_context_type(drawctxt->type), rb,
+			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
 		return 0;
 	}
 
+	snprintf(prefix, sizeof(prefix),
+		"Ack timeout for %scontext unregister", fast ? "fast " : "");
 	dev_err_ratelimited(dev,
-		"Ack timeout for context unregister seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+		"%s type: %s rb: %d seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+		prefix, kgsl_context_type(drawctxt->type), rb,
 		MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
 	return -ETIMEDOUT;
 }

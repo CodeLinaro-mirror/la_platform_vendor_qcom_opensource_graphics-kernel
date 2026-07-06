@@ -420,7 +420,6 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 		KGSL_CONTEXT_PWR_CONSTRAINT |
 		KGSL_CONTEXT_IFH_NOP |
 		KGSL_CONTEXT_SECURE |
-		KGSL_CONTEXT_PREEMPT_STYLE_MASK |
 		KGSL_CONTEXT_LPAC |
 		KGSL_CONTEXT_NO_SNAPSHOT |
 		KGSL_CONTEXT_FAULT_INFO |
@@ -428,9 +427,18 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 
 	/* Check for errors before trying to initialize */
 
-	/* If preemption is not supported, ignore preemption request */
-	if (!adreno_preemption_feature_set(adreno_dev))
-		local &= ~KGSL_CONTEXT_PREEMPT_STYLE_MASK;
+	/*
+	 * These bits represent the preemption style only for a5xx targets. For other targets,
+	 * userspace uses these bits to keep track of foreign contexts i.e. contexts that
+	 * may submit work to cores other than just the GPU.
+	 */
+	if (adreno_is_a5xx(adreno_dev)) {
+		/* Honor the preemption style only if preemption is enabled */
+		if (adreno_preemption_feature_set(adreno_dev))
+			local |= *flags & KGSL_CONTEXT_A5XX_PREEMPT_STYLE_MASK;
+	} else {
+		local |= *flags & (KGSL_CONTEXT_FOREIGN_NPU | KGSL_CONTEXT_FOREIGN_GPU);
+	}
 
 	/* We no longer support legacy context switching */
 	if ((local & KGSL_CONTEXT_PREAMBLE) == 0 ||

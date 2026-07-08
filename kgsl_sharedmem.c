@@ -1121,29 +1121,40 @@ static int kgsl_shmem_alloc_pages(struct kgsl_memdesc *memdesc)
 	size = kgsl_get_alloc_page_size(len, align);
 	order = get_order(size);
 	/* Cap order to the maximum allowed by shmem mTHP constraint */
-	if (IS_ENABLED(CONFIG_QCOM_KGSL_USE_SHMEM_MTHP))
+	if (IS_ENABLED(CONFIG_QCOM_KGSL_USE_SHMEM_MTHP)) {
 		order = min_t(u32, order, ilog2(SZ_512K >> PAGE_SHIFT));
+		size = PAGE_SIZE << order;
+		align = ilog2(size);
+	}
 
 	while (len) {
 		ret = _kgsl_shmem_alloc_page(memdesc, order);
 
 		if (ret == -EAGAIN) {
-			size = PAGE_SIZE << --order;
-			size = kgsl_get_alloc_page_size(size, ilog2(size));
+			if (!order)
+				return -ENOMEM;
+
+			order--;
+			size = PAGE_SIZE << order;
 			align = ilog2(size);
 			continue;
-		} else if (ret <= 0) {
-			return -ENOMEM;
 		}
 
+		if (ret <= 0)
+			return -ENOMEM;
+
 		count += ret;
-		len -= size;
+		len -= (ret << PAGE_SHIFT);
+
 		size = kgsl_get_alloc_page_size(len, align);
-		align = ilog2(size);
 		order = get_order(size);
 		/* Cap order to the maximum allowed by shmem mTHP constraint */
-		if (IS_ENABLED(CONFIG_QCOM_KGSL_USE_SHMEM_MTHP))
+		if (IS_ENABLED(CONFIG_QCOM_KGSL_USE_SHMEM_MTHP)) {
 			order = min_t(u32, order, ilog2(SZ_512K >> PAGE_SHIFT));
+			size = PAGE_SIZE << order;
+		}
+
+		align = ilog2(size);
 	}
 	return count;
 }

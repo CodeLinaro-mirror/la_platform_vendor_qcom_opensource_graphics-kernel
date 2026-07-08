@@ -51,17 +51,24 @@ static void kgsl_memdesc_clear_unevictable(struct kgsl_process_private *process,
 	 */
 	mapping_clear_unevictable(memdesc->shmem_filp->f_mapping);
 	folio_batch_init(&fbatch);
-	for (i = 0; i < memdesc->page_count; i++) {
-		set_page_dirty_lock(memdesc->pages[i]);
+	for (i = 0; i < memdesc->page_count; ) {
+		struct page *p = memdesc->pages[i];
+		int count = 1 << compound_order(p);
+		int j;
+
+		set_page_dirty_lock(p);
 		mutex_lock(&memdesc->lock);
-		folio_batch_add(&fbatch, page_folio(memdesc->pages[i]));
-		memdesc->pages[i] = NULL;
-		atomic_inc(&process->unpinned_page_count);
+		folio_batch_add(&fbatch, page_folio(p));
+		for (j = 0; j < count; j++) {
+			memdesc->pages[i + j] = NULL;
+			atomic_inc(&process->unpinned_page_count);
+		}
 		mutex_unlock(&memdesc->lock);
 		if (folio_batch_count(&fbatch) == PAGEVEC_SIZE) {
 			check_move_unevictable_folios(&fbatch);
 			__folio_batch_release(&fbatch);
 		}
+		i += count;
 	}
 
 	if (folio_batch_count(&fbatch)) {

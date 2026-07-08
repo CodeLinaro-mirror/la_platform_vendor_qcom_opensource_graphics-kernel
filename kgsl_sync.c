@@ -452,9 +452,9 @@ static void _set_input_fence_type(struct kgsl_device *device,
 	/*
 	 * If both synx and hw fence type are enabled, then import based on the type of input fence
 	 */
-	if (kgsl_is_synx_hw_fence(input_fence->fence))
+	if (kgsl_is_synx_native_fence(input_fence->fence))
 		input_fence->fence_type = KGSL_INPUT_FENCE_TYPE_SYNX_FENCE;
-	else if (kgsl_is_synx_native_fence(input_fence->fence))
+	else if (kgsl_is_synx_hw_fence(input_fence->fence))
 		input_fence->fence_type = KGSL_INPUT_FENCE_TYPE_HW_FENCE;
 }
 

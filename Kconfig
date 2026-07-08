@@ -33,6 +33,15 @@ config QCOM_KGSL_CORESIGHT
 	  data. On a6xx targets there are two sources available for the GX and
 	  CX domains respectively. Debug kernels should say 'Y' here.
 
+config QCOM_KGSL_CORESIGHT_QMI_TRACE
+	bool "Enable CoreSight QMI trace path configuration"
+	depends on QCOM_KGSL_CORESIGHT
+	help
+	  When enabled, allows configuration of QMI trace paths for GPU DBGC
+	  to enable/disable connection from GPU source to TMC sink. This feature
+	  requires kernel 6.18 or later where coresight_qmi_trace_path_set() is
+	  available.
+
 config QCOM_KGSL_IOCOHERENCY_DEFAULT
 	bool "Enable I/O coherency on cached GPU memory by default"
 	default y if ARCH_LAHAINA

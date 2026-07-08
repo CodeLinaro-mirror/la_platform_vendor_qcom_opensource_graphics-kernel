@@ -2050,9 +2050,10 @@ struct kgsl_gpu_aux_command_timeline {
 /* Macros for fault type used in kgsl_fault structure */
 #define KGSL_FAULT_TYPE_NO_FAULT    0
 #define KGSL_FAULT_TYPE_PAGEFAULT   1
-#define KGSL_FAULT_TYPE_MAX         2
+#define KGSL_FAULT_TYPE_GPU_FAULT   2
+#define KGSL_FAULT_TYPE_MAX         3
 
-/* Macros to be used in kgsl_pagefault_report structure */
+/* Macros for fault_type used in kgsl_fault_entry structure */
 #define KGSL_PAGEFAULT_TYPE_NONE                  0
 #define KGSL_PAGEFAULT_TYPE_READ                  (1 << 0)
 #define KGSL_PAGEFAULT_TYPE_WRITE                 (1 << 1)
@@ -2061,15 +2062,20 @@ struct kgsl_gpu_aux_command_timeline {
 #define KGSL_PAGEFAULT_TYPE_EXTERNAL              (1 << 4)
 #define KGSL_PAGEFAULT_TYPE_TRANSACTION_STALLED   (1 << 5)
 
+/* Macros for kgsl_fault_report flag */
+#define KGSL_FAULT_REPORT_FLAG_NONE               0
+#define KGSL_FAULT_REPORT_FLAG_INVALID_CTXT       (1 << 0)
+#define KGSL_FAULT_REPORT_FLAG_OVERFLOW           (1 << 1)
+
 /**
- * struct kgsl_pagefault_report - Descriptor for each page fault
- * @fault_addr: page fault address
- * @fault_type: type of page fault
+ * struct kgsl_fault_entry - Descriptor for each fault
+ * @fault_addr: Fault address
+ * @fault_type: type of fault
  *
- * Contains information about supported GPU page fault.
+ * Contains information about supported fault.
  * Supported fault type: KGSL_PAGEFAULT_TYPE_*
  */
-struct kgsl_pagefault_report {
+struct kgsl_fault_entry {
 	__u64 fault_addr;
 	/* private: reserved for future use */
 	__u64 reserved[2];
@@ -2110,6 +2116,7 @@ struct kgsl_fault {
  * @context_id: ID of a KGSL context
  * @snapshot_size: Size of the captured snpashot due to fault
  * @snapshot_addr: User memory pointer to snapshot buffer
+ * @flag: Set to any of the KGSL_FAULT_REPORT_FLAG_* macro
  * Returns a list of GPU faults for a context identified by @context_id. If the user specifies
  * @context_id only, then KGSL will set the @faultnents to the number of fault types it has
  * for that context.
@@ -2127,6 +2134,9 @@ struct kgsl_fault_report {
 	__u32 context_id;
 	__u32 snapshot_size;
 	__u64 snapshot_addr;
+	__u32 flag;
+	/* private: padding for 64 bit compatibility */
+	__u32 padding;
 };
 
 #define IOCTL_KGSL_GET_FAULT_REPORT \

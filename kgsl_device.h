@@ -461,21 +461,16 @@ struct kgsl_process_private;
 
 #define KGSL_MAX_FAULT_ENTRIES 40
 
-/* Maintain faults observed within threshold time (in milliseconds) */
-#define KGSL_MAX_FAULT_TIME_THRESHOLD 5000
-
 /**
  * struct kgsl_fault_node - GPU fault descriptor
  * @node: List node for list of faults
  * @type: Type of fault
  * @priv: Pointer to type specific fault
- * @time: Time when fault was observed
  */
 struct kgsl_fault_node {
 	struct list_head node;
 	u32 type;
 	void *priv;
-	ktime_t time;
 };
 
 /**
@@ -537,6 +532,8 @@ struct kgsl_context {
 	struct mutex fault_lock;
 	/** @deferred_destroy_ws: Work struct used to destroy context in a deferred manner */
 	struct work_struct deferred_destroy_ws;
+	/** @fault_report_overflow: Fault report list overflowed **/
+	bool fault_report_overflow;
 };
 
 #define _context_comm(_c) \

@@ -266,6 +266,32 @@ static void handle_sw_fault(struct adreno_device *adreno_dev, const char *str, u
 		adreno_scheduler_fault(adreno_dev, ADRENO_IOMMU_STALL_ON_PAGE_FAULT);
 }
 
+static void report_gpu_fault(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
+	struct kgsl_context *context;
+	struct kgsl_fault_entry *report;
+
+	context = kgsl_context_get(device, cmd->gc.ctxt_id);
+	if (!context)
+		return;
+
+	if (!(context->flags & KGSL_CONTEXT_FAULT_INFO))
+		goto done;
+
+	report = kzalloc(sizeof(struct kgsl_fault_entry),
+			GFP_KERNEL);
+	if (!report)
+		goto done;
+
+	report->fault_type = cmd->error;
+	if (kgsl_add_fault(context, KGSL_FAULT_TYPE_GPU_FAULT, report))
+		kfree(report);
+done:
+	kgsl_context_put(context);
+}
+
 static bool log_gpu_fault(struct adreno_device *adreno_dev)
 {
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
@@ -277,6 +303,7 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 	if (adreno_hwsched_log_nonfatal_gpu_fault(adreno_dev, gmu_pdev_dev, cmd->error))
 		return false;
 
+	report_gpu_fault(adreno_dev);
 	switch (cmd->error) {
 	case GMU_GPU_HW_HANG:
 		/*

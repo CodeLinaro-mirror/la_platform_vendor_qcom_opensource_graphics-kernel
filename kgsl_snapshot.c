@@ -832,6 +832,12 @@ static void kgsl_device_snapshot_secondary(struct kgsl_device *device,
 	if (snapshot == NULL)
 		return;
 
+	snapshot->owner = kgsl_context_get(device, context->id);
+	if (snapshot->owner == NULL) {
+		kfree(snapshot);
+		return;
+	}
+
 	init_completion(&snapshot->dump_gate);
 	INIT_LIST_HEAD(&snapshot->obj_list);
 	INIT_LIST_HEAD(&snapshot->cp_list);
@@ -840,7 +846,6 @@ static void kgsl_device_snapshot_secondary(struct kgsl_device *device,
 	snapshot->ptr = snapshot->start;
 	snapshot->remain = device->secondary_snapshot_memory.size;
 	snapshot->is_fault_snapshot = true;
-	snapshot->owner = kgsl_context_get(device, context->id);
 
 	if (device->ftbl->snapshot)
 		device->ftbl->snapshot(device, snapshot, context, context_lpac);
@@ -865,6 +870,12 @@ static void kgsl_secondary_snapshot_init(struct kgsl_device *device,
 	if (!snapshot)
 		return;
 
+	snapshot->owner = kgsl_context_get(device, context->id);
+	if (snapshot->owner == NULL) {
+		kfree(snapshot);
+		return;
+	}
+
 	init_completion(&snapshot->dump_gate);
 	INIT_LIST_HEAD(&snapshot->obj_list);
 	snapshot->start = device->secondary_snapshot_memory.ptr;
@@ -872,7 +883,6 @@ static void kgsl_secondary_snapshot_init(struct kgsl_device *device,
 	snapshot->remain = device->secondary_snapshot_memory.size;
 	snapshot->device = device;
 	snapshot->is_fault_snapshot = true;
-	snapshot->owner = kgsl_context_get(device, context->id);
 	mutex_lock(&device->fault_report_mutex);
 	device->secondary_snapshot = snapshot;
 	mutex_unlock(&device->fault_report_mutex);

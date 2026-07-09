@@ -3894,6 +3894,7 @@ int adreno_hwsched_import_external_fence(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret = kgsl_external_fence_import(device, input_fence);
+	bool signaled = test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &input_fence->fence->flags);
 
 	if (ret) {
 		disable_hw_syncobj(device, syncobj);
@@ -3903,12 +3904,15 @@ int adreno_hwsched_import_external_fence(struct adreno_device *adreno_dev,
 	obj->hash_index = input_fence->handle;
 
 	if (input_fence->fence_type == KGSL_INPUT_FENCE_TYPE_HW_FENCE) {
-		if (kgsl_hw_fence_signaled(input_fence->fence) ||
-			test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &input_fence->fence->flags))
-			obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT);
+		if (!signaled && kgsl_hw_fence_signaled(input_fence->fence))
+			signaled = true;
 	} else {
 		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SYNX_HANDLE_BIT);
 	}
+
+	if (signaled)
+		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT);
+
 
 	return 0;
 }

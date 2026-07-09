@@ -138,8 +138,8 @@ struct syncobj_flags {
 
 static void _get_syncobj_string(char *str, u32 max_size, struct hfi_syncobj *syncobj, u32 index)
 {
-	u32 count = scnprintf(str, max_size, "syncobj[%d] ctxt_id:%llu seqno:%llu flags:", index,
-			syncobj->ctxt_id, syncobj->seq_no);
+	u32 count = scnprintf(str, max_size, "syncobj[%d] ctxt_id:%llu seqno:%llu hash:%u flags:",
+			index, syncobj->ctxt_id, syncobj->seq_no, syncobj->hash_index);
 	u32 i;
 	bool first = true;
 	static const struct syncobj_flags _flags[] = {

@@ -5,6 +5,11 @@
  */
 
 #include <linux/interconnect.h>
+#include <linux/version.h>
+
+#if (KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE)
+#include <linux/sched/walt.h>
+#endif
 
 #include "adreno.h"
 #include "adreno_gen8.h"
@@ -2545,4 +2550,67 @@ int gen8_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 	}
 
 	return ret;
+}
+
+/* The GPU boost sched/walt API is available from Kernel version 6.18 */
+#if IS_ENABLED(CONFIG_SCHED_WALT) && (KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE)
+#define GEN8_11_X_GPU_BUSY_THRESHOLD (65)
+#define GEN8_11_X_GPU_FREQ_THRESHOLD (1400 * 1000 * 1000)
+
+/*
+ * Make the vote based on the enable/disable param.
+ * Return true on enable, false if skipped or disabled.
+ */
+static bool _cpu_perf_vote_req(struct adreno_device *adreno_dev, bool enable)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_clk_stats *stats = &device->pwrctrl.clk_stats;
+	u32 busy_percent = 0;
+	int ret;
+
+	/* Get GPU busy percentage */
+	if (stats->total_old != 0)
+		busy_percent = (stats->busy_old * 100) / stats->total_old;
+
+	/* Skip if enabling AND we aren't busy */
+	if (enable && (busy_percent <= GEN8_11_X_GPU_BUSY_THRESHOLD))
+		return false;
+
+	ret = walt_gpu_boost(enable);
+
+	/* Return the previous state if we failed to boost */
+	if (ret)
+		return !enable;
+
+	/* Return the requested enablement */
+	return enable;
+}
+
+static void _cpu_perf_vote(struct adreno_device *adreno_dev, u32 postlevel)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	static bool cpu_vote_state;
+	u32 freq;
+
+	freq = device->pwrctrl.pwrlevels[postlevel].gpu_freq;
+
+	if (!cpu_vote_state && (freq >= GEN8_11_X_GPU_FREQ_THRESHOLD))
+		cpu_vote_state = _cpu_perf_vote_req(adreno_dev, true);
+	else if (cpu_vote_state && (freq < GEN8_11_X_GPU_FREQ_THRESHOLD))
+		cpu_vote_state = _cpu_perf_vote_req(adreno_dev, false);
+}
+#else
+static void _cpu_perf_vote(struct adreno_device *adreno_dev, u32 postlevel)
+{
+}
+#endif
+
+void gen8_hwsched_pwrlevel_change_settings(struct adreno_device *adreno_dev,
+				u32 prelevel, u32 postlevel, bool post)
+{
+	if (!post)
+		return;
+
+	if (adreno_is_gen8_11_x(adreno_dev))
+		_cpu_perf_vote(adreno_dev, postlevel);
 }

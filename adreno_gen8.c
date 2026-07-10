@@ -4044,6 +4044,7 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.get_gmem_size = gen8_get_gmem_size,
 		.get_speed_bin = gen8_get_speed_bin,
 		.remove = gen8_hwsched_remove,
+		.pwrlevel_change_settings = gen8_hwsched_pwrlevel_change_settings,
 	},
 	.hfi_probe = gen8_hwsched_hfi_probe,
 	.hfi_remove = gen8_hwsched_hfi_remove,

@@ -129,6 +129,11 @@ def external_deps(target, variant):
             "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers",
         ]
 
+    if target in ["art", "art16k"]:
+        deplist = deplist + [
+            "//soc-repo:{}/kernel/sched/walt/sched-walt".format(tv),
+        ]
+
     native.genrule(
         name = "{}_defconfig".format(tv),
         srcs = defconfigs + ["config/{}_gpuconf".format(tv)],

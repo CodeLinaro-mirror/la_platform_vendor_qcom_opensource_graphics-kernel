@@ -1677,11 +1677,27 @@ static int enable_preemption(struct adreno_device *adreno_dev)
 		}
 	}
 
-	if (device->pwrctrl.rt_bus_hint) {
-		ret = gen8_hfi_send_set_value(adreno_dev, HFI_VALUE_RB_IB_RULE, 0,
-			device->pwrctrl.rt_bus_hint);
-		if (ret)
-			device->pwrctrl.rt_bus_hint = 0;
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_RT_HINT)) {
+		struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+		if (pwr->rt_bus_hint) {
+			ret = gen8_hfi_send_set_value(adreno_dev, HFI_VALUE_RB_IB_RULE, 0,
+				pwr->rt_bus_hint);
+			if (ret) {
+				dev_err(GMU_PDEV_DEV(device), "Failed to set rt bus hint %u, ret: %d\n",
+						pwr->rt_bus_hint, ret);
+				pwr->rt_bus_hint = 0;
+			}
+		}
+		if (pwr->rt_pwrlevel_hint != INVALID_DCVS_IDX) {
+			ret = gen8_hfi_send_set_value(adreno_dev, HFI_VALUE_RB_GPULEVEL_RULE, 0,
+				pwr->num_pwrlevels - pwr->rt_pwrlevel_hint);
+			if (ret) {
+				dev_err(GMU_PDEV_DEV(device), "Failed to set rt pwrlevel hint %u, ret: %d\n",
+						pwr->rt_pwrlevel_hint, ret);
+				pwr->rt_pwrlevel_hint = INVALID_DCVS_IDX;
+			}
+		}
 	}
 
 	/*

@@ -1419,6 +1419,10 @@ size_t adreno_snapshot_gmu_mem(struct kgsl_device *device,
 	else
 		memcpy(data, desc->memdesc->hostptr, desc->memdesc->size);
 
+	/* Clear the 'kgsl_link' in the AIM header to avoid exposing KGSL addresses in snapshot */
+	if (desc->type == SNAPSHOT_GMU_MEM_AIM)
+		memset(&(((struct gmu_aim_hdr *)data)->kgsl_link), 0, sizeof(u64));
+
 	return desc->memdesc->size + sizeof(*mem_hdr);
 }
 

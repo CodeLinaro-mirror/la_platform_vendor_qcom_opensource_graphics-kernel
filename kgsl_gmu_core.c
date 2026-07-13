@@ -1114,6 +1114,94 @@ void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace, u32 log_type, u32
 	trace->reset_hdr = false;
 }
 
+static void gmu_core_aim_init_header(struct kgsl_memdesc *md)
+{
+	struct gmu_aim_hdr *hdr = md->hostptr;
+
+	hdr->mem_size = md->size;
+	hdr->kgsl_link = 0;
+	hdr->gmu_link = 0;
+
+	SET_FLAG(KGSL_MEMDESC_AIM, &md->priv);
+}
+
+static void gmu_core_allocate_aim_root(struct kgsl_device *device)
+{
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+	int ret;
+
+	if (!IS_ERR_OR_NULL(gmu_core->aim_root))
+		return;
+
+	gmu_core->aim_root = gmu_core_reserve_kernel_block(device, 0, CONFIG_QCOM_KGSL_AIM_SIZE,
+				GMU_NONCACHED_KERNEL, 0);
+
+	if (IS_ERR(gmu_core->aim_root)) {
+		dev_warn_ratelimited(device->dev,
+			"Failed to allocate root AIM buffer, ret = %ld\n",
+			PTR_ERR(gmu_core->aim_root));
+		return;
+	}
+
+	/* Initialize the AIM header */
+	gmu_core_aim_init_header(gmu_core->aim_root);
+	gmu_core->aim_tail = gmu_core->aim_root;
+
+	/* Pass the AIM buffer address to GMU through the VRB */
+	ret = gmu_core_set_vrb_register(gmu_core->vrb, VRB_AIM, gmu_core->aim_root->gmuaddr);
+	if (ret) {
+		dev_warn_ratelimited(device->dev,
+			"Failed to pass AIM root to GMU through VRB, ret = %d\n", ret);
+		return;
+	}
+}
+
+static void gmu_core_aim_link(struct kgsl_memdesc **aim_tail, struct kgsl_memdesc *new_aim)
+{
+	struct gmu_aim_hdr *hdr = (*aim_tail)->hostptr;
+
+	hdr->kgsl_link = (u64)new_aim->hostptr;
+	hdr->gmu_link = new_aim->gmuaddr;
+	*aim_tail = new_aim;
+}
+
+void gmu_core_aim_expansion(struct kgsl_device *device)
+{
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+	struct kgsl_memdesc *aim_root = gmu_core->aim_root;
+	struct kgsl_memdesc *new_aim;
+	struct gmu_aim_hdr *root_hdr;
+	u32 size;
+
+	if (IS_ERR_OR_NULL(aim_root))
+		return;
+
+	/*
+	 * If the GMU needs more space to allocate a new AIM entry, it will set the 'alloc_fail'
+	 * field in the root header to the number of bytes it needs
+	 */
+	root_hdr = aim_root->hostptr;
+	if (!root_hdr->alloc_fail)
+		return;
+
+	/*
+	 * Ensure the new allocation is large enough to hold the new AIM entry. The new allocation
+	 * will have a page-aligned size.
+	 */
+	size = (root_hdr->alloc_fail > CONFIG_QCOM_KGSL_AIM_SIZE) ?
+		root_hdr->alloc_fail : CONFIG_QCOM_KGSL_AIM_SIZE;
+	new_aim = gmu_core_reserve_kernel_block(device, 0, size, GMU_NONCACHED_KERNEL, 0);
+	if (IS_ERR(new_aim)) {
+		dev_warn_ratelimited(device->dev,
+			"Failed to allocate child AIM buffer, ret = %ld\n", PTR_ERR(new_aim));
+		return;
+	}
+
+	gmu_core_aim_init_header(new_aim);
+	gmu_core_aim_link(&gmu_core->aim_tail, new_aim);
+	root_hdr->alloc_fail = 0;
+}
+
 int gmu_core_soccp_vote(struct kgsl_device *device, bool pwr_on)
 {
 	int ret;
@@ -1588,6 +1676,10 @@ int gmu_core_hwsched_memory_init(struct kgsl_device *device)
 		gmu_core_trace_header_init(&device->gmu_core.trace,
 			TRACE_LOGTYPE_HWSCHED, TRACE_MODE_DROP);
 	}
+
+	/* AIM root memory */
+	if (gmu_core_capabilities_enabled(&device->gmu_core.common_caps, FCC_AIM_MEMORY))
+		gmu_core_allocate_aim_root(device);
 
 	return 0;
 }

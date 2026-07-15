@@ -206,13 +206,13 @@ static const u32 gen8_11_0_debugbus_blocks[] = {
 	DEBUGBUS_MALU_S_2_I_3,
 };
 
-static struct gen8_debugbus_info gen8_11_0_cx_debugbus_blocks_sized[] = {
+static struct debugbus_info gen8_11_0_cx_debugbus_blocks_sized[] = {
 	{ DEBUGBUS_GBIF_CX_GC_US_I_0, 31 },
 	{ DEBUGBUS_GMU_CX_GC_US_I_0, 127 },
-	{ DEBUGBUS_CX_GC_US_I_0, 132 },
+	{ DEBUGBUS_CX_GC_US_I_0, 143 },
 };
 
-static struct gen8_debugbus_info gen8_11_0_gx_debugbus_blocks_sized[] = {
+static struct debugbus_info gen8_11_0_gx_debugbus_blocks_sized[] = {
 	{ DEBUGBUS_GBIF_GX_GC_US_I_0, 31 },
 	{ DEBUGBUS_GMU_GX_GC_US_I_0, 63 },
 	{ DEBUGBUS_DBGC_GC_US_I_0, 127 },
@@ -239,7 +239,7 @@ static struct gen8_debugbus_info gen8_11_0_gx_debugbus_blocks_sized[] = {
 	{ DEBUGBUS_UCHE_GC_US_I_1, 237 },
 	{ DEBUGBUS_UCHE_GC_US_I_0_1, 13 },
 	{ DEBUGBUS_UCHE_GC_US_I_1_1, 13 },
-	{ DEBUGBUS_CP_GC_S_0_I_0, 176 },
+	{ DEBUGBUS_CP_GC_S_0_I_0, 186 },
 	{ DEBUGBUS_PC_BR_S_0_I_0, 63 },
 	{ DEBUGBUS_PC_BV_S_0_I_0, 63 },
 	{ DEBUGBUS_TESS_GC_S_0_I_0, 127 },
@@ -296,7 +296,7 @@ static struct gen8_debugbus_info gen8_11_0_gx_debugbus_blocks_sized[] = {
 	{ DEBUGBUS_MALU_S_0_I_1, 29 },
 	{ DEBUGBUS_MALU_S_0_I_2, 29 },
 	{ DEBUGBUS_MALU_S_0_I_3, 29 },
-	{ DEBUGBUS_CP_GC_S_1_I_0, 176 },
+	{ DEBUGBUS_CP_GC_S_1_I_0, 186 },
 	{ DEBUGBUS_PC_BR_S_1_I_0, 63 },
 	{ DEBUGBUS_PC_BV_S_1_I_0, 63 },
 	{ DEBUGBUS_TESS_GC_S_1_I_0, 127 },
@@ -353,7 +353,7 @@ static struct gen8_debugbus_info gen8_11_0_gx_debugbus_blocks_sized[] = {
 	{ DEBUGBUS_MALU_S_1_I_1, 29 },
 	{ DEBUGBUS_MALU_S_1_I_2, 29 },
 	{ DEBUGBUS_MALU_S_1_I_3, 29 },
-	{ DEBUGBUS_CP_GC_S_2_I_0, 176 },
+	{ DEBUGBUS_CP_GC_S_2_I_0, 186 },
 	{ DEBUGBUS_PC_BR_S_2_I_0, 63 },
 	{ DEBUGBUS_PC_BV_S_2_I_0, 63 },
 	{ DEBUGBUS_TESS_GC_S_2_I_0, 127 },

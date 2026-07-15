@@ -6,9 +6,11 @@
 
 #include <linux/debugfs.h>
 #include <linux/io.h>
+#include <linux/net.h>
 #include <linux/of.h>
 #include <linux/of_fdt.h>
 #include <linux/of_device.h>
+#include <net/sock.h>
 #include <soc/qcom/of_common.h>
 
 #include "adreno.h"
@@ -16,6 +18,7 @@
 #include "adreno_gen8_hwsched.h"
 #include "adreno_pm4types.h"
 #include "adreno_trace.h"
+#include "adreno_qmi.h"
 #include "kgsl_pwrscale.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
@@ -1219,6 +1222,8 @@ int gen8_init(struct adreno_device *adreno_dev)
 	if (of_fdt_get_ddrtype() == 0x7)
 		adreno_dev->highest_bank_bit = 14;
 
+	adreno_qmi_setup_service(adreno_dev);
+
 	gen8_crashdump_init(adreno_dev);
 
 	gen8_dev->nc_overrides = gen8_nc_overrides;
@@ -1992,6 +1997,80 @@ void gen8_enable_ahb_timeout_detection(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_CP_CNTL, cntl_val);
 	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, cntl_val);
 	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_HOST_CNTL, host_cntl_val);
+}
+
+static void _gen8_setup_qecp_debugbus(struct adreno_device *adreno_dev, bool log_err)
+{
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	const struct gen8_snapshot_block_list *gen8_snapshot_block_list =
+						gen8_core->gen8_snapshot_block_list;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int ret = 0;
+
+	ret = adreno_qmi_debugbus_blocks_set(adreno_dev,
+			gen8_snapshot_block_list->sized_cx_debugbus_blocks,
+			gen8_snapshot_block_list->sized_cx_debugbus_blocks_len,
+			QDCP_GPUDBG_BLOCK_CX_V01);
+	if (ret) {
+		if (log_err)
+			dev_err_ratelimited(device->dev, "Failed QMI set req for CX ret=%d\n", ret);
+		return;
+	}
+
+	ret = adreno_qmi_debugbus_blocks_get(adreno_dev, QDCP_GPUDBG_BLOCK_CX_V01);
+	if (ret != gen8_snapshot_block_list->sized_cx_debugbus_blocks_len) {
+		if (log_err)
+			dev_err_ratelimited(device->dev,
+				"Failed QMI get req for CX ret=%d requested=%zu\n",
+				ret, gen8_snapshot_block_list->sized_cx_debugbus_blocks_len);
+		return;
+	}
+
+	ret = adreno_qmi_debugbus_blocks_set(adreno_dev,
+			gen8_snapshot_block_list->sized_gx_debugbus_blocks,
+			gen8_snapshot_block_list->sized_gx_debugbus_blocks_len,
+			QDCP_GPUDB_BLOCK_GX_V01);
+	if (ret) {
+		if (log_err)
+			dev_err_ratelimited(device->dev, "Failed QMI set req for GX ret=%d\n", ret);
+		return;
+	}
+
+	ret = adreno_qmi_debugbus_blocks_get(adreno_dev, QDCP_GPUDB_BLOCK_GX_V01);
+	if (ret != gen8_snapshot_block_list->sized_gx_debugbus_blocks_len) {
+		if (log_err)
+			dev_err_ratelimited(device->dev,
+				"Failed QMI get req for GX ret=%d requested=%zu\n",
+				ret, gen8_snapshot_block_list->sized_gx_debugbus_blocks_len);
+		return;
+	}
+
+	adreno_dev->qecp_data_sent = true;
+}
+
+void gen8_setup_qecp_debugbus(struct adreno_device *adreno_dev)
+{
+	if (!adreno_dev->qecp_debugbus_enabled ||
+		!adreno_dev->qmi_service_connected || adreno_dev->qecp_data_sent)
+		return;
+
+	_gen8_setup_qecp_debugbus(adreno_dev, true);
+}
+
+void gen8_try_setup_qecp_debugbus(struct adreno_device *adreno_dev)
+{
+	if (!adreno_dev->qecp_debugbus_enabled ||
+		!adreno_dev->qmi_service_connected || adreno_dev->qecp_data_sent)
+		return;
+
+	/* Return early if we hit the retry limit */
+	if (!adreno_dev->qecp_retry_count)
+		return;
+
+	adreno_dev->qecp_retry_count--;
+
+	/* Try to setup the QECP debugbus without excessive logs */
+	_gen8_setup_qecp_debugbus(adreno_dev, !adreno_dev->qecp_retry_count);
 }
 
 #define MIN_HBB 13
@@ -3240,6 +3319,8 @@ int gen8_probe_common(struct platform_device *pdev,
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)
 		return ret;
+
+	adreno_qmi_init(adreno_dev);
 
 	if (adreno_preemption_feature_set(adreno_dev)) {
 		adreno_dev->total_ctxt_record_sz = gen8_core->ctxt_record_size ?

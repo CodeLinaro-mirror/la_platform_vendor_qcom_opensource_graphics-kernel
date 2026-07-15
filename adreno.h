@@ -10,6 +10,7 @@
 #include <linux/iopoll.h>
 #include <linux/of.h>
 #include <linux/soc/qcom/llcc-qcom.h>
+#include <linux/soc/qcom/qmi.h>
 #include "adreno_coresight.h"
 #include "adreno_dispatch.h"
 #include "adreno_drawctxt.h"
@@ -207,6 +208,8 @@
 #define ADRENO_GMU_DYNAMIC_CTX_PRIORITY BIT_ULL(36)
 /* Enable TDCVS via GMU */
 #define ADRENO_TDCVS BIT_ULL(37)
+/* Enable QECP (Qualcomm Enclave Control Processor) debugbus capture */
+#define ADRENO_QECP_DEBUGBUS BIT_ULL(38)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -938,6 +941,18 @@ struct adreno_device {
 	u32 tdcvs_enable;
 	/** @tdcvs_data: Value of TDCVS data from debugfs */
 	u32 tdcvs_data;
+	/** @qmi: QMI driver client handle */
+	struct qmi_handle qmi;
+	/** @sq: QMI socket address used to verify the address present in the qmi handle */
+	struct sockaddr_qrtr sq;
+	/** @qmi_service_connected: Bool to detect if QMI connection is established */
+	bool qmi_service_connected;
+	/** @qecp_data_sent: Bool to denote if debugbus data is sent to QECP */
+	bool qecp_data_sent;
+	/** @qecp_debugbus_enabled: Bool to denote if encrypted debugbus is enabled */
+	bool qecp_debugbus_enabled;
+	/** @qecp_retry_count: Number of retries remaining to set up qecp debugbus */
+	u32 qecp_retry_count;
 };
 
 /* Time to wait for suspend recovery gate to complete */

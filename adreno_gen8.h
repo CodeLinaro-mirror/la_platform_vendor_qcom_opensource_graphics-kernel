@@ -849,4 +849,23 @@ static inline void gen8_populate_ctxt_record_size(struct adreno_device *adreno_d
  */
 void gen8_setup_adreno_props(struct adreno_device *adreno_dev);
 
+/**
+ * gen8_setup_qecp_debugbus - Send debugbus data to QECP for secure capture
+ * @adreno_dev: Handle to the adreno device
+ *
+ * This function sends the CX and GX debugbus list of blocks and sizes to QECP
+ * to capture when secure debugbus capture is triggered.
+ */
+void gen8_setup_qecp_debugbus(struct adreno_device *adreno_dev);
+
+/**
+ * gen8_try_setup_qecp_debugbus - Send debugbus data to QECP for secure capture, upto a retry limit
+ * @adreno_dev: Handle to the adreno device
+ *
+ * This function sends the CX and GX debugbus list of blocks and sizes to QECP
+ * to capture when secure debugbus capture is triggered. This honours the adreno device's QECP
+ * setup retry limit.
+ */
+void gen8_try_setup_qecp_debugbus(struct adreno_device *adreno_dev);
+
 #endif

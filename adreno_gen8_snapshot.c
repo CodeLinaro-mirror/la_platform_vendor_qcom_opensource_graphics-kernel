@@ -13,6 +13,7 @@
 #include "adreno_gen8_6_0_snapshot.h"
 #include "adreno_gen8_9_0_snapshot.h"
 #include "adreno_gen8_11_0_snapshot.h"
+#include "adreno_qmi.h"
 #include "adreno_snapshot.h"
 
 static struct kgsl_memdesc *gen8_capturescript;
@@ -1754,8 +1755,22 @@ static void gen8_snapshot_cx_debugbus(struct adreno_device *adreno_dev,
 	u32 i;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (device->debug_bus_bin && !device->debugbus_en && !device->gpu_niden_en)
+	snapshot->qecp_cx_debugbus_captured = false;
+
+	/* If debugbus fuse is blown use the QECP path to collect the debugbus data */
+	if (device->debug_bus_bin && !device->debugbus_en && !device->gpu_niden_en) {
+		if (adreno_dev->qecp_debugbus_enabled) {
+			int ret = adreno_qmi_trigger_debugbus_capture(adreno_dev,
+					QDCP_GPUDBG_BLOCK_CX_V01);
+
+			snapshot->qecp_cx_debugbus_captured = !ret;
+			if (ret) {
+				dev_err_ratelimited(device->dev,
+					"Failed to capture CX data QMI req ret=%d\n", ret);
+			}
+		}
 		return;
+	}
 
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_CNTLT,
 			FIELD_PREP(GENMASK(31, 28), 0xf));
@@ -1813,8 +1828,22 @@ static void gen8_snapshot_debugbus(struct adreno_device *adreno_dev,
 	u32 i;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (device->debug_bus_bin && !device->debugbus_en && !device->gpu_niden_en)
+	snapshot->qecp_gx_debugbus_captured = false;
+
+	/* If debugbus fuse is blown use the QECP path to collect the debugbus data */
+	if (device->debug_bus_bin && !device->debugbus_en && !device->gpu_niden_en) {
+		if (adreno_dev->qecp_debugbus_enabled) {
+			int ret = adreno_qmi_trigger_debugbus_capture(adreno_dev,
+					QDCP_GPUDB_BLOCK_GX_V01);
+
+			snapshot->qecp_gx_debugbus_captured = !ret;
+			if (ret) {
+				dev_err_ratelimited(device->dev,
+					"Failed to capture GX data QMI req ret=%d\n", ret);
+			}
+		}
 		return;
+	}
 
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_CNTLT,
 			FIELD_PREP(GENMASK(31, 28), 0xf));
@@ -2122,6 +2151,9 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, gen8_snapshot_malu_status, NULL);
 
+	/* Try one last time to send the debugbus data to QECP */
+	gen8_setup_qecp_debugbus(adreno_dev);
+
 	gen8_snapshot_cx_debugbus(adreno_dev, snapshot);
 
 	if (!gen8_gmu_rpmh_pwr_state_is_active(device) ||
@@ -2131,6 +2163,14 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	gen8_snapshot_trace_buffer(device, snapshot);
 
 	gen8_snapshot_debugbus(adreno_dev, snapshot);
+
+	/* Copy over the secure debugbus data if QECP captured it */
+	if (snapshot->qecp_gx_debugbus_captured || snapshot->qecp_cx_debugbus_captured) {
+		int ret = adreno_qmi_debugbus_get_data(adreno_dev, snapshot);
+
+		if (ret)
+			dev_err(device->dev, "Failed to copy data QMI req ret=%d\n", ret);
+	}
 
 	is_current_rt = rt_task(current);
 

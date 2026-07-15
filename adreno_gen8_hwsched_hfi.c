@@ -2987,6 +2987,10 @@ static int gen8_hwsched_feature_ctrl(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	ret = gen8_hfi_send_tdcvs_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
+
 	ret = gen8_hfi_send_core_fw_start(adreno_dev);
 	if (ret)
 		goto err;
@@ -3018,10 +3022,6 @@ static int gen8_hwsched_feature_ctrl(struct adreno_device *adreno_dev)
 		goto err;
 
 	ret = gen8_hfi_send_fast_context_destroy_feature_ctrl(adreno_dev);
-	if (ret)
-		goto err;
-
-	ret = gen8_hfi_send_tdcvs_feature_ctrl(adreno_dev);
 	if (ret)
 		goto err;
 

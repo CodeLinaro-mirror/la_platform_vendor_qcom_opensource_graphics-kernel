@@ -228,4 +228,15 @@ void adreno_hwsched_deregister_hw_fence(struct adreno_device *adreno_dev);
  * Resubmit all cmdbatches to GMU after device reset
  */
 void adreno_hwsched_replay(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_hwsched_retire_cmdlist_obj - helper function for cleaning up cmd_list_obj
+ * @adreno_dev: Pointer to the adreno device
+ * @obj: pointer to cmd_list_obj
+ *
+ * Helper function to remove node from cmd_list.
+ *
+ */
+void adreno_hwsched_retire_cmdlist_obj(struct adreno_device *adreno_dev,
+    struct cmd_list_obj *obj);
 #endif

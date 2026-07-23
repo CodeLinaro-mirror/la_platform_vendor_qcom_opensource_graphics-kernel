@@ -3875,13 +3875,17 @@ void adreno_hwsched_reset_hfi_mem(struct adreno_device *adreno_dev)
 	}
 }
 
-static void disable_hw_syncobj(struct kgsl_drawobj_sync *syncobj)
+static void disable_hw_syncobj(struct kgsl_device *device, struct kgsl_drawobj_sync *syncobj)
 {
 	struct kgsl_drawobj *drawobj = DRAWOBJ(syncobj);
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
 
 	clear_bit(KGSL_SYNCOBJ_HW, &syncobj->flags);
 	drawobj->timestamp = 0;
 	clear_bit(KGSL_SYNCOBJ_HW_TS, &syncobj->flags);
+	dev_err_ratelimited(GMU_PDEV_DEV(device),
+		"Cannot send syncobj to GMU for ctx:%d last_syncobj_ts:%d\n",
+		drawobj->context->id, drawctxt->syncobj_timestamp);
 }
 
 int adreno_hwsched_import_external_fence(struct adreno_device *adreno_dev,
@@ -3889,12 +3893,14 @@ int adreno_hwsched_import_external_fence(struct adreno_device *adreno_dev,
 	struct hfi_syncobj *obj)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	int ret = kgsl_external_fence_import(device, input_fence, &obj->hash_index);
+	int ret = kgsl_external_fence_import(device, input_fence);
 
 	if (ret) {
-		disable_hw_syncobj(syncobj);
+		disable_hw_syncobj(device, syncobj);
 		return ret;
 	}
+
+	obj->hash_index = input_fence->handle;
 
 	if (input_fence->fence_type == KGSL_INPUT_FENCE_TYPE_HW_FENCE) {
 		if (kgsl_hw_fence_signaled(input_fence->fence) ||
@@ -3904,7 +3910,6 @@ int adreno_hwsched_import_external_fence(struct adreno_device *adreno_dev,
 		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SYNX_HANDLE_BIT);
 	}
 
-
 	return 0;
 }
 
@@ -3913,10 +3918,10 @@ int adreno_hwsched_import_external_fence_legacy(struct adreno_device *adreno_dev
 	struct hfi_syncobj_legacy *obj)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	int ret = kgsl_external_fence_import(device, input_fence, NULL);
+	int ret = kgsl_external_fence_import(device, input_fence);
 
 	if (ret) {
-		disable_hw_syncobj(syncobj);
+		disable_hw_syncobj(device, syncobj);
 		return ret;
 	}
 

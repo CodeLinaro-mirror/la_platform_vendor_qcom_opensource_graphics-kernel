@@ -803,14 +803,14 @@ void a6xx_hwsched_hfi_stop(struct adreno_device *adreno_dev)
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct a6xx_hwsched_hfi *hfi = to_a6xx_hwsched_hfi(adreno_dev);
 
-	hfi->irq_mask &= ~HFI_IRQ_MSGQ_MASK;
-
 	/*
 	 * In some corner cases, it is possible that GMU put TS_RETIRE
 	 * on the msgq after we have turned off gmu interrupts. Hence,
 	 * drain the queue one last time before we reset HFI queues.
 	 */
 	a6xx_hwsched_process_msgq(adreno_dev);
+
+	hfi->irq_mask &= ~HFI_IRQ_MSGQ_MASK;
 
 	/* Drain the debug queue before we reset HFI queues */
 	a6xx_hwsched_process_dbgq(adreno_dev, false);

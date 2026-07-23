@@ -1058,6 +1058,9 @@ void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 {
 	unsigned long flags;
 	struct kgsl_sync_fence *kfence, *next;
+	struct list_head hw_fence_put_list;
+
+	INIT_LIST_HEAD(&hw_fence_put_list);
 
 	if (!kref_get_unless_zero(&ktimeline->kref))
 		return;
@@ -1074,14 +1077,28 @@ void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 			if (__test_and_clear_bit(KGSL_FENCE_FLAG_TIMER_TRIGGERED, &kfence->flags))
 				hrtimer_cancel(&kfence->deadline_timer);
 
-			if (__test_and_clear_bit(KGSL_FENCE_FLAG_SIGNAL_REFCOUNT, &kfence->flags))
-				kgsl_hw_fence_put(kfence);
-			list_del_init(&kfence->child_list);
-			dma_fence_put(&kfence->fence);
+			if (__test_and_clear_bit(KGSL_FENCE_FLAG_SIGNAL_REFCOUNT, &kfence->flags)) {
+				list_move_tail(&kfence->child_list, &hw_fence_put_list);
+			} else {
+				list_del_init(&kfence->child_list);
+				dma_fence_put(&kfence->fence);
+			}
 		}
 	}
 
 	spin_unlock_irqrestore(&ktimeline->lock, flags);
+
+	/*
+	 * kgsl_hw_fence_put() should not be invoked while holding the ktimeline lock
+	 * (aka the fence lock) as hw fence destroy APIs may also need to lock and unlock
+	 * the same lock.
+	 */
+	list_for_each_entry_safe(kfence, next, &hw_fence_put_list, child_list) {
+		list_del_init(&kfence->child_list);
+		kgsl_hw_fence_put(kfence);
+		dma_fence_put(&kfence->fence);
+	}
+
 	kgsl_sync_timeline_put(ktimeline);
 }
 

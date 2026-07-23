@@ -46,12 +46,12 @@ static __maybe_unused void add_hw_fence(struct kgsl_sync_fence *kfence)
 	 * If dma fence is not signaled then increment the refcount one more time.
 	 * This refcount will be put back when this dma fence gets signaled.
 	 */
-	spin_lock_irqsave(fence->lock, flags);
+	kgsl_dma_fence_lock_irqsave(fence, flags);
 	if (!test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags)) {
 		kref_get(&kfence->hw_refcount);
 		__set_bit(KGSL_FENCE_FLAG_SIGNAL_REFCOUNT, &kfence->flags);
 	}
-	spin_unlock_irqrestore(fence->lock, flags);
+	kgsl_dma_fence_unlock_irqrestore(fence, flags);
 }
 
 static __maybe_unused void destroy_all_hw_fences(void)

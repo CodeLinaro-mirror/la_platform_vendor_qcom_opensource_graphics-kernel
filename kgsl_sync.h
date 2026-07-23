@@ -123,6 +123,20 @@ struct kgsl_process_private;
 struct kgsl_syncsource;
 
 #if defined(CONFIG_SYNC_FILE)
+
+/* Helper macros to lock and unlock dma_fence spinlock */
+#ifdef dma_fence_lock_irqsave
+#define kgsl_dma_fence_lock_irqsave(_fence, _flags) \
+		dma_fence_lock_irqsave(_fence, _flags)
+#define kgsl_dma_fence_unlock_irqrestore(_fence, _flags) \
+		dma_fence_unlock_irqrestore(_fence, _flags)
+#else
+#define kgsl_dma_fence_lock_irqsave(_fence, _flags) \
+		spin_lock_irqsave((_fence)->lock, _flags)
+#define kgsl_dma_fence_unlock_irqrestore(_fence, _flags) \
+		spin_unlock_irqrestore((_fence)->lock, _flags)
+#endif
+
 int kgsl_add_fence_event(struct kgsl_device *device,
 	u32 context_id, u32 timestamp, void __user *data, int len,
 	struct kgsl_device_private *owner);

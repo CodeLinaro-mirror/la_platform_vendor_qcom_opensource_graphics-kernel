@@ -52,6 +52,10 @@ static __maybe_unused void add_hw_fence(struct kgsl_sync_fence *kfence)
 		__set_bit(KGSL_FENCE_FLAG_SIGNAL_REFCOUNT, &kfence->flags);
 	}
 	kgsl_dma_fence_unlock_irqrestore(fence, flags);
+
+	trace_kgsl_hw_fence_create(kfence->context_id, kfence->fence.context, kfence->fence.seqno,
+		kfence->fence_type, kfence->hw_fence_handle, kfence->synx_handle,
+		kfence->fence.flags);
 }
 
 static __maybe_unused void destroy_all_hw_fences(void)
@@ -513,6 +517,10 @@ void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fenc
 	/* soccp should be powered on */
 	WARN_RATELIMIT(!test_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags),
 		"signaling hw fence via cpu without soccp powered up\n");
+
+	trace_kgsl_hw_fence_signal_cpu(kfence->context_id, kfence->fence.context,
+		kfence->fence.seqno, kfence->fence_type, kfence->hw_fence_handle,
+		kfence->synx_handle, kfence->fence.flags);
 
 	if (kfence->synx_handle)
 		synx_signal(kgsl_synx.synx_session, (u32)kfence->synx_handle,

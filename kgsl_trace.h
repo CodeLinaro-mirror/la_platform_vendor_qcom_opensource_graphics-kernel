@@ -1722,6 +1722,64 @@ TRACE_EVENT(kgsl_migrate_process,
 	)
 );
 
+TRACE_EVENT(kgsl_hw_fence_create,
+	TP_PROTO(u32 context_id, u64 dma_fence_context_id, u64 seqno, u32 type, u64 hw_fence_handle,
+		u64 synx_handle, u64 flags
+	),
+	TP_ARGS(context_id, dma_fence_context_id, seqno, type, hw_fence_handle, synx_handle, flags),
+	TP_STRUCT__entry(
+		__field(u32, context_id)
+		__field(u64, dma_fence_context_id)
+		__field(u64, seqno)
+		__field(u32, type)
+		__field(u64, hw_fence_handle)
+		__field(u64, synx_handle)
+		__field(u64, flags)
+	),
+	TP_fast_assign(
+		__entry->context_id = context_id;
+		__entry->dma_fence_context_id = dma_fence_context_id;
+		__entry->seqno = seqno;
+		__entry->type = type;
+		__entry->hw_fence_handle = hw_fence_handle;
+		__entry->synx_handle = synx_handle;
+		__entry->flags = flags;
+	),
+	TP_printk("context=%u dma_context=%llu seqno=%llu type=%u hw_fence_handle=%llu synx_handle=%llu flags=0x%llx",
+		__entry->context_id, __entry->dma_fence_context_id, __entry->seqno, __entry->type,
+		__entry->hw_fence_handle, __entry->synx_handle, __entry->flags
+	)
+);
+
+TRACE_EVENT(kgsl_hw_fence_signal_cpu,
+	TP_PROTO(u32 context_id, u64 dma_fence_context_id, u64 seqno, u32 type, u64 hw_fence_handle,
+		u64 synx_handle, u64 flags
+	),
+	TP_ARGS(context_id, dma_fence_context_id, seqno, type, hw_fence_handle, synx_handle, flags),
+	TP_STRUCT__entry(
+		__field(u32, context_id)
+		__field(u64, dma_fence_context_id)
+		__field(u64, seqno)
+		__field(u32, type)
+		__field(u64, hw_fence_handle)
+		__field(u64, synx_handle)
+		__field(u64, flags)
+	),
+	TP_fast_assign(
+		__entry->context_id = context_id;
+		__entry->dma_fence_context_id = dma_fence_context_id;
+		__entry->seqno = seqno;
+		__entry->type = type;
+		__entry->hw_fence_handle = hw_fence_handle;
+		__entry->synx_handle = synx_handle;
+		__entry->flags = flags;
+	),
+	TP_printk("context=%u dma_context=%llu seqno=%llu type=%u hw_fence_handle=%llu synx_handle=%llu flags=0x%llx",
+		__entry->context_id, __entry->dma_fence_context_id, __entry->seqno, __entry->type,
+		__entry->hw_fence_handle, __entry->synx_handle, __entry->flags
+	)
+);
+
 #endif /* _KGSL_TRACE_H */
 
 /* This part must be outside protection */

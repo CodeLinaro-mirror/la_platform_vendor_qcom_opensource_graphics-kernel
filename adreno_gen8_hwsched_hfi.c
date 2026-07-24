@@ -3700,8 +3700,8 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 			obj->ctxt_id = fence->context;
 			obj->seq_no =  fence->seqno;
 		}
-		trace_adreno_input_hw_fence(drawobj->context->id, obj->ctxt_id,
-			obj->seq_no, obj->flags, fence->ops->get_timeline_name ?
+		trace_adreno_input_syncobj_fence(drawobj->context->id, obj->ctxt_id,
+			obj->seq_no, obj->hash_index, obj->flags, fence->ops->get_timeline_name ?
 			fence->ops->get_timeline_name(fence) : "unknown");
 
 		obj->header = FIELD_PREP(GENMASK(15, 0), sizeof(*obj) >> 2);

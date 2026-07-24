@@ -912,12 +912,29 @@ static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packe
 			data->ctx_switch_cntl, pkt->ticks);
 		break;
 		}
-	case GMU_TRACE_EXTERNAL_HW_FENCE_SIGNAL: {
-		struct trace_ext_hw_fence_signal *data =
-				(struct trace_ext_hw_fence_signal *)pkt->payload;
+	case GMU_TRACE_INPUT_HW_FENCE_SIGNAL: {
+		struct trace_input_hw_fence_signal_legacy *legacy_data =
+			(struct trace_input_hw_fence_signal_legacy *)pkt->payload;
+		u32 size_bytes = TRACE_PKT_GET_SIZE(pkt->hdr) << 2;
+		u32 payload_size_bytes = size_bytes - offsetof(struct gmu_trace_packet, payload);
+		u32 handle = 0;
 
-		trace_adreno_ext_hw_fence_signal(data->context, data->seq_no,
-			data->flags, pkt->ticks);
+		if (payload_size_bytes == sizeof(struct trace_input_hw_fence_signal)) {
+			struct trace_input_hw_fence_signal *data =
+				(struct trace_input_hw_fence_signal *)pkt->payload;
+			handle = data->handle;
+		}
+
+		trace_adreno_input_hw_fence_signal(legacy_data->context, legacy_data->seq_no,
+			handle, legacy_data->status, pkt->ticks);
+		break;
+		}
+	case GMU_TRACE_INPUT_SYNX_SIGNAL: {
+		struct trace_input_synx_signal *data =
+				(struct trace_input_synx_signal *)pkt->payload;
+
+		trace_adreno_input_synx_signal(data->context, data->seq_no,
+			data->handle, data->status, pkt->ticks);
 		break;
 		}
 	case GMU_TRACE_SYNCOBJ_RETIRE: {
@@ -1002,6 +1019,22 @@ static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packe
 
 		trace_adreno_spel_cap_pwrlevel(pkt->ticks, data->pwrlevel,
 			pwr->pwrlevels[data->pwrlevel].gpu_freq);
+		break;
+		}
+	case GMU_TRACE_OUTPUT_HW_FENCE_SIGNAL: {
+		struct trace_output_hw_fence_signal *data =
+				(struct trace_output_hw_fence_signal *)pkt->payload;
+
+		trace_adreno_output_hw_fence_signal(pkt->ticks, data->gpu_context_id,
+			data->dma_fence_context_id, data->dma_fence_seqno, data->hash, data->flags);
+		break;
+		}
+	case GMU_TRACE_OUTPUT_SYNX_SIGNAL: {
+		struct trace_output_synx_signal *data =
+				(struct trace_output_synx_signal *)pkt->payload;
+
+		trace_adreno_output_synx_signal(pkt->ticks, data->gpu_context_id, data->remote_host_id,
+			data->dma_fence_context_id, data->dma_fence_seqno, data->hash, data->flags);
 		break;
 		}
 	default: {

@@ -214,6 +214,8 @@ struct kgsl_functable {
 	bool (*is_first_boot_done)(struct kgsl_device *device);
 	/** @context_is_guilty: Check if the context is guilty for gpu fault */
 	bool (*context_is_guilty)(struct kgsl_context *context);
+	/** @is_reset_recovery: Check if the ADRENO device under goes reset recovery */
+	bool (*is_reset_recovery)(struct kgsl_device *device);
 };
 
 struct kgsl_ioctl {

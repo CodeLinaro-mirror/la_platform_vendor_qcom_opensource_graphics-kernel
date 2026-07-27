@@ -1708,26 +1708,32 @@ int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 	if (!pwr->cx_regulator && !pwr->gmu_cx_pd)
 		return 0;
 
-	ret = wait_for_completion_timeout(&pwr->cx_gdsc_gate, msecs_to_jiffies(5000));
-	if (!ret) {
-		/* Dump the cx regulator consumer list */
-		if (pwr->cx_regulator) {
-			dev_err(device->dev, "GPU CX wait timeout. Dumping CX votes:\n");
-			qcom_clk_dump(NULL, pwr->cx_regulator, false);
-		} else {
-			dev_err(device->dev, "GPU CX wait timeout\n");
+	/*
+	 * Wait for CX GDSC collapse during hang recovery to prevent
+	 * boot up from stale state.
+	 */
+	if ((device->ftbl->is_reset_recovery(device)) || !(pwr->skip_cx_gdsc_wait)) {
+		ret = wait_for_completion_timeout(&pwr->cx_gdsc_gate, msecs_to_jiffies(5000));
+		if (!ret) {
+			/* Dump the cx regulator consumer list */
+			if (pwr->cx_regulator) {
+				dev_err(device->dev, "GPU CX wait timeout. Dumping CX votes:\n");
+				qcom_clk_dump(NULL, pwr->cx_regulator, false);
+			} else {
+				dev_err(device->dev, "GPU CX wait timeout\n");
 #ifdef CONFIG_QCOM_KGSL_GENPD_DUMP
-			qcom_gdsc_genpd_dump(pwr->cx_pd);
+				qcom_gdsc_genpd_dump(pwr->cx_pd);
 #endif
-			dump_cx_gdsc_timeout_reg(device);
+				dump_cx_gdsc_timeout_reg(device);
+			}
+			KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
+				GMU_PDEV(device), 0ULL, GMU_FAULT_CX_WAIT_TIMEOUT);
+			skip_tlb_flush = false;
 		}
-		KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
-			GMU_PDEV(device), 0ULL, GMU_FAULT_CX_WAIT_TIMEOUT);
-		skip_tlb_flush = false;
-	}
 
-	if (!completion_done(&pwr->cx_gdsc_gate))
-		log_kgsl_cx_wait_timeout_event(HLOS_CX_WAIT_TIMEOUT);
+		if (!completion_done(&pwr->cx_gdsc_gate))
+			log_kgsl_cx_wait_timeout_event(HLOS_CX_WAIT_TIMEOUT);
+	}
 
 	if (pwr->cx_regulator)
 		ret = regulator_enable(pwr->cx_regulator);

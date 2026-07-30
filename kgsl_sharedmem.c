@@ -1396,7 +1396,18 @@ void kgsl_memdesc_pagelist_cleanup(struct file *shmem_filp, struct kgsl_memdesc 
 
 	list_for_each_entry_safe(p, tmp, &page_list, lru) {
 		list_del(&p->lru);
-		put_page(p);
+
+		if (IS_ENABLED(CONFIG_QCOM_KGSL_USE_SHMEM_MTHP)) {
+			/*
+			 * When using MTHP, the pages in the list are not split, so each
+			 * list entry is a single compund page. Free this entire compound
+			 * page in a single __free_pages() call.
+			 */
+			__free_pages(p, compound_order(p));
+		} else {
+			/* Put the refcount on each order-0 page in the list */
+			put_page(p);
+		}
 	}
 }
 

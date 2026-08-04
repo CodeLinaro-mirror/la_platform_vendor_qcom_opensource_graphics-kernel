@@ -277,6 +277,19 @@ static const struct qmi_elem_info qdcp_gpudbg_blocks_set_resp_msg_v01_ei[] = {
 	},
 };
 
+/* kernel_connect() uses sockaddr_unsized instead of sockaddr from kernel version 7.1 */
+#if (KERNEL_VERSION(7, 1, 0) <= LINUX_VERSION_CODE)
+static int adreno_qmi_kernel_connect(struct socket *sock, struct sockaddr_qrtr *sq)
+{
+	return kernel_connect(sock, (struct sockaddr_unsized *)sq, sizeof(*sq), 0);
+}
+#else
+static int adreno_qmi_kernel_connect(struct socket *sock, struct sockaddr_qrtr *sq)
+{
+	return kernel_connect(sock, (struct sockaddr *)sq, sizeof(*sq), 0);
+}
+#endif
+
 static int adreno_qmi_new_server(struct qmi_handle *qmi, struct qmi_service *service)
 {
 	struct adreno_device *adreno_dev = container_of(qmi, struct adreno_device, qmi);
@@ -293,7 +306,7 @@ static int adreno_qmi_new_server(struct qmi_handle *qmi, struct qmi_service *ser
 	sq->sq_port = service->port;
 	service->priv = pdev;
 
-	ret = kernel_connect(adreno_dev->qmi.sock, (struct sockaddr *)sq, sizeof(*sq), 0);
+	ret = adreno_qmi_kernel_connect(adreno_dev->qmi.sock, sq);
 	if (ret) {
 		dev_err_ratelimited(device->dev,
 			"Failed to connect to remote QMI port ret=%d\n", ret);

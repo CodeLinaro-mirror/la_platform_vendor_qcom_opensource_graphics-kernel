@@ -4465,6 +4465,70 @@ static const struct gen8_limits_mit_cfg gen8_11_0_limits_mit_cfg = {
 	.len = ARRAY_SIZE(gen8_11_0_limits_mit_tbl),
 };
 
+static const struct hfi_limits_mit_tbl gen8_14_0_limits_mit_tbl[] = {
+	{
+		.feature_id = GMU_MIT_IFF,
+		.domain = GMU_GX_DOMAIN,
+		.feature_rev = 0,
+		.mit_cfg = {
+			.enable = 1,
+			.msg_path = 0,
+			.lkgen = 0,
+			.mode = 0,
+			.sid_val = 0xC,
+			.mit_time = 5,
+			.curr_limit = 30000,
+		}
+	},
+	{
+		.feature_id = GMU_MIT_IFF,
+		.domain = GMU_MX_DOMAIN,
+		.feature_rev = 0,
+		.mit_cfg = {
+			.enable = 1,
+			.msg_path = 0,
+			.lkgen = 0,
+			.mode = BIT(1),
+			.sid_val = 0x12,
+			.mit_time = 2000,
+			.curr_limit = 5000,
+		}
+	},
+	{
+		.feature_id = GMU_MIT_PCLX,
+		.domain = GMU_GX_DOMAIN,
+		.feature_rev = 0,
+		.mit_cfg = {
+			.enable = 1,
+			.msg_path = 0,
+			.lkgen = 0,
+			.mode = 0,
+			.sid_val = 0x12,
+			.mit_time = 3,
+			.curr_limit = 24000,
+		}
+	},
+	{
+		.feature_id = GMU_MIT_PCLX,
+		.domain = GMU_MX_DOMAIN,
+		.feature_rev = 0,
+		.mit_cfg = {
+			.enable = 1,
+			.msg_path = 0,
+			.lkgen = 0,
+			.mode = BIT(1),
+			.sid_val = 0x7,
+			.mit_time = 3,
+			.curr_limit = 6000,
+		}
+	},
+};
+
+static const struct gen8_limits_mit_cfg gen8_14_0_limits_mit_cfg = {
+	.limits_mit_tbl = gen8_14_0_limits_mit_tbl,
+	.len = ARRAY_SIZE(gen8_14_0_limits_mit_tbl),
+};
+
 /* GEN8_11_0 protected register list */
 static const struct gen8_protected_regs gen8_11_0_protected_regs[] = {
 	{ GEN8_CP_PROTECT_REG_GLOBAL + 0, 0x00008, 0x003a3, 0 },
@@ -4961,7 +5025,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_14_0 = {
 	.cl_no_ft_timeout_ms = 6500,
 	.ctxt_record_size = (13564 * SZ_1K),
 	.therm_cfg = &therm_mit_cfg_8_14_0,
-	.limits_mit_cfg = &gen8_11_0_limits_mit_cfg,
+	.limits_mit_cfg = &gen8_14_0_limits_mit_cfg,
 	.preempt_level = 1,
 	.gmu_mx_gdsc = true,
 	.three_rail_memory = true,

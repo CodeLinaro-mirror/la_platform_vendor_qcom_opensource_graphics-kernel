@@ -1140,7 +1140,7 @@ static void kgsl_handle_missed_deadline(struct kgsl_sync_fence *kfence, ktime_t 
 	struct kgsl_sync_timeline *ktimeline = kfence->parent;
 	struct kgsl_device *device = ktimeline->device;
 
-	trace_kgsl_fence_deadline_info(kfence->context_id, kfence->timestamp, 0, 0, 0);
+	trace_kgsl_fence_deadline_info(kfence->context_id, kfence->timestamp, 0, 0, 0, 0);
 
 	/* Account for bootup latency and ignore notification within short period */
 	if (!device->bootcomplete_ktime ||
@@ -1170,12 +1170,15 @@ static void kgsl_sync_fence_process_deadline(struct kgsl_sync_fence *kfence, kti
 	}
 
 	/* Update the fence */
+	now = ktime_get();
+	/* Apply the configured offset to boost the gpu frequency ahead of the actual deadline */
+	deadline = deadline - (((deadline - now) * device->deadline_offset) / 100);
 	signaled = kfence->signaled;
 	kfence->deadline = deadline;
-	now = ktime_get();
 
 	trace_kgsl_fence_deadline_info(kfence->context_id, kfence->timestamp, deadline,
-			(s64)(ktime_to_us(deadline) - ktime_to_us(now)), kfence->signaled);
+			(s64)(ktime_to_us(deadline) - ktime_to_us(now)), kfence->signaled,
+			device->deadline_offset);
 
 	/*
 	 * Schedule work to notify missed deadline if the fence is signaled after the deadline, or

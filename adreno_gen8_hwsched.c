@@ -1990,6 +1990,48 @@ static ssize_t dcvs_tuning_store(struct kobject *kobj,
 	return count;
 }
 
+/* Default value (disabled) for the deadline offset percentage tunable */
+#define DEADLINE_OFFSET_DEFAULT 0
+
+static ssize_t deadline_offset_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, tunables_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", device->deadline_offset);
+}
+
+static ssize_t deadline_offset_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, tunables_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int val = 0;
+	int ret;
+
+	ret = kstrtoint(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	/* Valid input range is -1 to 100 */
+	if ((val < -1) || (val > 100))
+		return -EINVAL;
+
+	if (val == -1)
+		val = DEADLINE_OFFSET_DEFAULT;
+
+	device->deadline_offset = (u32)val;
+
+	return count;
+}
+
+static struct adreno_dcvs_tuning_attribute dcvs_attr_deadline_offset_percentage = {
+	.attr = __ATTR(deadline_offset_percentage, 0644, deadline_offset_show,
+			deadline_offset_store),
+};
+
 DCVS_TUNABLES_SYSFS(penalty_up, GPU_TUNING_KEY_BUSY_PENALTY_UP);
 DCVS_TUNABLES_SYSFS(penalty_down, GPU_TUNING_KEY_BUSY_PENALTY_DOWN);
 DCVS_TUNABLES_SYSFS(first_step_down, GPU_TUNING_KEY_FIRST_STEP_DOWN_COUNT);
@@ -2030,6 +2072,7 @@ static struct attribute *dcvs_tunables_attrs[] = {
 	&dcvs_attr_deadline_boost_base_freq_mhz.attr.attr,
 	&dcvs_attr_deadline_boost_stride_percentage.attr.attr,
 	&dcvs_attr_deadline_boost_release_num_frames.attr.attr,
+	&dcvs_attr_deadline_offset_percentage.attr.attr,
 	NULL,
 };
 

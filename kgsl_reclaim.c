@@ -372,6 +372,9 @@ static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_en
 		kill_pid(entry->priv->pid, SIGKILL, 1);
 	}
 
+	/* Clean up any unused pages on the shmem page list */
+	kgsl_memdesc_pagelist_cleanup(shmem_filp, memdesc);
+
 	atomic_add(memdesc->page_count, &entry->priv->migrated_page_count);
 	trace_kgsl_migrate_memdesc(entry);
 

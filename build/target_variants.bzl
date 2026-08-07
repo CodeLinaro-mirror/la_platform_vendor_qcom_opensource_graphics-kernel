@@ -10,6 +10,7 @@ targets = [
     "bengal",
     "chora",
     "shikra",
+    "waipio",
 ]
 
 la_variants = [

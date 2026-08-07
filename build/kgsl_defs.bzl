@@ -117,7 +117,8 @@ def external_deps(target, variant):
         "bengal-le",
         "chora",
         "malabar",
-        "shikra"
+        "shikra",
+        "waipio"
         ]:
         deplist = deplist + [
             "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers"

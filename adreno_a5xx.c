@@ -12,6 +12,9 @@
 #include <linux/version.h>
 #if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
 #include <linux/firmware/qcom/qcom_scm.h>
+#if IS_ENABLED(CONFIG_QCOM_PAS)
+#include <linux/firmware/qcom/qcom_pas.h>
+#endif
 #else
 #include <linux/qcom_scm.h>
 #endif
@@ -1632,7 +1635,11 @@ static int a5xx_gpmu_init(struct adreno_device *adreno_dev)
 
 static int a5xx_zap_shader_resume(struct kgsl_device *device)
 {
+#if IS_ENABLED(CONFIG_QCOM_PAS)
+	int ret = qcom_pas_set_remote_state(0, 13);
+#else
 	int ret = qcom_scm_set_remote_state(0, 13);
+#endif
 
 	if (ret)
 		dev_err(device->dev,

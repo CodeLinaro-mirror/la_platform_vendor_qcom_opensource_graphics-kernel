@@ -16,6 +16,9 @@
 #include <linux/version.h>
 #if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
 #include <linux/firmware/qcom/qcom_scm.h>
+#if IS_ENABLED(CONFIG_QCOM_PAS)
+#include <linux/firmware/qcom/qcom_pas.h>
+#endif
 #else
 #include <linux/qcom_scm.h>
 #endif
@@ -161,7 +164,11 @@ int kgsl_zap_shader_load(struct device *dev, const char *name)
 		goto out;
 	}
 
+#if IS_ENABLED(CONFIG_QCOM_PAS)
+	ret = qcom_pas_auth_and_reset(GPU_PASID);
+#else
 	ret = qcom_scm_pas_auth_and_reset(GPU_PASID);
+#endif
 
 out:
 	if (mem_region)

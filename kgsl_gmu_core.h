@@ -39,6 +39,7 @@
 
 enum gmu_common_capabilities {
 	FCC_VERSION_INFO = 0,
+	FCC_AIM_MEMORY = 1,
 	FCC_MPU_NON_BUFFERABLE_CARVEOUT = 2,
 };
 
@@ -244,6 +245,8 @@ enum gmu_vrb_idx {
 	VRB_CTXRECORD_GMEM_SZ = 12,
 	/* Contains the GMU VA of the trace buffer for power prototype */
 	VRB_TRC_BUF_PWR_PROTO_TRACE = 15,
+	/* Contains the GMU VA for AIM root memory */
+	VRB_AIM = 16,
 	/* Contains whether to enable fault on DBGC interrupts */
 	VRB_DBGC_FAULT_ENABLE = 17,
 	/* Contains the GMU base VA of noncached region non bufferable carveout */
@@ -511,6 +514,35 @@ struct kgsl_gmu_spel {
 	u32 config[GMU_PWR_BUDGET_DWORDS];
 };
 
+/*
+ * AIM header definition
+ * AIM header fields initialized / updated by KGSL and GMU
+ * GMU input: Following header fields are initialized by KGSL
+ *           - @mem_size
+ *           - @kgsl_link, @gmu_link updated upon child initialization
+ * GMU output: Following header fields are initialized by GMU
+ *           - @init_magic, @version, @data_start, @data_end
+ *           - @alloc_fail updated by GMU upon failure to allocate new AIM entries
+ */
+struct gmu_aim_hdr {
+	/** @init_magic: Magic number used by the GMU to verify initialization */
+	u32 init_magic;
+	/** @version: Header version */
+	u32 version;
+	/** @mem_size: Total size in bytes of this AIM allocation (including this header) */
+	u32 mem_size;
+	/** @data_start: Byte offset to the first data location in this AIM block */
+	u32 data_start;
+	/** @data_end: Byte offset to the end of valid data in this AIM block */
+	u32 data_end;
+	/** @alloc_fail: Set to the requested size in bytes if allocation fails */
+	u32 alloc_fail;
+	/** @kgsl_link: KGSL link to next AIM block */
+	u64 kgsl_link;
+	/** @gmu_link: GMU link to next AIM block */
+	u32 gmu_link;
+} __packed;
+
 /* GMU memdesc entries */
 #define GMU_KERNEL_ENTRIES		32
 
@@ -747,6 +779,10 @@ struct gmu_core_device {
 	 * or hw fence session
 	 */
 	u32 input_fence_type;
+	/** @aim_root: AIM root memory descriptor */
+	struct kgsl_memdesc *aim_root;
+	/** @aim_tail: The last memory descriptor in the AIM chain */
+	struct kgsl_memdesc *aim_tail;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -1028,6 +1064,15 @@ void gmu_core_trace_header_init(struct kgsl_gmu_trace *trace, u32 log_type, u32 
  * @mode: Specify the mode if drop/freerun.
  */
 void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace, u32 log_type, u32 mode);
+
+/**
+ * gmu_core_aim_expansion - Allocate an additional child AIM buffer if necessary
+ * @device: Pointer to KGSL device
+ *
+ * Determine if AIM memory needs to be expanded. If so, allocate an additional child AIM buffer
+ * and link it to the existing memory chain.
+ */
+void gmu_core_aim_expansion(struct kgsl_device *device);
 
 /**
  * gmu_core_soccp_vote - vote for soccp power

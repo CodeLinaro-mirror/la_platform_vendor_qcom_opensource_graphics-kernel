@@ -1187,6 +1187,8 @@ no_gx_power:
 
 	gen8_hwsched_soccp_vote(adreno_dev, false);
 
+	gmu_core_aim_expansion(device);
+
 	device->bootcomplete_ktime = 0;
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 

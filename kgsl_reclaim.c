@@ -6,10 +6,15 @@
 
 #include <linux/kthread.h>
 #include <linux/notifier.h>
-#include <linux/pagevec.h>
 #include <linux/shmem_fs.h>
 #include <linux/swap.h>
 #include <linux/version.h>
+
+#if (KERNEL_VERSION(7, 1, 0) <= LINUX_VERSION_CODE)
+#include <linux/folio_batch.h>
+#else
+#include <linux/pagevec.h>
+#endif
 
 #include "kgsl_pool.h"
 #include "kgsl_reclaim.h"
@@ -33,6 +38,12 @@ struct work_struct reclaim_work;
 static atomic_t kgsl_nr_to_reclaim;
 
 #if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+
+/* PAGEVEC_SIZE was renamed to FOLIO_BATCH_SIZE. Use the new name for consistency */
+#ifndef FOLIO_BATCH_SIZE
+#define FOLIO_BATCH_SIZE PAGEVEC_SIZE
+#endif
+
 static void kgsl_memdesc_clear_unevictable(struct kgsl_process_private *process,
 		struct kgsl_memdesc *memdesc)
 {
@@ -64,7 +75,7 @@ static void kgsl_memdesc_clear_unevictable(struct kgsl_process_private *process,
 			atomic_inc(&process->unpinned_page_count);
 		}
 		mutex_unlock(&memdesc->lock);
-		if (folio_batch_count(&fbatch) == PAGEVEC_SIZE) {
+		if (folio_batch_count(&fbatch) == FOLIO_BATCH_SIZE) {
 			check_move_unevictable_folios(&fbatch);
 			__folio_batch_release(&fbatch);
 		}

@@ -1063,11 +1063,16 @@ void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 	unsigned long flags;
 	struct kgsl_sync_fence *kfence, *next;
 	struct list_head hw_fence_put_list;
+	bool deadline_supported;
 
 	INIT_LIST_HEAD(&hw_fence_put_list);
 
 	if (!kref_get_unless_zero(&ktimeline->kref))
 		return;
+
+	/* Skip deadline bookkeeping below on targets that don't support deadline boost */
+	deadline_supported = ktimeline->device &&
+		!IS_ERR_OR_NULL(ktimeline->device->deadline_worker);
 
 	spin_lock_irqsave(&ktimeline->lock, flags);
 	if (timestamp_cmp(timestamp, ktimeline->last_timestamp) > 0)
@@ -1076,10 +1081,13 @@ void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 	list_for_each_entry_safe(kfence, next, &ktimeline->child_list_head,
 				child_list) {
 		if (dma_fence_is_signaled_locked(&kfence->fence)) {
-			kfence->signaled = ktime_get();
-			/* Now that the fence is signaled, cancel the timer if needed */
-			if (__test_and_clear_bit(KGSL_FENCE_FLAG_TIMER_TRIGGERED, &kfence->flags))
-				hrtimer_cancel(&kfence->deadline_timer);
+			if (deadline_supported) {
+				kfence->signaled = ktime_get();
+				/* Now that the fence is signaled, cancel the timer if needed */
+				if (__test_and_clear_bit(KGSL_FENCE_FLAG_TIMER_TRIGGERED,
+						&kfence->flags))
+					hrtimer_cancel(&kfence->deadline_timer);
+			}
 
 			if (__test_and_clear_bit(KGSL_FENCE_FLAG_SIGNAL_REFCOUNT, &kfence->flags)) {
 				list_move_tail(&kfence->child_list, &hw_fence_put_list);

@@ -799,9 +799,9 @@ static void load_tcm(struct adreno_device *adreno_dev, const u8 *src,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 tcm_offset = tcm_start + ((blk->addr - base)/sizeof(u32));
-	void __iomem *addr = kgsl_regmap_virt(&device->regmap, tcm_offset);
 
-	memcpy_toio(addr, src, blk->size);
+	kgsl_regmap_bulk_write(&device->regmap, tcm_offset, src,
+		blk->size >> 2);
 }
 
 int a6xx_gmu_load_fw(struct adreno_device *adreno_dev)

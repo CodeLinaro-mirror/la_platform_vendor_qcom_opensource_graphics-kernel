@@ -87,19 +87,6 @@ static void kgsl_memdesc_clear_unevictable(struct kgsl_process_private *process,
 		__folio_batch_release(&fbatch);
 	}
 }
-
-static int kgsl_read_mapping(struct kgsl_memdesc *memdesc, struct page **page, int i)
-{
-	struct folio *folio = shmem_read_folio_gfp(memdesc->shmem_filp->f_mapping,
-						   i, kgsl_gfp_mask(0));
-
-	if (!IS_ERR(folio)) {
-		*page = folio_page(folio, 0);
-		return 0;
-	}
-
-	return PTR_ERR(folio);
-}
 #else
 static void kgsl_memdesc_clear_unevictable(struct kgsl_process_private *process,
 		struct kgsl_memdesc *memdesc)
@@ -137,6 +124,7 @@ static void kgsl_memdesc_clear_unevictable(struct kgsl_process_private *process,
 		__pagevec_release(&pvec);
 	}
 }
+#endif
 
 static int kgsl_read_mapping(struct kgsl_memdesc *memdesc, struct page **page, int i)
 {
@@ -144,7 +132,6 @@ static int kgsl_read_mapping(struct kgsl_memdesc *memdesc, struct page **page, i
 					   i, kgsl_gfp_mask(0));
 	return PTR_ERR_OR_ZERO(*page);
 }
-#endif
 
 static int kgsl_memdesc_get_reclaimed_pages(struct kgsl_mem_entry *entry)
 {

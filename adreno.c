@@ -1285,6 +1285,8 @@ const char *hfi_feature_to_string(u32 feature)
 		return "DMS";
 	case HFI_FEATURE_AQE:
 		return "AQE";
+	case HFI_FEATURE_FAST_CONTEXT_DESTROY:
+		return "FAST_CONTEXT_DESTROY";
 	}
 	return "unknown";
 }
@@ -2780,7 +2782,8 @@ int adreno_set_constraint(struct kgsl_device *device,
 	if ((status == 0) &&
 		(context->id == device->pwrctrl.constraint.owner_id)) {
 		trace_kgsl_constraint(device, device->pwrctrl.constraint.type,
-					device->pwrctrl.active_pwrlevel, 0, 0);
+			device->pwrctrl.active_pwrlevel, 0, 0,
+			device->pwrctrl.constraint.owner_id);
 		device->pwrctrl.constraint.type = KGSL_CONSTRAINT_NONE;
 	}
 

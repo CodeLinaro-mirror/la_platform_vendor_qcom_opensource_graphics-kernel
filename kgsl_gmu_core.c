@@ -797,6 +797,16 @@ static void _gmu_trace_dcvs_pwrlevel(struct kgsl_device *device, struct gmu_trac
 	if (data->prev_pwrlvl == pwr->num_pwrlevels)
 		data->prev_pwrlvl = pwr->active_pwrlevel;
 
+	if (data->prev_pwrlvl != data->new_pwrlvl) {
+		unsigned long flags;
+
+		/* Track GPU frequency transitions for GMU-based DCVS */
+		spin_lock_irqsave(&pwr->trans_stats.lock, flags);
+		pwr->trans_stats.trans_table[data->prev_pwrlvl][data->new_pwrlvl]++;
+		pwr->trans_stats.total_trans++;
+		spin_unlock_irqrestore(&pwr->trans_stats.lock, flags);
+	}
+
 	if (pwr->active_pwrlevel != data->new_pwrlvl) {
 		u32 penalty = FIELD_PREP(GENMASK(31, 16), data->penalty_down) |
 				FIELD_PREP(GENMASK(15, 0), data->penalty_up);
@@ -852,6 +862,9 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 
 	pwr->clock_times[pwr->active_pwrlevel] += data->gpu_time;
 	pwr->time_in_pwrlevel[pwr->active_pwrlevel] += data->total_time;
+	pwr->trans_stats.time_in_pwrlevel[pwr->active_pwrlevel] += data->total_time;
+	pwr->trans_stats.last_time_updated = ktime_get();
+
 	if (pwr->thermal_pwrlevel)
 		pwr->thermal_time += data->gpu_time;
 
@@ -861,6 +874,20 @@ static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trac
 	pwr->accum_busy_stats += data->gpu_time;
 	pwr->accum_total_time += data->total_time;
 	spin_unlock(&pwr->stats_lock);
+}
+
+static void _gmu_trace_pwr_constraint(struct kgsl_device *device,
+		struct gmu_trace_packet *pkt)
+{
+	struct trace_pwr_constraint data = {};
+	u32 pkt_words = TRACE_PKT_GET_SIZE(pkt->hdr);
+	u32 hdr_words = offsetof(struct gmu_trace_packet, payload) >> 2;
+	u32 payload_words = pkt_words - hdr_words;
+	u32 payload_bytes = payload_words * sizeof(u32);
+
+	memcpy(&data, pkt->payload, min_t(u32, payload_bytes, sizeof(data)));
+	trace_kgsl_constraint(device, data.type, data.value,
+		data.status, pkt->ticks, data.owner_ctx_id);
 }
 
 static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packet *pkt)
@@ -910,10 +937,7 @@ static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packe
 		break;
 		}
 	case GMU_TRACE_PWR_CONSTRAINT: {
-		struct trace_pwr_constraint *data =
-			(struct trace_pwr_constraint *)pkt->payload;
-
-		trace_kgsl_constraint(device, data->type, data->value, data->status, pkt->ticks);
+		_gmu_trace_pwr_constraint(device, pkt);
 		break;
 		}
 	case GMU_TRACE_DCVS_PROFILE: {
@@ -926,6 +950,46 @@ static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packe
 		struct trace_preempt_info *data =
 			(struct trace_preempt_info *)pkt->payload;
 		trace_adreno_gpu_preempt_info(data, pkt->ticks);
+		break;
+		}
+	case GMU_TRACE_CTX_PRI_UPDATE_REQ: {
+		struct trace_ctx_pri_update_req *data =
+				(struct trace_ctx_pri_update_req *)pkt->payload;
+		u32 cur_pri = TRACE_CUR_CTX_PRI(data->prio);
+		u32 new_pri = TRACE_NEW_CTX_PRI(data->prio);
+
+		trace_adreno_ctx_priority_update_request(
+			data->ctx_id, cur_pri, new_pri,
+			KGSL_CTX_PRI_TO_RB_LEVEL(cur_pri),
+			KGSL_CTX_PRI_TO_RB_LEVEL(new_pri),
+			data->flags, data->last_submitted_ts,
+			pkt->ticks);
+		break;
+		}
+	case GMU_TRACE_CTX_PRI_UPDATE_DONE: {
+		struct trace_ctx_pri_update_done *data =
+				(struct trace_ctx_pri_update_done *)pkt->payload;
+		u32 cur_pri = TRACE_CUR_CTX_PRI(data->prio);
+		u32 new_pri = TRACE_NEW_CTX_PRI(data->prio);
+
+		trace_adreno_ctx_priority_update_done(
+			data->ctx_id, cur_pri, new_pri,
+			KGSL_CTX_PRI_TO_RB_LEVEL(cur_pri),
+			KGSL_CTX_PRI_TO_RB_LEVEL(new_pri),
+			pkt->ticks);
+		break;
+		}
+	case GMU_TRACE_CTX_PRI_REQ_DEFERRED: {
+		struct trace_ctx_pri_req_deferred *data =
+				(struct trace_ctx_pri_req_deferred *)pkt->payload;
+		u32 cur_pri = TRACE_CUR_CTX_PRI(data->prio);
+		u32 new_pri = TRACE_NEW_CTX_PRI(data->prio);
+
+		trace_adreno_ctx_pri_update_deferred(
+			data->ctx_id, cur_pri, new_pri,
+			KGSL_CTX_PRI_TO_RB_LEVEL(cur_pri),
+			KGSL_CTX_PRI_TO_RB_LEVEL(new_pri),
+			data->last_ts, pkt->ticks);
 		break;
 		}
 	default: {

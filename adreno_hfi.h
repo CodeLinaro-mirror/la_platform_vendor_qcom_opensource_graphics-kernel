@@ -10,7 +10,7 @@
 
 #define HW_FENCE_QUEUE_SIZE		SZ_4K
 #define HFI_QUEUE_SIZE			SZ_4K /* bytes, must be base 4dw */
-#define MAX_RCVD_PAYLOAD_SIZE		16 /* dwords */
+#define MAX_RCVD_PAYLOAD_SIZE		32 /* dwords */
 #define MAX_RCVD_SIZE			(MAX_RCVD_PAYLOAD_SIZE + 3) /* dwords */
 #define HFI_MAX_MSG_SIZE		(SZ_1K)
 
@@ -84,6 +84,7 @@
 #define HFI_FEATURE_IFF_PCLX		32
 #define HFI_FEATURE_SOFT_RESET		0x10000001
 #define HFI_FEATURE_DCVS_PROFILE	0x10000002
+#define HFI_FEATURE_FAST_CONTEXT_DESTROY	0x10000003
 
 /*
  * MINBW_HYST_MASK = 0xffff
@@ -271,6 +272,16 @@ enum hfi_mem_kind {
 	 * related to GMU based DCVS.
 	 */
 	HFI_MEMKIND_FREQMGR_SCRATCH,
+	/**
+	 * @HFI_MEMKIND_DUMMY_CSW_PRIV_NON_SECURE: Used for requesting privileged non
+	 * secure preemption records for the internal dummy buffer
+	 */
+	HFI_MEMKIND_DUMMY_CSW_PRIV_NON_SECURE,
+	/**
+	 * @HFI_MEMKIND_DUMMY_CSW_COUNTER: Used for requesting preemption performance
+	 * counter save/restore buffer for the internal dummy buffer
+	 */
+	HFI_MEMKIND_DUMMY_CSW_COUNTER,
 	HFI_MEMKIND_MAX,
 };
 
@@ -303,6 +314,8 @@ static const char * const hfi_memkind_strings[] = {
 	[HFI_MEMKIND_AQE_BUFFER] = "GMU AQE BUFFER",
 	[HFI_MEMKIND_HW_FENCE_SHADOW] = "GMU HW FENCE SHADOW",
 	[HFI_MEMKIND_FREQMGR_SCRATCH] = "GMU FREQMGR SCRATCH",
+	[HFI_MEMKIND_DUMMY_CSW_PRIV_NON_SECURE] = "GMU DUMMY CSW PRIV NON SECURE",
+	[HFI_MEMKIND_DUMMY_CSW_COUNTER] = "GMU DUMMY CSW COUNTER",
 	[HFI_MEMKIND_MAX] = "GMU UNKNOWN",
 };
 
@@ -522,6 +535,8 @@ enum hfi_msg_type {
 	F2H_MSG_SYNCOBJ_QUERY		= 153,
 	H2F_MSG_WARMBOOT_CMD		= 154,
 	F2H_MSG_PROCESS_TRACE		= 155,
+	H2F_MSG_CONTEXT_PRI_UPDATE	= 156,
+	F2H_MSG_CONTEXT_PRI_UPDATE_DONE	= 157,
 	F2H_MSG_PLATFORM_LA		= 200,
 	H2F_MSG_PLATFORM_LA		= 201,
 	F2H_MSG_PLATFORM_WIN		= 202, /* Reserved */
@@ -904,6 +919,15 @@ struct hfi_unregister_ctxt_cmd {
 	u32 ts;
 } __packed;
 
+/* H2F */
+struct hfi_context_priority_update_cmd {
+	u32 hdr;
+	u32 version;
+	u32 ctxt_id;
+	u32 new_ctx_pri;
+	u64 flags;
+} __packed;
+
 struct hfi_issue_ib {
 	u64 addr;
 	u32 size;
@@ -973,6 +997,14 @@ struct hfi_ts_retire_cmd {
 	u64 retired_on_gmu;
 	u64 active;
 	u32 version;
+} __packed;
+
+/* F2H */
+struct hfi_context_priority_update_done_cmd {
+	u32 hdr;
+	u32 ctxt_id;
+	u32 cur_ctx_pri;
+	u32 new_ctx_pri;
 } __packed;
 
 /* H2F */
@@ -1555,6 +1587,7 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
  * adreno_hwsched_ctxt_unregister_wait_completion - Wait for HFI ack for context unregister
  * adreno_dev: Pointer to the adreno device
  * dev: Pointer to the device structure
+ * context: Pointer to the context structure
  * ack: Pointer to the pending ack
  * process_msgq: Function pointer to the msgq processing function
  * cmd: Pointer to the hfi packet header and data
@@ -1568,7 +1601,7 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
  */
 int adreno_hwsched_ctxt_unregister_wait_completion(
 	struct adreno_device *adreno_dev,
-	struct device *dev, struct pending_cmd *ack,
+	struct device *dev, struct kgsl_context *context, struct pending_cmd *ack,
 	void (*process_msgq)(struct adreno_device *adreno_dev),
 	struct hfi_unregister_ctxt_cmd *cmd);
 

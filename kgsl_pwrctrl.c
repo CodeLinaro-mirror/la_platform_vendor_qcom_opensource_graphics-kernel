@@ -7,6 +7,12 @@
 #include <linux/clk/qcom.h>
 #include <linux/interconnect.h>
 #include <linux/iopoll.h>
+#include <linux/version.h>
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+#include <linux/firmware/qcom/qcom_scm.h>
+#else
+#include <linux/qcom_scm.h>
+#endif
 #include <linux/of_device.h>
 #include <linux/pm_domain.h>
 #include <linux/pm_runtime.h>
@@ -25,12 +31,16 @@
 #include "kgsl_sysfs.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
+#include "gen8_reg.h"
 
 #define UPDATE_BUSY_VAL		1000000
 
 #define KGSL_MAX_BUSLEVELS	20
 
 #define GX_GDSC_TIMEOUT_MS	200
+
+#define SECURE_REGREAD(GEN8_GCC_BASE, offset) \
+	(GEN8_GCC_BASE + ((offset) << 2))
 
 /* Order deeply matters here because reasons. New entries go on the end */
 static const char * const clocks[KGSL_MAX_CLKS] = {
@@ -179,7 +189,7 @@ done:
 	if (reset) {
 		/* Trace the constraint being un-set by the driver */
 		trace_kgsl_constraint(device, pwr->constraint.type,
-						old_level, 0, 0);
+			old_level, 0, 0, pwr->constraint.owner_id);
 		/*Invalidate the constraint set */
 		pwr->constraint.expires = 0;
 		pwr->constraint.type = KGSL_CONSTRAINT_NONE;
@@ -207,13 +217,26 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 				unsigned int new_level)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	struct kgsl_pwrlevel *pwrlevel;
 	unsigned int old_level = pwr->active_pwrlevel;
 
 	new_level = kgsl_pwrctrl_adjust_pwrlevel(device, new_level);
 
 	if (new_level == old_level)
 		return;
+
+	/*
+	 * Record transition only for host-based DCVS. On GMU-based DCVS
+	 * targets, transitions are recorded in _gmu_trace_dcvs_pwrlevel()
+	 * via GMU trace packets to avoid double counting.
+	 */
+	if (device->host_based_dcvs) {
+		unsigned long flags;
+
+		spin_lock_irqsave(&pwr->trans_stats.lock, flags);
+		pwr->trans_stats.trans_table[old_level][new_level]++;
+		pwr->trans_stats.total_trans++;
+		spin_unlock_irqrestore(&pwr->trans_stats.lock, flags);
+	}
 
 	kgsl_pwrscale_update_stats(device);
 
@@ -240,7 +263,6 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 	if (new_level < old_level)
 		kgsl_bus_update(device, KGSL_BUS_VOTE_ON);
 
-	pwrlevel = &pwr->pwrlevels[pwr->active_pwrlevel];
 	/* Change register settings if any  BEFORE pwrlevel change*/
 	kgsl_pwrctrl_pwrlevel_change_settings(device, 0);
 	device->ftbl->gpu_clock_set(device, pwr->active_pwrlevel);
@@ -306,12 +328,13 @@ void kgsl_pwrctrl_set_constraint(struct kgsl_device *device,
 		pwrc_old->owner_timestamp = ts;
 		kgsl_pwrctrl_pwrlevel_change(device, constraint);
 		/* Trace the constraint being set by the driver */
-		trace_kgsl_constraint(device, pwrc_old->type, constraint, 1, 0);
+		trace_kgsl_constraint(device, pwrc_old->type, constraint, 1, 0, pwrc_old->owner_id);
 	} else if ((pwrc_old->type == pwrc->type) && (pwrc_old->sub_type == pwrc->sub_type)) {
 		pwrc_old->owner_id = id;
 		pwrc_old->owner_timestamp = ts;
 		pwrc_old->expires = jiffies +
 			msecs_to_jiffies(atomic64_read(&device->pwrctrl.interval_timeout));
+		trace_kgsl_constraint(device, pwrc_old->type, constraint, 1, 0, pwrc_old->owner_id);
 	}
 }
 
@@ -621,7 +644,7 @@ static ssize_t gpubusy_show(struct device *dev,
 			stats->busy_old, stats->total_old);
 
 	/* Reset the stats if GPU is OFF */
-	if ((atomic_read(&device->active_cnt) == 0)) {
+	if (!kgsl_state_is_awake(device)) {
 		spin_lock(&pwr->stats_lock);
 		stats->busy_old = 0;
 		stats->total_old = 0;
@@ -891,7 +914,7 @@ static ssize_t _gpu_busy_show(struct kgsl_device *device,
 	ret = scnprintf(buf, PAGE_SIZE, "%d %%\n", busy_percent);
 
 	/* Reset the stats if GPU is OFF */
-	if ((atomic_read(&device->active_cnt) == 0)) {
+	if (!kgsl_state_is_awake(device)) {
 		spin_lock(&pwr->stats_lock);
 		stats->busy_old = 0;
 		stats->total_old = 0;
@@ -1127,6 +1150,166 @@ static ssize_t pwrscale_show(struct device *dev,
 		return scnprintf(buf, PAGE_SIZE, "%u\n", (u32)gmu_core->gpu_pwrscale_enable);
 }
 
+/*
+ * Helper to write formatted output directly into the bin_attribute buffer,
+ * handling offset-based chunked reads without a temporary vmalloc buffer.
+ * Advances *len by the virtual formatted length and returns the number of
+ * bytes actually written into buf within the [off, off+count) window.
+ */
+static size_t trans_stat_print(char *buf, size_t count, loff_t off,
+			size_t *len, const char *fmt, ...)
+{
+	va_list args;
+	size_t n, written = 0;
+
+	/* Already past the buffer window -- exact len no longer matters */
+	if (*len >= off + count)
+		return 0;
+
+	va_start(args, fmt);
+	n = vsnprintf(NULL, 0, fmt, args);
+	va_end(args);
+
+	if (*len + n <= off) {
+		*len += n;
+		return 0;
+	}
+
+	va_start(args, fmt);
+	if (*len >= off) {
+		/* Current write position within buf */
+		size_t pos = *len - off;
+
+		written = vscnprintf(buf + pos, count - pos, fmt, args);
+	} else {
+		/*
+		 * This formatted string straddles the offset boundary.
+		 * Format into a stack buffer, then copy the visible
+		 * portion (past the skip offset) into buf.
+		 */
+		char tmp[64];
+		size_t skip = off - *len;
+		size_t formatted;
+
+		formatted = vscnprintf(tmp, min_t(size_t, n + 1, sizeof(tmp)),
+					fmt, args);
+		if (formatted > skip) {
+			written = min_t(size_t, formatted - skip, count);
+			memcpy(buf, tmp + skip, written);
+		}
+	}
+	va_end(args);
+
+	*len += n;
+	return written;
+}
+
+#if (KERNEL_VERSION(6, 16, 0) > LINUX_VERSION_CODE)
+static ssize_t gpu_trans_stat_read(struct file *filp,
+				struct kobject *kobj,
+				struct bin_attribute *attr,
+				char *buf, loff_t off, size_t count)
+#else
+static ssize_t gpu_trans_stat_read(struct file *filp,
+				struct kobject *kobj,
+				const struct bin_attribute *attr,
+				char *buf, loff_t off, size_t count)
+#endif
+{
+	struct device *dev = kobj_to_dev(kobj);
+	struct kgsl_device *device = dev_get_drvdata(dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct kgsl_trans_stats *stats = &pwr->trans_stats;
+	size_t len = 0, written = 0;
+	unsigned int active_pwrlevel = READ_ONCE(pwr->active_pwrlevel);
+	int i, j;
+	u64 time_ms;
+
+	written += trans_stat_print(buf, count, off, &len, "     From :   To\n");
+	written += trans_stat_print(buf, count, off, &len, "          :");
+
+	for (i = 0; i < pwr->num_pwrlevels; i++)
+		written += trans_stat_print(buf, count, off, &len, "%10u",
+				 pwr->pwrlevels[i].gpu_freq / 1000000);
+	written += trans_stat_print(buf, count, off, &len, "   time(ms)\n");
+
+	/*
+	 * Read transition counters without holding stats->lock. The lock
+	 * serializes writers (read-modify-write increments) against each
+	 * other; a plain load cannot race with a store in a way that
+	 * causes corruption. Cross-field skew is acceptable for diagnostic
+	 * output, consistent with how thermal_time, clock_times[] and
+	 * time_in_pwrlevel[] are read locklessly from their sysfs nodes.
+	 */
+	for (i = 0; i < pwr->num_pwrlevels; i++) {
+		if (i == active_pwrlevel) {
+			written += trans_stat_print(buf, count, off, &len, "*%9u:",
+					 pwr->pwrlevels[i].gpu_freq / 1000000);
+		} else {
+			written += trans_stat_print(buf, count, off, &len, "%10u:",
+					 pwr->pwrlevels[i].gpu_freq / 1000000);
+		}
+
+		for (j = 0; j < pwr->num_pwrlevels; j++) {
+			written += trans_stat_print(buf, count, off, &len, "%10llu",
+					 stats->trans_table[i][j]);
+		}
+
+		time_ms = stats->time_in_pwrlevel[i] / 1000;
+		if (i == active_pwrlevel)
+			time_ms += ktime_us_delta(ktime_get(), stats->last_time_updated) / 1000;
+
+		written += trans_stat_print(buf, count, off, &len, "%12llu\n",
+				 time_ms);
+	}
+
+	written += trans_stat_print(buf, count, off, &len,
+			 "Total transition : %llu\n", stats->total_trans);
+
+	return written;
+}
+
+#if (KERNEL_VERSION(6, 16, 0) > LINUX_VERSION_CODE)
+static ssize_t gpu_trans_stat_write(struct file *filp,
+				struct kobject *kobj,
+				struct bin_attribute *attr,
+				char *buf, loff_t off, size_t count)
+#else
+static ssize_t gpu_trans_stat_write(struct file *filp,
+				struct kobject *kobj,
+				const struct bin_attribute *attr,
+				char *buf, loff_t off, size_t count)
+#endif
+{
+	struct device *dev = kobj_to_dev(kobj);
+	struct kgsl_device *device = dev_get_drvdata(dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct kgsl_trans_stats *stats = &pwr->trans_stats;
+	unsigned int val;
+	unsigned long flags;
+	int ret;
+
+	ret = kstrtou32(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	/* Reset only when zero is written, matching legacy devfreq/trans_stat */
+	if (val != 0)
+		return count;
+
+	/* Reset transition statistics */
+	spin_lock_irqsave(&stats->lock, flags);
+	memset(stats->trans_table, 0, sizeof(stats->trans_table));
+	stats->total_trans = 0;
+	spin_unlock_irqrestore(&stats->lock, flags);
+
+	/* Reset time-in-state statistics for trans_stat */
+	memset(stats->time_in_pwrlevel, 0, sizeof(stats->time_in_pwrlevel));
+	stats->last_time_updated = ktime_get();
+
+	return count;
+}
+
 static DEVICE_ATTR_RO(temp);
 static DEVICE_ATTR_RW(gpuclk);
 static DEVICE_ATTR_RW(max_gpuclk);
@@ -1154,6 +1337,7 @@ static DEVICE_ATTR_RW(max_clock_mhz);
 static DEVICE_ATTR_RO(clock_mhz);
 static DEVICE_ATTR_RO(freq_table_mhz);
 static DEVICE_ATTR_RW(pwrscale);
+static BIN_ATTR_RW(gpu_trans_stat, 0);
 
 static const struct attribute *pwrctrl_attr_list[] = {
 	&dev_attr_gpuclk.attr,
@@ -1212,6 +1396,10 @@ int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device)
 	ret = sysfs_create_files(&device->dev->kobj, pwrctrl_attr_list);
 	if (ret)
 		return ret;
+
+	ret = sysfs_create_bin_file(&device->dev->kobj, &bin_attr_gpu_trans_stat);
+	if (ret)
+		dev_err(device->dev, "Unable to create gpu_trans_stat sysfs node: %d\n", ret);
 
 	if (!device->gpu_sysfs_kobj.state_in_sysfs)
 		return 0;
@@ -1393,6 +1581,85 @@ int kgsl_regulator_disable_wait(struct regulator *reg, u32 timeout)
 			return (!regulator_is_enabled(reg) ? 0 : -ETIMEDOUT);
 
 		usleep_range((100 >> 2) + 1, 100);
+	}
+}
+
+struct reg_pairs {
+	u32 address;
+	const char *str;
+};
+
+static const struct reg_pairs gpucc_reg_pairs[] = {
+	{ GEN8_GPUCC_GPU_CC_CX_GDSCR, "GPUCC_GPU_CC_CX_GDSCR" },
+	{ GEN8_GPUCC_GPU_CC_CX_CFG_GDSCR, "GPUCC_GPU_CC_CX_CFG_GDSCR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_CFG1_GDSR, "GPUCC_GPU_CC_CX_HW_CTRL_CFG1_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_CFG2_GDSR, "GPUCC_GPU_CC_CX_HW_CTRL_CFG2_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_DVM_STATUS_GDSR, "GPUCC_GPU_CC_CX_HW_CTRL_DVM_STATUS_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_HALT1_STATUS_GDSR,
+		"GPUCC_GPU_CC_CX_HW_CTRL_HALT1_STATUS_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_HALT2_STATUS_GDSR,
+		"GPUCC_GPU_CC_CX_HW_CTRL_HALT2_STATUS_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_REQ_SW_GDSR, "GPUCC_GPU_CC_CX_HW_CTRL_REQ_SW_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_HW_CTRL_IRQ_STATUS_GDSR, "GPUCC_GPU_CC_CX_HW_CTRL_IRQ_STATUS_GDSR" },
+	{ GEN8_GPUCC_GPU_CC_CX_GDS_HW_CTL_SMMU_HALT_STATUS,
+		"GPUCC_GPU_CC_CX_GDS_HW_CTL_SMMU_HALT_STATUS" },
+	{ GEN8_GPUCC_GPU_CC_TZ_VOTE_GPU_SMMU_GDS, "GPUCC_GPU_CC_TZ_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GPUCC_GPU_CC_HYP_VOTE_GPU_SMMU_GDS, "GPUCC_GPU_CC_HYP_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GPUCC_GPU_CC_HLOS1_VOTE_GPU_SMMU_GDS, "GPUCC_GPU_CC_HLOS1_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GPUCC_GPU_CC_SPARE_VOTE_GPU_SMMU_GDS, "GPUCC_GPU_CC_SPARE_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GPUCC_GPU_CC_CX_CFG2_GDSCR, "GPUCC_GPU_CC_CX_CFG2_GDSCR" },
+	{ GEN8_GPUCC_GPU_CC_CX_CFG3_GDSCR, "GPUCC_GPU_CC_CX_CFG3_GDSCR" },
+	{ GEN8_GPUCC_GPU_CC_CX_CFG4_GDSCR, "GPUCC_GPU_CC_CX_CFG4_GDSCR" },
+	{ GEN8_GPUCC_GPU_CC_MEMNOC_GFX_CBCR, "GPUCC_GPU_CC_MEMNOC_GFX_CBCR" },
+	{ GEN8_GPUCC_GPU_CC_MEMNOC_GFX_SREGR, "GPUCC_GPU_CC_MEMNOC_GFX_SREGR" },
+	{ GEN8_GPUCC_GPU_CC_MEMNOC_GFX_CFG_SREGR, "GPUCC_GPU_CC_MEMNOC_GFX_CFG_SREGR" },
+	{ GEN8_GPUCC_GPU_CC_MEMNOC_GFX_CFG2_SREGR, "GPUCC_GPU_CC_MEMNOC_GFX_CFG2_SREGR" },
+	{ GEN8_GPUCC_GPU_CC_MEMNOC_GFX_SW_CLK_DIS, "GPUCC_GPU_CC_MEMNOC_GFX_SW_CLK_DIS" },
+	{ GEN8_GPUCC_GPU_CC_HLOS1_VOTE_GPU_SMMU_CLK, "GPUCC_GPU_CC_HLOS1_VOTE_GPU_SMMU_CLK" },
+	{ GEN8_GPUCC_GPU_CC_HYP_VOTE_GPU_SMMU_CLK, "GPUCC_GPU_CC_HYP_VOTE_GPU_SMMU_CLK" },
+};
+
+static const struct reg_pairs gcc_reg_pairs[] = {
+	{ GEN8_GCC_TURING_DSP_VOTE_GPU_SMMU_GDS, "GCC_TURING_DSP_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_TURING_DSP_VOTE_ALL_SMMU_MMU_GDS, "GCC_TURING_DSP_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_TZ_VOTE_GPU_SMMU_GDS, "GCC_TZ_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_TZ_VOTE_ALL_SMMU_MMU_GDS, "GCC_TZ_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_HYP_VOTE_GPU_SMMU_GDS, "GCC_HYP_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_HYP_VOTE_ALL_SMMU_MMU_GDS, "GCC_HYP_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_HLOS1_VOTE_GPU_SMMU_GDS, "GCC_HLOS1_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_HLOS1_VOTE_ALL_SMMU_MMU_GDS, "GCC_HLOS1_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_HLOS2_VOTE_GPU_SMMU_GDS, "GCC_HLOS2_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_HLOS2_VOTE_ALL_SMMU_MMU_GDS, "GCC_HLOS2_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_SP_VOTE_GPU_SMMU_GDS, "GCC_SP_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_SP_VOTE_ALL_SMMU_MMU_GDS, "GCC_SP_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_MSS_VOTE_GPU_SMMU_GDS, "GCC_MSS_VOTE_GPU_SMMU_GDS" },
+	{ GEN8_GCC_MSS_VOTE_ALL_SMMU_MMU_GDS, "GCC_MSS_VOTE_ALL_SMMU_MMU_GDS" },
+	{ GEN8_GCC_GPU_GEMNOC_GFX_CBCR, "GCC_GPU_GEMNOC_GFX_CBCR" },
+};
+
+static void dump_cx_gdsc_timeout_reg(struct kgsl_device *device)
+{
+	int i;
+	u32 val;
+	phys_addr_t phys;
+
+	for (i = 0; i < ARRAY_SIZE(gpucc_reg_pairs); i++) {
+		kgsl_regread(device, gpucc_reg_pairs[i].address, &val);
+
+		dev_err(device->dev, "GPUCC: register: %s, value: 0x%x\n",
+			gpucc_reg_pairs[i].str, val);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(gcc_reg_pairs); i++) {
+		phys = SECURE_REGREAD(GEN8_GCC_BASE, gcc_reg_pairs[i].address);
+
+		if (qcom_scm_io_readl(phys, &val) == 0) {
+			dev_err(device->dev, "GCC: register: %s, value: 0x%x\n",
+				gcc_reg_pairs[i].str, val);
+		} else {
+			dev_err(device->dev, "Failed to read %s value\n",
+				gcc_reg_pairs[i].str);
+		}
 	}
 }
 
@@ -1625,6 +1892,7 @@ static int kgsl_cx_gdsc_event(struct notifier_block *nb,
 			val, (val & BIT(15)), 100, 100 * 1000)) {
 			dev_err(device->dev, "GPU CX GDSC power down timed out\n");
 			log_kgsl_cx_wait_timeout_event(NONHLOS_CX_WAIT_TIMEOUT);
+			dump_cx_gdsc_timeout_reg(device);
 			KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
 				GMU_PDEV(device), 0ULL, GMU_FAULT_WAIT_FOR_CX);
 		}
@@ -1991,6 +2259,11 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 
 	spin_lock_init(&pwr->stats_lock);
 
+	/* Initialize transition statistics */
+	memset(&pwr->trans_stats, 0, sizeof(pwr->trans_stats));
+	spin_lock_init(&pwr->trans_stats.lock);
+	pwr->trans_stats.last_time_updated = ktime_get();
+
 	init_waitqueue_head(&device->active_cnt_wq);
 
 	for (i = 0; i < pwr->num_pwrlevels; i++) {
@@ -2107,6 +2380,8 @@ void kgsl_pwrctrl_close(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
+	sysfs_remove_bin_file(&device->dev->kobj, &bin_attr_gpu_trans_stat);
+
 	pwr->power_flags = 0;
 
 	if (!IS_ERR(pwr->cooling_dev)) {
@@ -2207,7 +2482,7 @@ done:
 
 void kgsl_timer(struct timer_list *t)
 {
-	struct kgsl_device *device = from_timer(device, t, idle_timer);
+	struct kgsl_device *device = kgsl_timer_container_of(device, t, idle_timer);
 
 	if (device->requested_state != KGSL_STATE_SUSPEND) {
 		kgsl_pwrctrl_request_state(device, KGSL_STATE_SLUMBER);
@@ -2362,6 +2637,7 @@ static int _wake(struct kgsl_device *device)
 
 		device->ftbl->deassert_gbif_halt(device);
 		pwr->last_stat_updated = ktime_get();
+		pwr->trans_stats.last_time_updated = pwr->last_stat_updated;
 		/*
 		 * No need to turn on/off irq here as it no longer affects
 		 * power collapse

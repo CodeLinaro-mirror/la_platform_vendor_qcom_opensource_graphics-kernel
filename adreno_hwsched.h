@@ -98,6 +98,11 @@ struct adreno_hwsched_ops {
 	 */
 	int (*set_dcvs_profile)(struct adreno_device *adreno_dev,
 		struct kgsl_process_private *proc_priv);
+	/**
+	 * @context_priority_update - Target specific function to send priority update HFI
+	 */
+	int (*context_priority_update)(struct adreno_device *adreno_dev,
+		struct kgsl_context *context, u32 new_ctx_pri);
 };
 
 enum gpu_reset_type {
@@ -122,15 +127,19 @@ struct adreno_hwsched {
 	/** @mem_alloc_entries: Number of entries in the memory allocation table */
 	u32 mem_alloc_entries;
 	/** @mutex: Mutex needed to run dispatcher function */
+#if IS_ENABLED(CONFIG_QCOM_KGSL_RT_MUTEX)
+	struct rt_mutex mutex;
+#else
 	struct mutex mutex;
+#endif
 	/** @flags: Container for the dispatcher internal flags */
 	unsigned long flags;
 	/** @inflight: Number of active submissions to the dispatch queues */
 	u32 inflight;
 	/** @jobs - Array of dispatch job lists for each priority level */
-	struct llist_head jobs[16];
+	struct llist_head jobs[KGSL_CONTEXT_PRIORITY_NUM];
 	/** @requeue - Array of lists for dispatch jobs that got requeued */
-	struct llist_head requeue[16];
+	struct llist_head requeue[KGSL_CONTEXT_PRIORITY_NUM];
 	/** @cmd_list: List of objects submitted to dispatch queues */
 	struct list_head cmd_list;
 	/** @hwsched_ops: Container for target specific hwscheduler ops */

@@ -1885,6 +1885,28 @@ static bool _ft_long_ib_detect_show(struct adreno_device *adreno_dev)
 	return adreno_dev->long_ib_detect;
 }
 
+#define LONG_IB_TIMEOUT_MIN_MS 2000
+#define LONG_IB_TIMEOUT_MAX_MS 8000
+static int _long_ib_timeout_ms_store(struct adreno_device *adreno_dev, u32 val)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (val && (val < LONG_IB_TIMEOUT_MIN_MS || val > LONG_IB_TIMEOUT_MAX_MS)) {
+		dev_err_ratelimited(device->dev,
+			"long_ib_timeout_ms: %ums outside supported range %u-%ums\n",
+			val, LONG_IB_TIMEOUT_MIN_MS, LONG_IB_TIMEOUT_MAX_MS);
+		return -EINVAL;
+	}
+
+	return adreno_power_cycle_u32(adreno_dev,
+			&adreno_dev->hwsched.long_ib_timeout_ms, val);
+}
+
+static u32 _long_ib_timeout_ms_show(struct adreno_device *adreno_dev)
+{
+	return adreno_dev->hwsched.long_ib_timeout_ms;
+}
+
 static ssize_t ctx_pri_req_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -2025,6 +2047,7 @@ done:
 static ADRENO_SYSFS_BOOL(preemption);
 static ADRENO_SYSFS_RO_U32(preempt_count);
 static ADRENO_SYSFS_BOOL(ft_long_ib_detect);
+static ADRENO_SYSFS_U32(long_ib_timeout_ms);
 static ADRENO_SYSFS_CUSTOM(ctx_pri_req);
 
 static const struct attribute *_hwsched_attr_list[] = {
@@ -2032,6 +2055,7 @@ static const struct attribute *_hwsched_attr_list[] = {
 	&adreno_attr_preempt_count.attr.attr,
 	&adreno_attr_preempt_info.attr,
 	&adreno_attr_ft_long_ib_detect.attr.attr,
+	&adreno_attr_long_ib_timeout_ms.attr.attr,
 	&adreno_attr_ctx_pri_req.attr,
 	NULL,
 };

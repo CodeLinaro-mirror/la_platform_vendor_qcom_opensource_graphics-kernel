@@ -3046,6 +3046,9 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 
 	reset_hfi_queues(adreno_dev);
 
+	gmu_core_set_vrb_register(gmu_core->vrb, VRB_LONG_IB_TIMEOUT,
+		adreno_dev->hwsched.long_ib_timeout_ms);
+
 	ret = gen8_gmu_hfi_start(adreno_dev);
 	if (ret)
 		goto err;

@@ -267,6 +267,8 @@ enum gmu_vrb_idx {
 	VRB_IPCC_SIZE_BYTES = 23,
 	/* Contains the address of SPEL trace buffer */
 	VRB_SPEL_TRACE_BUFFER_ADDR_IDX = 24,
+	/* Non-CL long IB bail-out timeout in ms, 0 = firmware default */
+	VRB_LONG_IB_TIMEOUT = 26,
 };
 
 /* For GMU Trace */

@@ -34,7 +34,7 @@
 #define QDCP_INSTANCE_ID 32
 #define QDCP_VERSION_ID 1
 
-#define QECP_CARVEOUT_SIZE (SZ_1K * 350)
+#define QECP_DEBUGBUS_DATA_SIZE (SZ_1K * 350)
 #define QMI_TRANSACTION_TIMEOUT (5 * HZ)
 
 /* Types of debugbus blocks to be sent to QECP */

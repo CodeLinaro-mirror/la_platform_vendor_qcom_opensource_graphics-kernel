@@ -2106,6 +2106,46 @@ static bool gen8_snapshot_pc_indexed_regs(struct kgsl_device *device,
 	return ret;
 }
 
+static void gen8_snapshot_qecp(struct adreno_device *adreno_dev, struct kgsl_snapshot *snapshot)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_snapshot_section_header *header =
+		(struct kgsl_snapshot_section_header *)snapshot->ptr;
+	void *data = snapshot->ptr + sizeof(*header);
+	size_t section_size = sizeof(*header) + QECP_DEBUGBUS_DATA_SIZE;
+	int ret;
+
+	/* Check if secure debugbus data was captured by QECP */
+	if (!snapshot->qecp_gx_debugbus_captured && !snapshot->qecp_cx_debugbus_captured)
+		return;
+
+	if (!snapshot->qecp_carveout_ptr)
+		return;
+
+	ret = adreno_qmi_debugbus_get_data(adreno_dev, snapshot);
+	if (ret) {
+		dev_err(device->dev, "Failed to copy data QMI req ret=%d\n", ret);
+		return;
+	}
+
+	if (snapshot->remain < section_size) {
+		SNAPSHOT_ERR_NOMEM(device, "QECP SECTION");
+		return;
+	}
+
+	header->magic = SNAPSHOT_SECTION_MAGIC;
+	header->id = KGSL_SNAPSHOT_SECTION_QECP;
+	header->size = section_size;
+
+	/* Make sure the QECP data is available in memory before copying it out */
+	mb();
+	memcpy(data, snapshot->qecp_carveout_ptr, QECP_DEBUGBUS_DATA_SIZE);
+
+	snapshot->ptr += header->size;
+	snapshot->remain -= header->size;
+	snapshot->size += header->size;
+}
+
 /*
  * gen8_snapshot() - GEN8 GPU snapshot function
  * @adreno_dev: Device being snapshotted
@@ -2164,13 +2204,7 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 
 	gen8_snapshot_debugbus(adreno_dev, snapshot);
 
-	/* Copy over the secure debugbus data if QECP captured it */
-	if (snapshot->qecp_gx_debugbus_captured || snapshot->qecp_cx_debugbus_captured) {
-		int ret = adreno_qmi_debugbus_get_data(adreno_dev, snapshot);
-
-		if (ret)
-			dev_err(device->dev, "Failed to copy data QMI req ret=%d\n", ret);
-	}
+	gen8_snapshot_qecp(adreno_dev, snapshot);
 
 	is_current_rt = rt_task(current);
 

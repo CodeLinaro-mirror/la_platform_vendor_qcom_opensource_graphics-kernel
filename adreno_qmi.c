@@ -385,7 +385,9 @@ int adreno_qmi_debugbus_get_data(struct adreno_device *adreno_dev,
 	if (!adreno_dev->qmi_service_connected)
 		return -ENOENT;
 
-	if (!snapshot->qecp_carveout_addr)
+	/* Check if the carveout is large enough for the debugbus data */
+	if (!snapshot->qecp_carveout_addr ||
+		(snapshot->qecp_carveout_size < QECP_DEBUGBUS_DATA_SIZE))
 		return -ENOMEM;
 
 	req = kzalloc(sizeof(*req), GFP_KERNEL);
@@ -399,7 +401,7 @@ int adreno_qmi_debugbus_get_data(struct adreno_device *adreno_dev,
 	}
 
 	req->paddr = snapshot->qecp_carveout_addr;
-	req->size = snapshot->qecp_carveout_size;
+	req->size = QECP_DEBUGBUS_DATA_SIZE;
 
 	ret = qmi_txn_init(qmi, &txn, qdcp_gpudbg_get_data_resp_msg_v01_ei, resp);
 	if (ret < 0) {
@@ -647,32 +649,39 @@ static size_t adreno_qmi_snapshot_qecp_status(struct kgsl_device *device, u8 *bu
 	return DEBUG_SECTION_SZ(1);
 }
 
-/*
- * Our current snapshot has the following structure for every target. The first
- * 48 bytes store the main snapshot header. 350KB starting from that point is
- * shared with QECP to store the encrypted debugbus. The rest of the memory
- * region is available for the remaining snaphot data. Also debugbus is collected
- * one of two ways, encrypted using QECP or the AHB method in KGSL. Since either
- * one of the method is used we are certain to have enough memory for at least
- * one of the method.
- */
+/* Map the QECP carveout. We currently use 350K of the QECP carveout for encrypted debugbus data */
 static void adreno_qmi_allocate_qecp_carveout(struct adreno_device *adreno_dev,
 			struct kgsl_snapshot *snapshot)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct kgsl_snapshot_section_header *header =
-		(struct kgsl_snapshot_section_header *)snapshot->ptr;
+	u64 qecp_addr = 0;
+	u64 qecp_size = 0;
 
-	header->magic = SNAPSHOT_SECTION_MAGIC;
-	header->id = KGSL_SNAPSHOT_SECTION_QECP;
+	if (snapshot->qecp_carveout_ptr)
+		return;
 
-	snapshot->qecp_carveout_addr = snapshot_phy_addr(device) + snapshot->size + sizeof(*header);
-	snapshot->qecp_carveout_size = QECP_CARVEOUT_SIZE;
+	if (kgsl_get_resource_address_size(device, device->pdev, "qcom,qecp-carveout",
+						&qecp_addr, &qecp_size))
+		return;
 
-	header->size = snapshot->qecp_carveout_size + sizeof(*header);
-	snapshot->ptr += header->size;
-	snapshot->remain -= header->size;
-	snapshot->size += header->size;
+	if (qecp_size > U32_MAX) {
+		dev_err_once(device->dev,
+			"qcom,qecp-carveout region too large: 0x%llx\n", qecp_size);
+		return;
+	}
+
+	snapshot->qecp_carveout_addr = qecp_addr;
+	snapshot->qecp_carveout_size = qecp_size;
+
+	snapshot->qecp_carveout_ptr = devm_memremap(device->dev,
+					snapshot->qecp_carveout_addr, snapshot->qecp_carveout_size,
+					MEMREMAP_WC);
+
+	if (IS_ERR_OR_NULL(snapshot->qecp_carveout_ptr)) {
+		dev_err(device->dev, "QECP carveout was not mapped: %pe\n",
+			snapshot->qecp_carveout_ptr);
+		snapshot->qecp_carveout_ptr = NULL;
+	}
 }
 
 void adreno_qmi_qecp_carveout(struct adreno_device *adreno_dev, struct kgsl_snapshot *snapshot)

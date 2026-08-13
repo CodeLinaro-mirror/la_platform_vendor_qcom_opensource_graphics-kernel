@@ -741,6 +741,8 @@ struct kgsl_snapshot {
 	bool is_fault_snapshot;
 	/** @qecp_carveout_addr: Physical address of the encrypted debugbus buffer */
 	u64 qecp_carveout_addr;
+	/** @qecp_carveout_ptr: Pointer to the encrypted debugbus buffer */
+	void *qecp_carveout_ptr;
 	/** @qecp_carveout_size: Size of the encrypted debugbus buffer to be shared with QECP */
 	u32 qecp_carveout_size;
 	/** qecp_gx_debugbus_captured: True if QECP captured GX debugbus */

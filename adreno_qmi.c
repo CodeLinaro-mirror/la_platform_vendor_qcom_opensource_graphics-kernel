@@ -277,8 +277,8 @@ static const struct qmi_elem_info qdcp_gpudbg_blocks_set_resp_msg_v01_ei[] = {
 	},
 };
 
-/* kernel_connect() uses sockaddr_unsized instead of sockaddr from kernel version 7.1 */
-#if (KERNEL_VERSION(7, 1, 0) <= LINUX_VERSION_CODE)
+/* kernel_connect() uses sockaddr_unsized instead of sockaddr from kernel version 6.19 */
+#if (KERNEL_VERSION(6, 19, 0) <= LINUX_VERSION_CODE)
 static int adreno_qmi_kernel_connect(struct socket *sock, struct sockaddr_qrtr *sq)
 {
 	return kernel_connect(sock, (struct sockaddr_unsized *)sq, sizeof(*sq), 0);

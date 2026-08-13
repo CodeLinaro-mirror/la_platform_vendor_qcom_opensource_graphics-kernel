@@ -1118,10 +1118,17 @@ void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev)
 	struct gen7_hwsched_hfi *hw_hfi = to_gen7_hwsched_hfi(adreno_dev);
 	u32 rcvd[MAX_RCVD_SIZE], next_hdr, type;
 
-	if (!(hw_hfi->irq_mask & HFI_IRQ_MSGQ_MASK))
-		return;
-
 	mutex_lock(&hw_hfi->msgq_mutex);
+
+	/*
+	 * Check the mask under msgq_mutex. Otherwise this thread can observe
+	 * the mask as set, then a concurrent hfi_stop can clear it and finish,
+	 * and this thread would still drain the queue based on a stale mask.
+	 */
+	if (!(hw_hfi->irq_mask & HFI_IRQ_MSGQ_MASK)) {
+		mutex_unlock(&hw_hfi->msgq_mutex);
+		return;
+	}
 
 	for (;;) {
 		next_hdr = peek_next_header(adreno_dev, gmu, HFI_MSG_ID);
@@ -1613,7 +1620,9 @@ void gen7_hwsched_hfi_stop(struct adreno_device *adreno_dev)
 	 */
 	gen7_hwsched_process_msgq(adreno_dev);
 
+	mutex_lock(&hfi->msgq_mutex);
 	hfi->irq_mask &= ~HFI_IRQ_MSGQ_MASK;
+	mutex_unlock(&hfi->msgq_mutex);
 
 	/* Drain the debug queue before we reset HFI queues */
 	gen7_hwsched_process_dbgq(adreno_dev, false);
@@ -1627,7 +1636,9 @@ static void gen7_hwsched_enable_async_hfi(struct adreno_device *adreno_dev)
 {
 	struct gen7_hwsched_hfi *hfi = to_gen7_hwsched_hfi(adreno_dev);
 
+	mutex_lock(&hfi->msgq_mutex);
 	hfi->irq_mask |= HFI_IRQ_MSGQ_MASK;
+	mutex_unlock(&hfi->msgq_mutex);
 
 	gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN7_GMU_GMU2HOST_INTR_MASK,
 		(u32)~hfi->irq_mask);

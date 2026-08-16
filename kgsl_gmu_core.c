@@ -816,6 +816,10 @@ static void _gmu_trace_dcvs_pwrlevel(struct kgsl_device *device, struct gmu_trac
 		u32 num_samples = FIELD_PREP(GENMASK(31, 16), data->num_samples_down) |
 				FIELD_PREP(GENMASK(15, 0), data->num_samples_up);
 
+		/* Trigger any device-specific pwrlevel updates */
+		device->ftbl->pwrlevel_change_settings(device,
+					data->prev_pwrlvl, data->new_pwrlvl, true);
+
 		trace_kgsl_pwrlevel(device, data->new_pwrlvl,
 					pwr->pwrlevels[data->new_pwrlvl].gpu_freq,
 					data->prev_pwrlvl,

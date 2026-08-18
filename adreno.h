@@ -188,6 +188,22 @@
 #define ADRENO_TSENSE_DYNAMIC_PERIOD BIT(27)
 /* Enable GMU Based AB voting */
 #define ADRENO_GMU_AB BIT(28)
+/* Enable GMU Fast Context Destroy optimization */
+#define ADRENO_GMU_FAST_CONTEXT_DESTROY BIT(29)
+/* Enable AHB timeout recovery */
+#define ADRENO_AHB_TIMEOUT_RECOVERY BIT(30)
+/* Enable SPEL (System Power and Energy Limits) */
+#define ADRENO_GMU_SPEL BIT(31)
+/* Enable ACD AVG (Adaptive Voltage Guardband) */
+#define ADRENO_ACD_AVG BIT_ULL(32)
+/* GMU and kernel supports synx */
+#define ADRENO_SYNX BIT_ULL(33)
+/* Enable tracking and handling of fence deadlines */
+#define ADRENO_FENCE_DEADLINE_BOOST BIT_ULL(34)
+/* GMU supports thinmem_cfg feature */
+#define ADRENO_GMU_THINMEM_CFG BIT_ULL(35)
+/* Enable dynamic context priority (RB migration) */
+#define ADRENO_GMU_DYNAMIC_CTX_PRIORITY BIT_ULL(36)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -902,6 +918,8 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_RESET_RECOVERY = 18,
 	/** @ADRENO_DEVICE_FIRST_BOOT_DONE: Set if the ADRENO device first boot is done */
 	ADRENO_DEVICE_FIRST_BOOT_DONE = 19,
+	/** @ADRENO_DEVICE_FAST_CONTEXT_DESTROY: Set if fast context destroy is enabled on GMU */
+	ADRENO_DEVICE_FAST_CONTEXT_DESTROY = 20,
 };
 
 /**
@@ -1362,6 +1380,12 @@ static inline int adreno_is_a619_malabar(struct adreno_device *adreno_dev)
 		"qcom,adreno-gpu-a619-malabar");
 }
 
+static inline int adreno_is_a619_bourtzi(struct adreno_device *adreno_dev)
+{
+        return of_device_is_compatible(adreno_dev->dev.pdev->dev.of_node,
+                "qcom,adreno-gpu-a619-bourtzi");
+}
+
 static inline int adreno_is_a620(struct adreno_device *adreno_dev)
 {
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
@@ -1765,6 +1789,17 @@ static inline bool adreno_is_preemption_enabled(
 	return test_bit(ADRENO_DEVICE_PREEMPTION, &adreno_dev->priv);
 }
 
+/**
+ * adreno_is_fast_context_destroy_enabled() - Check whether the GMU fast context
+ * destroy optimization is statically enabled and if the GMU supports the
+ * capability.
+ * @adreno_dev: Pointer to the adreno_device struct
+ */
+static inline bool adreno_is_fast_context_destroy_enabled(
+				struct adreno_device *adreno_dev)
+{
+	return test_bit(ADRENO_DEVICE_FAST_CONTEXT_DESTROY, &adreno_dev->priv);
+}
 
 /**
  * adreno_preemption_feature_set() - Check whether adreno preemption feature is statically enabled

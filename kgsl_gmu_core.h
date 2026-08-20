@@ -269,6 +269,8 @@ enum gmu_vrb_idx {
 	VRB_SPEL_TRACE_BUFFER_ADDR_IDX = 24,
 	/* Non-CL long IB bail-out timeout in ms, 0 = firmware default */
 	VRB_LONG_IB_TIMEOUT = 26,
+	/* Set by GMU when it disables power interrupts during hang recovery */
+	VRB_GMU_PWR_HALT = 27,
 };
 
 /* For GMU Trace */

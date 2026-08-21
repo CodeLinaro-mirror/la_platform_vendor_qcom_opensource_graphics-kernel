@@ -292,7 +292,7 @@ struct adreno_device *a6xx_gmu_to_adreno(struct a6xx_gmu_device *gmu)
 #define PDC_CMD_OFFSET 4
 #define PDC_ENABLE_REG_VALUE 0x80000001
 
-void a6xx_load_rsc_ucode(struct adreno_device *adreno_dev)
+int a6xx_load_rsc_ucode(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
@@ -302,6 +302,11 @@ void a6xx_load_rsc_ucode(struct adreno_device *adreno_dev)
 		rscc = gmu->rscc_virt;
 	else
 		rscc = kgsl_regmap_virt(&device->regmap, RSCC_OFFSET_LEGACY);
+
+	if (!rscc) {
+		dev_err(GMU_PDEV_DEV(device), "Failed to get RSCC virtual address\n");
+		return -ENODEV;
+	}
 
 	/* Disable SDE clock gating */
 	_regwrite(rscc, A6XX_GPU_RSCC_RSC_STATUS0_DRV0, BIT(24));
@@ -341,6 +346,8 @@ void a6xx_load_rsc_ucode(struct adreno_device *adreno_dev)
 		_regwrite(rscc, A6XX_RSCC_SEQ_MEM_0_DRV0 + 3, 0xE9A982E2);
 		_regwrite(rscc, A6XX_RSCC_SEQ_MEM_0_DRV0 + 4, 0x0020E8A8);
 	}
+
+	return 0;
 }
 
 int a6xx_load_pdc_ucode(struct adreno_device *adreno_dev)
@@ -2329,7 +2336,10 @@ static int a6xx_gmu_first_boot(struct adreno_device *adreno_dev)
 		if (ret)
 			goto err;
 
-		a6xx_load_rsc_ucode(adreno_dev);
+		ret = a6xx_load_rsc_ucode(adreno_dev);
+		if (ret)
+			goto err;
+
 		set_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags);
 	}
 

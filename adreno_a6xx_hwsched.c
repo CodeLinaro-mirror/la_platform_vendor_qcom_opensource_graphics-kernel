@@ -121,7 +121,10 @@ static int a6xx_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		if (ret)
 			goto clks_gdsc_off;
 
-		a6xx_load_rsc_ucode(adreno_dev);
+		ret = a6xx_load_rsc_ucode(adreno_dev);
+		if (ret)
+			goto clks_gdsc_off;
+
 		set_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags);
 	}
 

@@ -761,7 +761,7 @@ static void gen7_process_syncobj_query_work(struct kthread_work *work)
 	struct cmd_list_obj *obj;
 	bool missing = true;
 
-	mutex_lock(&hwsched->mutex);
+	kgsl_mutex_lock(&hwsched->mutex);
 	kgsl_mutex_lock(&device->mutex);
 
 	/* If context is bad, we don't care about the sync object query */
@@ -802,7 +802,7 @@ static void gen7_process_syncobj_query_work(struct kthread_work *work)
 
 unlock:
 	kgsl_mutex_unlock(&device->mutex);
-	mutex_unlock(&hwsched->mutex);
+	kgsl_mutex_unlock(&hwsched->mutex);
 
 	kgsl_context_put(context);
 	kfree(query_work);
@@ -1031,7 +1031,7 @@ static void gen7_defer_hw_fence_work(struct kthread_work *work)
 	 * Grab the dispatcher and device mutex as we don't want to race with concurrent fault
 	 * recovery
 	 */
-	mutex_lock(&adreno_dev->hwsched.mutex);
+	kgsl_mutex_lock(&adreno_dev->hwsched.mutex);
 	kgsl_mutex_lock(&device->mutex);
 
 	spin_lock(&hwf->lock);
@@ -1060,7 +1060,7 @@ static void gen7_defer_hw_fence_work(struct kthread_work *work)
 
 unlock:
 	kgsl_mutex_unlock(&device->mutex);
-	mutex_unlock(&adreno_dev->hwsched.mutex);
+	kgsl_mutex_unlock(&adreno_dev->hwsched.mutex);
 }
 
 static int _check_hw_fence_ack_failure(struct kgsl_device *device, u32 *result)
@@ -3714,7 +3714,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	}
 
 	ret = adreno_hwsched_ctxt_unregister_wait_completion(adreno_dev,
-		GMU_PDEV_DEV(device), &pending_ack, gen7_hwsched_process_msgq, &cmd);
+		GMU_PDEV_DEV(device), context, &pending_ack, gen7_hwsched_process_msgq, &cmd);
 	if (ret) {
 		trigger_context_unregister_fault(adreno_dev, drawctxt);
 		goto done;

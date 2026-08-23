@@ -683,7 +683,7 @@ static void gen8_process_syncobj_query_work(struct kthread_work *work)
 	struct cmd_list_obj *obj;
 	bool missing = true;
 
-	mutex_lock(&hwsched->mutex);
+	kgsl_mutex_lock(&hwsched->mutex);
 	kgsl_mutex_lock(&device->mutex);
 
 	/* If context is bad, we don't care about the sync object query */
@@ -724,7 +724,7 @@ static void gen8_process_syncobj_query_work(struct kthread_work *work)
 
 unlock:
 	kgsl_mutex_unlock(&device->mutex);
-	mutex_unlock(&hwsched->mutex);
+	kgsl_mutex_unlock(&hwsched->mutex);
 
 	kgsl_context_put(context);
 	kfree(query_work);
@@ -952,7 +952,7 @@ static void gen8_defer_hw_fence_work(struct kthread_work *work)
 	 * Grab the dispatcher and device mutex as we don't want to race with concurrent fault
 	 * recovery
 	 */
-	mutex_lock(&adreno_dev->hwsched.mutex);
+	kgsl_mutex_lock(&adreno_dev->hwsched.mutex);
 	kgsl_mutex_lock(&device->mutex);
 
 	spin_lock(&hwf->lock);
@@ -981,7 +981,7 @@ static void gen8_defer_hw_fence_work(struct kthread_work *work)
 
 unlock:
 	kgsl_mutex_unlock(&device->mutex);
-	mutex_unlock(&adreno_dev->hwsched.mutex);
+	kgsl_mutex_unlock(&adreno_dev->hwsched.mutex);
 }
 
 static int _check_hw_fence_ack_failure(struct kgsl_device *device, u32 *result)
@@ -1069,6 +1069,36 @@ int gen8_hwsched_process_f2h_platform_msg(struct adreno_device *adreno_dev, u32 
 	return 0;
 }
 
+static void gen8_handle_ctx_priority_update_done(struct adreno_device *adreno_dev, u32 *rcvd)
+{
+	struct hfi_context_priority_update_done_cmd *cmd =
+		(struct hfi_context_priority_update_done_cmd *)rcvd;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_context *context = NULL;
+	struct adreno_context *drawctxt;
+	int ret;
+
+	read_lock(&device->context_lock);
+	context = idr_find(&device->context_idr, cmd->ctxt_id);
+	ret = _kgsl_context_get(context);
+	read_unlock(&device->context_lock);
+
+	if (!ret)
+		return;
+
+	drawctxt = ADRENO_CONTEXT(context);
+
+	spin_lock(&drawctxt->lock);
+	context->priority = cmd->new_ctx_pri;
+	context->flags = (context->flags & ~KGSL_CONTEXT_PRIORITY_MASK) |
+		((cmd->new_ctx_pri << KGSL_CONTEXT_PRIORITY_SHIFT) &
+		KGSL_CONTEXT_PRIORITY_MASK);
+	drawctxt->pending_ctx_pri = 0;
+	spin_unlock(&drawctxt->lock);
+
+	kgsl_context_put(context);
+}
+
 void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -1121,6 +1151,9 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 			break;
 		case F2H_MSG_SYNCOBJ_QUERY:
 			gen8_trigger_syncobj_query(adreno_dev, rcvd);
+			break;
+		case F2H_MSG_CONTEXT_PRI_UPDATE_DONE:
+			gen8_handle_ctx_priority_update_done(adreno_dev, rcvd);
 			break;
 		case F2H_MSG_GMU_CNTR_RELEASE: {
 			struct hfi_gmu_cntr_release_cmd *cmd =
@@ -1254,16 +1287,20 @@ static int check_ack_failure(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u64 ticks = gpudev->read_alwayson(adreno_dev);
 
-	if (ack->results[2] != 0xffffffff)
+	if (ack->results[2] == 0)
 		return 0;
 
 	dev_err(GMU_PDEV_DEV(device),
-		"ACK error: sender id %d seqnum %d\n",
+		"ACK error: sender id %d seqnum %d ret 0x%x\n",
 		MSG_HDR_GET_ID(ack->sent_hdr),
-		MSG_HDR_GET_SEQNUM(ack->sent_hdr));
+		MSG_HDR_GET_SEQNUM(ack->sent_hdr),
+		ack->results[2]);
 
-	KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
-				GMU_PDEV(device), ticks, GMU_FAULT_HFI_ACK);
+	/* GMU fatal error, trigger force a panic */
+	if (ack->results[2] == 0xffffffff)
+		KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
+					GMU_PDEV(device), ticks, GMU_FAULT_HFI_ACK);
+
 	return -EINVAL;
 }
 
@@ -1769,6 +1806,28 @@ static int gen8_hfi_send_soft_reset_feature_ctrl(struct adreno_device *adreno_de
 		return 0;
 
 	return gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_SOFT_RESET, 1, 0);
+}
+
+static int gen8_hfi_send_fast_context_destroy_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	int ret;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_FAST_CONTEXT_DESTROY))
+		return 0;
+
+	if (!gmu_core_capabilities_enabled(&KGSL_DEVICE(adreno_dev)->gmu_core.platform_caps,
+					   FAC_FAST_CONTEXT_DESTROY))
+		return 0;
+
+	/*
+	 * Enable the fast context destroy optimization if requested by the static
+	 * feature flag and if the capability is supported by the GMU.
+	 */
+	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_FAST_CONTEXT_DESTROY, 1, 0);
+	if (!ret)
+		set_bit(ADRENO_DEVICE_FAST_CONTEXT_DESTROY, &adreno_dev->priv);
+
+	return ret;
 }
 
 static void gen8_spin_idle_debug_lpac(struct adreno_device *adreno_dev,
@@ -2553,51 +2612,10 @@ static int gen8_hfi_send_gmu_dcvs_req(struct adreno_device *adreno_dev)
 	return gen8_hfi_send_generic_req(adreno_dev, cmd, MSG_HDR_GET_SIZE(cmd->hdr) << 2);
 }
 
-int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
+static int gen8_hwsched_feature_ctrl(struct adreno_device *adreno_dev)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct pending_cmd ack = {0};
 	int ret;
-
-	reset_hfi_queues(adreno_dev);
-
-	ret = gen8_gmu_hfi_start(adreno_dev);
-	if (ret)
-		goto err;
-
-	if (gen8_hwsched_warmboot_possible(adreno_dev))
-		return gen8_hwsched_warmboot_init_gmu(adreno_dev);
-
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_WARMBOOT) &&
-		(!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags))) {
-		if (gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_WARMBOOT, 0) == 1)
-			gmu_core->warmboot_enabled = true;
-	}
-
-	warmboot_init_message_record_bitmask(adreno_dev);
-
-	/* Reset the variable here and set it when we successfully record the scratch */
-	clear_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
-	clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
-
-	ret = gen8_hwsched_hfi_send_warmboot_cmd(adreno_dev, gmu->gmu_init_scratch,
-		HFI_WARMBOOT_SET_SCRATCH, false, &ack);
-	if (ret)
-		goto err;
-
-	ret = gen8_hfi_send_gpu_perf_table(adreno_dev);
-	if (ret)
-		goto err;
-
-	ret = gen8_hfi_send_generic_req(adreno_dev, &gmu->hfi.bw_table, sizeof(gmu->hfi.bw_table));
-	if (ret)
-		goto err;
-
-	ret = gen8_hfi_send_gmu_dcvs_req(adreno_dev);
-	if (ret)
-		goto err;
 
 	ret = gen8_hfi_send_acd_feature_ctrl(adreno_dev);
 	if (ret)
@@ -2686,11 +2704,69 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	ret = gen8_hfi_send_fast_context_destroy_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
+
 	if (adreno_dev->dcvs_profile_enabled) {
 		ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_DCVS_PROFILE, 1, 0);
 		if (ret)
 			goto err;
 	}
+
+err:
+	return ret;
+}
+
+int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct pending_cmd ack = {0};
+	int ret;
+
+	reset_hfi_queues(adreno_dev);
+
+	ret = gen8_gmu_hfi_start(adreno_dev);
+	if (ret)
+		goto err;
+
+	if (gen8_hwsched_warmboot_possible(adreno_dev))
+		return gen8_hwsched_warmboot_init_gmu(adreno_dev);
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_WARMBOOT) &&
+		(!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags))) {
+		if (gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_WARMBOOT, 0) == 1)
+			gmu_core->warmboot_enabled = true;
+	}
+
+	warmboot_init_message_record_bitmask(adreno_dev);
+
+	/* Reset the variable here and set it when we successfully record the scratch */
+	clear_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
+	clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
+
+	ret = gen8_hwsched_hfi_send_warmboot_cmd(adreno_dev, gmu->gmu_init_scratch,
+		HFI_WARMBOOT_SET_SCRATCH, false, &ack);
+	if (ret)
+		goto err;
+
+	ret = gen8_hfi_send_gpu_perf_table(adreno_dev);
+	if (ret)
+		goto err;
+
+	ret = gen8_hfi_send_generic_req(adreno_dev, &gmu->hfi.bw_table, sizeof(gmu->hfi.bw_table));
+	if (ret)
+		goto err;
+
+	ret = gen8_hfi_send_gmu_dcvs_req(adreno_dev);
+	if (ret)
+		goto err;
+
+	ret = gen8_hwsched_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
 
 	ret = send_start_msg(adreno_dev);
 	if (ret)
@@ -3067,6 +3143,33 @@ static int send_context_pointers(struct adreno_device *adreno_dev,
 	return gen8_hfi_send_cmd_async(adreno_dev, &cmd, sizeof(cmd));
 }
 
+/* Apply any pending ctx pri update that was deferred while the GPU was in SLUMBER */
+static void gen8_apply_pending_ctx_priority_update(struct kgsl_context *context)
+{
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	u32 old_prio, new_prio;
+
+	spin_lock(&drawctxt->lock);
+	if (!drawctxt->pending_ctx_pri) {
+		spin_unlock(&drawctxt->lock);
+		return;
+	}
+
+	old_prio = context->priority;
+	new_prio = drawctxt->pending_ctx_pri;
+
+	context->flags =
+		(context->flags & ~KGSL_CONTEXT_PRIORITY_MASK) |
+		((new_prio << KGSL_CONTEXT_PRIORITY_SHIFT) &
+		 KGSL_CONTEXT_PRIORITY_MASK);
+	context->priority = new_prio;
+	drawctxt->pending_ctx_pri = 0;
+	spin_unlock(&drawctxt->lock);
+
+	trace_adreno_ctx_priority_update_done(context->id, old_prio, new_prio,
+		KGSL_CTX_PRI_TO_RB_LEVEL(old_prio), KGSL_CTX_PRI_TO_RB_LEVEL(new_prio), 0);
+}
+
 static int hfi_context_register(struct adreno_device *adreno_dev,
 	struct kgsl_context *context)
 {
@@ -3077,6 +3180,8 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 
 	if (context->gmu_registered)
 		return 0;
+
+	gen8_apply_pending_ctx_priority_update(context);
 
 	ret = send_context_register(adreno_dev, context);
 	if (ret) {
@@ -4132,7 +4237,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	}
 
 	ret = adreno_hwsched_ctxt_unregister_wait_completion(adreno_dev,
-			gmu_pdev_dev, &pending_ack,
+			gmu_pdev_dev, context, &pending_ack,
 			gen8_hwsched_process_msgq, &cmd);
 	if (ret) {
 		trigger_context_unregister_fault(adreno_dev, drawctxt);
@@ -4436,6 +4541,83 @@ int gen8_hwsched_disable_hw_fence_throttle(struct adreno_device *adreno_dev)
 done:
 	_disable_hw_fence_throttle(adreno_dev, true);
 
+	return ret;
+}
+
+static int gen8_defer_ctx_priority_update(struct kgsl_context *context,
+	u32 cur_ctx_pri, u32 new_ctx_pri)
+{
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+
+	spin_lock(&drawctxt->lock);
+	context->flags =
+		(context->flags & ~KGSL_CONTEXT_PRIORITY_MASK) |
+		((new_ctx_pri << KGSL_CONTEXT_PRIORITY_SHIFT) &
+		 KGSL_CONTEXT_PRIORITY_MASK);
+	context->priority = new_ctx_pri;
+	drawctxt->pending_ctx_pri = new_ctx_pri;
+	spin_unlock(&drawctxt->lock);
+
+	trace_adreno_ctx_priority_update_request(context->id,
+			cur_ctx_pri, new_ctx_pri,
+			KGSL_CTX_PRI_TO_RB_LEVEL(cur_ctx_pri),
+			KGSL_CTX_PRI_TO_RB_LEVEL(new_ctx_pri),
+			0, 0, 0);
+
+	return 0;
+}
+
+int gen8_hwsched_context_priority_update(struct adreno_device *adreno_dev,
+	struct kgsl_context *context, u32 new_ctx_pri)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct hfi_context_priority_update_cmd cmd = {0};
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	u32 cur_ctx_pri = context->priority;
+	u32 new_level = KGSL_CTX_PRI_TO_RB_LEVEL(new_ctx_pri);
+	u32 old_level = KGSL_CTX_PRI_TO_RB_LEVEL(cur_ctx_pri);
+	int ret;
+
+	/* LPAC has a fixed RB; dynamic priority is not supported */
+	if (context->flags & KGSL_CONTEXT_LPAC)
+		return -EOPNOTSUPP;
+
+	/* RB0 is reserved for real-time workloads, ctx pri change not allowed */
+	if (!new_level || !old_level)
+		return -EOPNOTSUPP;
+
+	/* No-op: priority is already at the requested value */
+	if (new_ctx_pri == cur_ctx_pri)
+		return 0;
+
+	/*
+	 * Defer if the GPU is in slumber OR if the context is unregistered
+	 * with the GMU (during slumber). In both cases the update is applied
+	 * at the next context registration
+	 */
+	if (!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags) ||
+		!context->gmu_registered)
+		return gen8_defer_ctx_priority_update(context, cur_ctx_pri, new_ctx_pri);
+
+	ret = CMD_MSG_HDR(cmd, H2F_MSG_CONTEXT_PRI_UPDATE);
+	if (ret)
+		return ret;
+
+	cmd.ctxt_id = context->id;
+	cmd.version = 1;
+	cmd.new_ctx_pri = new_ctx_pri;
+
+	ret = gen8_hfi_send_cmd_async(adreno_dev, &cmd, sizeof(cmd));
+	if (ret) {
+		dev_err_ratelimited(GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev)),
+		"ctx %u: priority update from %u to %u failed: %d\n",
+		context->id, cur_ctx_pri, new_ctx_pri, ret);
+		new_ctx_pri = 0;
+	}
+
+	spin_lock(&drawctxt->lock);
+	drawctxt->pending_ctx_pri = new_ctx_pri;
+	spin_unlock(&drawctxt->lock);
 	return ret;
 }
 

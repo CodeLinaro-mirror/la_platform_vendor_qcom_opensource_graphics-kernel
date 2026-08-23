@@ -937,7 +937,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a619_variant = {
 	.highest_bank_bit = 14,
 };
 
-/* a619_malabar, a620, a621, a622 and a650 */
+/* a619_malabar, a619_bourtzi, a620, a621, a622 and a650 */
 static const struct kgsl_regmap_list a650_gbif_regs[] = {
 	{A6XX_GBIF_QSB_SIDE0, 0x00071620},
 	{A6XX_GBIF_QSB_SIDE1, 0x00071620},
@@ -969,6 +969,32 @@ static const struct adreno_a6xx_core adreno_gpu_core_a619_malabar = {
 	.protected_regs = a630_protected_regs,
 	.gx_cpr_toggle = true,
 	.highest_bank_bit = 14,
+};
+
+static const struct adreno_a6xx_core adreno_gpu_core_a619_bourtzi = {
+	.base = {
+		DEFINE_ADRENO_REV(ADRENO_REV_A619, 6, 1, 9, ANY_ID),
+		.compatible = "qcom,adreno-gpu-a619-bourtzi",
+		.features =  ADRENO_PREEMPTION | ADRENO_CONTENT_PROTECTION |
+			ADRENO_IOCOHERENT,
+		.gpudev = &adreno_a6xx_gpudev,
+		.perfcounters = &adreno_a6xx_legacy_perfcounters,
+		.uche_gmem_alignment = SZ_1M,
+		.gmem_size = SZ_512K,
+		.bus_width = 32,
+		.snapshot_size = SZ_2M,
+	},
+	.prim_fifo_threshold = 0x0018000,
+	.sqefw_name = "a630_sqe.fw",
+	.zap_name = "gen6_3_33_0_zap.mbn",
+	.hwcg = a615_hwcg_regs,
+	.hwcg_count = ARRAY_SIZE(a615_hwcg_regs),
+	.vbif = a650_gbif_regs,
+	.vbif_count = ARRAY_SIZE(a650_gbif_regs),
+	.hang_detect_cycles = 0x3fffff,
+	.protected_regs = a630_protected_regs,
+	.gx_cpr_toggle = true,
+	.highest_bank_bit = 15,
 };
 
 static const struct kgsl_regmap_list a620_hwcg_regs[] = {
@@ -3548,7 +3574,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 			ADRENO_HW_FENCE | ADRENO_BCL | ADRENO_ACD | ADRENO_GMU_BASED_DCVS |
 			ADRENO_GMU_THERMAL_MITIGATION | ADRENO_CLX | ADRENO_DEFER_GMEM_ALLOC |
 			ADRENO_GMU_MINBW | ADRENO_DCVS_PROFILE | ADRENO_TSENSE_DYNAMIC_PERIOD |
-			ADRENO_GMU_AB,
+			ADRENO_GMU_AB | ADRENO_GMU_FAST_CONTEXT_DESTROY |
+			ADRENO_GMU_DYNAMIC_CTX_PRIORITY,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_2_x_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -3594,7 +3621,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_1 = {
 			ADRENO_HW_FENCE | ADRENO_BCL | ADRENO_ACD | ADRENO_GMU_BASED_DCVS |
 			ADRENO_GMU_THERMAL_MITIGATION | ADRENO_CLX | ADRENO_DEFER_GMEM_ALLOC |
 			ADRENO_GMU_MINBW | ADRENO_DCVS_PROFILE | ADRENO_TSENSE_DYNAMIC_PERIOD |
-			ADRENO_GMU_AB,
+			ADRENO_GMU_AB | ADRENO_GMU_FAST_CONTEXT_DESTROY |
+			ADRENO_GMU_DYNAMIC_CTX_PRIORITY,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_2_x_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -4084,6 +4112,8 @@ static const struct gen8_nonctxt_regs gen8_9_0_nonctxt_regs[] = {
 	{ GEN8_SP_READ_SEL, 0x0001ff00, BIT(PIPE_NONE) },
 	{ GEN8_TPL1_DBG_ECO_CNTL, 0x10100000, BIT(PIPE_NONE) },
 	{ GEN8_TPL1_DBG_ECO_CNTL1, 0x04000720, BIT(PIPE_NONE) },
+	/* Disable HLSQ stproc stc_buf_mode */
+	{ GEN8_SP_HLSQ_DBG_ECO_CNTL_3, BIT(7), BIT(PIPE_NONE) },
 	{ 0 },
 };
 
@@ -4194,6 +4224,7 @@ static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_a619.base,
 	&adreno_gpu_core_a619_variant.base,
 	&adreno_gpu_core_a619_malabar.base,
+	&adreno_gpu_core_a619_bourtzi.base,
 	&adreno_gpu_core_a620.base,
 	&adreno_gpu_core_a621.base,
 	&adreno_gpu_core_a622.base,

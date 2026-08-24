@@ -1296,6 +1296,8 @@ read_gmu_freq:
 
 	gmu->num_freqs = num_freqs;
 	gmu->max_pwrlevel = gmu->num_freqs - 1;
+	/* Set the cur_pwrlevel to an uninitialized state */
+	gmu->cur_pwrlevel = UINT_MAX;
 
 	return 0;
 
@@ -1308,6 +1310,8 @@ default_gmu_freq:
 
 	gmu->num_freqs = 2;
 	gmu->max_pwrlevel = gmu->num_freqs - 1;
+	/* Set the cur_pwrlevel to an uninitialized state */
+	gmu->cur_pwrlevel = UINT_MAX;
 
 	if (adreno_is_a6xx(adreno_dev) && !adreno_is_a660(adreno_dev))
 		gmu->vlvls[0] = RPMH_REGULATOR_LEVEL_MIN_SVS;
@@ -1355,8 +1359,17 @@ static int gmu_core_clock_set_rate_locked(struct kgsl_device *device, u32 pwrlev
 	if (pwrlevel < gmu_core->min_pwrlevel)
 		pwrlevel = gmu_core->min_pwrlevel;
 
-	/* If already at requested level, do nothing */
-	if (pwrlevel == gmu_core->cur_pwrlevel)
+	/*
+	 * Skip if already at the requested level and hub clock is
+	 * correctly configured. Do not skip if cur_hub_level equals
+	 * num_hub_freqs, which is the sentinel value set by
+	 * gmu_core_enable_clks() to indicate that hub clock
+	 * reconfiguration is required after power collapse.
+	 * scale_hub_clock() clears this sentinel after configuring
+	 * GPU_CC_HUB_CX_INT_CLK.
+	 */
+	if ((pwrlevel == gmu_core->cur_pwrlevel) &&
+			(gmu_core->cur_hub_level != gmu_core->num_hub_freqs))
 		return  0;
 
 	req_freq = gmu_core->freqs[pwrlevel];
@@ -1368,9 +1381,9 @@ static int gmu_core_clock_set_rate_locked(struct kgsl_device *device, u32 pwrlev
 		return ret;
 	}
 
-	trace_kgsl_gmu_pwrlevel(req_freq, gmu_core->freqs[gmu_core->cur_pwrlevel]);
-
 	gmu_core->cur_pwrlevel = pwrlevel;
+
+	trace_kgsl_gmu_pwrlevel(req_freq, gmu_core->freqs[gmu_core->cur_pwrlevel]);
 
 	ret = scale_hub_clock(device, gmu_core->vlvls[pwrlevel]);
 
@@ -1447,7 +1460,10 @@ int gmu_core_get_active_frequency(struct kgsl_device *device)
 	struct gmu_core_device *gmu_core_dev = &device->gmu_core;
 
 	mutex_lock(&gmu_core_dev->pwrlevel_mutex);
-	ret = gmu_core_dev->freqs[gmu_core_dev->cur_pwrlevel];
+	if (gmu_core_dev->cur_pwrlevel >= MAX_CX_LEVELS)
+		ret = -EINVAL;
+	else
+		ret = gmu_core_dev->freqs[gmu_core_dev->cur_pwrlevel];
 	mutex_unlock(&gmu_core_dev->pwrlevel_mutex);
 	return ret;
 }

@@ -1183,8 +1183,12 @@ int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
 	 * If scm call returned EOPNOTSUPP, either we are on a kernel version
 	 * lesser than 6.1 where scm call is not supported or we are sending an
 	 * empty request. Ignore the error in such cases.
+	 *
+	 * -EIO indicates that the GPU init SCM call is not supported
+	 * by the TZ firmware. In this case, defer BCL/CLX
+	 * initialization until after the first successful GMU boot.
 	 */
-	return (ret == -EOPNOTSUPP) ? 0 : ret;
+	return (ret == -EOPNOTSUPP || ret == -EIO) ? 0 : ret;
 }
 
 void gen7_spin_idle_debug(struct adreno_device *adreno_dev,

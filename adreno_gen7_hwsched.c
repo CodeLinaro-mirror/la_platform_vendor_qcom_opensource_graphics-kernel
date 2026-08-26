@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+<<<<<<< TARGET BRANCH (24c9e4 Revert "msm: kgsl: Give hint to SMMU for skipping TLB ops du)
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+=======
+ *Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+>>>>>>> SOURCE BRANCH (709c72 kgsl: Prevent bind to VBO entries pending free in deferred w)
  */
 
 #include <linux/clk.h>
@@ -343,7 +347,7 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	gen7_gmu_aop_send_acd_state(gmu, adreno_dev->acd_enabled);
 
-	ret = gen7_gmu_enable_gdsc(adreno_dev);
+	ret = kgsl_pwrctrl_enable_cx_gdsc(device);
 	if (ret)
 		return ret;
 
@@ -423,7 +427,7 @@ clks_gdsc_off:
 	clk_bulk_disable_unprepare(gmu->num_clks, gmu->clks);
 
 gdsc_off:
-	gen7_gmu_disable_gdsc(adreno_dev);
+	kgsl_pwrctrl_disable_cx_gdsc(device);
 
 	gen7_rdpm_cx_freq_update(gmu, 0);
 
@@ -438,7 +442,7 @@ static int gen7_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_AWARE);
 
-	ret = gen7_gmu_enable_gdsc(adreno_dev);
+	ret = kgsl_pwrctrl_enable_cx_gdsc(device);
 	if (ret)
 		return ret;
 
@@ -494,7 +498,7 @@ clks_gdsc_off:
 	clk_bulk_disable_unprepare(gmu->num_clks, gmu->clks);
 
 gdsc_off:
-	gen7_gmu_disable_gdsc(adreno_dev);
+	kgsl_pwrctrl_disable_cx_gdsc(device);
 
 	gen7_rdpm_cx_freq_update(gmu, 0);
 
@@ -581,7 +585,7 @@ static int gen7_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
 
 	clk_bulk_disable_unprepare(gmu->num_clks, gmu->clks);
 
-	gen7_gmu_disable_gdsc(adreno_dev);
+	kgsl_pwrctrl_disable_cx_gdsc(device);
 
 	gen7_rdpm_cx_freq_update(gmu, 0);
 

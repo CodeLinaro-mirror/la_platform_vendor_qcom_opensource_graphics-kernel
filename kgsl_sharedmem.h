@@ -43,6 +43,8 @@ struct kgsl_process_private;
 #define KGSL_MEMDESC_HYPASSIGNED_HLOS BIT(13)
 /* The memdesc is migrated to shmem */
 #define KGSL_MEMDESC_MIGRATED BIT(14)
+/* The memdesc is part of AIM memory */
+#define KGSL_MEMDESC_AIM BIT(15)
 
 #define TEST_FLAG(_bit, _val) ((atomic_read(_val) & (_bit)) != 0)
 #define SET_FLAG(_bit, _val) atomic_or((int)(_bit), (_val))

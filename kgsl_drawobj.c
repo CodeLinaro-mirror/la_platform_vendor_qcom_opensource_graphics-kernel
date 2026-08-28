@@ -172,8 +172,9 @@ void kgsl_drawobj_log_hw_syncobj(struct kgsl_device *device, struct kgsl_drawobj
 		kgsl_get_fence_name(fence, value, sizeof(value));
 
 		dev_err(device->dev,
-			"dma fence[%d] signaled:%d kgsl:%d ctx:%llu seqno:%llu value:%s cmdbatch:%d\n",
-			i++, signaled, kgsl, fence->context, fence->seqno, value, cmdbatch);
+			"dma fence[%d] signaled:%d kgsl:%d ctx:%llu seqno:%llu value:%s cmdbatch:%d handle:%llu\n",
+			i++, signaled, kgsl, fence->context, fence->seqno, value, cmdbatch,
+			hw_fence->handle);
 	}
 }
 

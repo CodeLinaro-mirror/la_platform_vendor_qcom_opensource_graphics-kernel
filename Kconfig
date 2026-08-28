@@ -184,3 +184,13 @@ config QCOM_KGSL_GENPD_DUMP
 	  This feature depends on the generic power domain (GENPD)
 	  framework and requires additional downstream debug support
 	  for GENPD to provide meaningful output.
+
+config QCOM_KGSL_AIM_SIZE
+	hex "Size of AIM buffer allocations in bytes"
+	default 0x2000
+	help
+	  The size, in bytes, of each Aggregated Information Manager (AIM) memory
+	  allocation. This value sizes the root AIM buffer allocated during GMU
+	  memory initialization. It's also used as the minimum size for any
+	  additional child buffers allocated per GMU request. Note that the
+	  allocations will ultimately be page-aligned.

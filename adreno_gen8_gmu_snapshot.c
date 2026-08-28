@@ -102,6 +102,8 @@ static void gen8_gmu_snapshot_memories(struct kgsl_device *device,
 			desc.type = SNAPSHOT_GMU_MEM_VRB;
 		else if (md == gmu_core->trace.md)
 			desc.type = SNAPSHOT_GMU_MEM_TRACE;
+		else if (TEST_FLAG(KGSL_MEMDESC_AIM, &md->priv))
+			desc.type = SNAPSHOT_GMU_MEM_AIM;
 		else
 			desc.type = SNAPSHOT_GMU_MEM_BIN_BLOCK;
 

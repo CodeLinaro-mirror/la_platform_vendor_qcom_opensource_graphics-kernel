@@ -255,7 +255,7 @@ static void gen8_hwsched_init_spel_config(struct adreno_device *adreno_dev)
 	struct gmu_core_device *gmu = &device->gmu_core;
 	struct kgsl_gmu_spel *spel = &gmu->spel;
 
-	spel->enabled = false;
+	spel->enabled = true;
 	memset(spel->config, 0, sizeof(spel->config));
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_DYN_EN, 1);
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_LKG_EN, 1);
@@ -1186,6 +1186,8 @@ no_gx_power:
 	kgsl_pwrctrl_clear_l3_vote(device);
 
 	gen8_hwsched_soccp_vote(adreno_dev, false);
+
+	gmu_core_aim_expansion(device);
 
 	device->bootcomplete_ktime = 0;
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);

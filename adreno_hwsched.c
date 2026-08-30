@@ -2903,6 +2903,7 @@ static void adreno_hwsched_setup_fence(struct adreno_device *adreno_dev,
 {
 	struct kgsl_sync_timeline *ktimeline = kfence->parent;
 	struct kgsl_context *context = ktimeline->context;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_hwsched_ops *hwsched_ops =
 				adreno_dev->hwsched.hwsched_ops;
 
@@ -2910,17 +2911,20 @@ static void adreno_hwsched_setup_fence(struct adreno_device *adreno_dev,
 	if (kgsl_context_is_bad(context))
 		return;
 
-	kthread_init_work(&kfence->deadline_work, adreno_hwsched_fence_deadline_work);
+	/* Skip deadline timer/work init on targets that don't support deadline boost */
+	if (!IS_ERR_OR_NULL(device->deadline_worker)) {
+		kthread_init_work(&kfence->deadline_work, adreno_hwsched_fence_deadline_work);
 
 #if (KERNEL_VERSION(6, 15, 0) > LINUX_VERSION_CODE)
-	hrtimer_init(&kfence->deadline_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
-	kfence->deadline_timer.function = adreno_hwsched_fence_deadline_timer;
+		hrtimer_init(&kfence->deadline_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+		kfence->deadline_timer.function = adreno_hwsched_fence_deadline_timer;
 #else
-	hrtimer_setup(&kfence->deadline_timer, adreno_hwsched_fence_deadline_timer,
-			CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+		hrtimer_setup(&kfence->deadline_timer, adreno_hwsched_fence_deadline_timer,
+				CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 #endif
+	}
 
-	if (!gmu_core_is_gmu_fencing_enabled(KGSL_DEVICE(adreno_dev)))
+	if (!gmu_core_is_gmu_fencing_enabled(device))
 		return;
 
 	/* If the fence is already signaled, skip the work to create a hw fence */

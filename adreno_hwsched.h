@@ -212,6 +212,11 @@ struct adreno_hwsched {
 	struct adreno_dcvs_tunable sysfs_dcvs_tunables[GPU_TUNING_KEY_MAX];
 	/** @default_dcvs_tunables: Default value of GMU based DCVS tunables **/
 	u32 default_dcvs_tunables[GPU_TUNING_KEY_MAX];
+	/**
+	 * @long_ib_timeout_ms: Sysfs override for the GC long IB timeout
+	 * in ms. 0 means use the default.
+	 */
+	u32 long_ib_timeout_ms;
 };
 
 /*

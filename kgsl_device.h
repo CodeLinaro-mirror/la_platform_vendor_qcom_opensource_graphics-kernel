@@ -422,6 +422,8 @@ struct kgsl_device {
 	bool fence_deadline_boost;
 	/** @deadline_worker: Worker thread to send missed deadline hint to GMU */
 	struct kthread_worker *deadline_worker;
+	/** @deadline_offset: Percentage offset applied to the deadline to boost gpu freq early */
+	u32 deadline_offset;
 	/** @prev_missed_deadline: previous deadline for the vsync */
 	ktime_t prev_missed_deadline;
 	/** @prev_deadline_ktime: Previous ktime of deadline boost sent */

@@ -351,14 +351,15 @@ TRACE_EVENT(kgsl_missed_deadline,
 
 TRACE_EVENT(kgsl_fence_deadline_info,
 	TP_PROTO(unsigned int ctx, unsigned int ts, u64 deadline_ktime, s64 expiry_us,
-		u64 signaled_ktime),
-	TP_ARGS(ctx, ts, deadline_ktime, expiry_us, signaled_ktime),
+		u64 signaled_ktime, u32 deadline_offset),
+	TP_ARGS(ctx, ts, deadline_ktime, expiry_us, signaled_ktime, deadline_offset),
 	TP_STRUCT__entry(
 		__field(unsigned int, ctx)
 		__field(unsigned int, ts)
 		__field(u64, deadline_ktime)
 		__field(s64, expiry_us)
 		__field(u64, signaled_ktime)
+		__field(u32, deadline_offset)
 	),
 	TP_fast_assign(
 		__entry->ctx = ctx;
@@ -366,14 +367,16 @@ TRACE_EVENT(kgsl_fence_deadline_info,
 		__entry->deadline_ktime = deadline_ktime;
 		__entry->expiry_us = expiry_us;
 		__entry->signaled_ktime = signaled_ktime;
+		__entry->deadline_offset = deadline_offset;
 	),
 
-	TP_printk("ctx=%u ts=%u deadline_ktime=%llu expiry_us=%lld signaled_ktime=%llu",
+	TP_printk("ctx=%u ts=%u deadline_ktime=%llu expiry_us=%lld signaled_ktime=%llu deadline_offset=%u",
 		__entry->ctx,
 		__entry->ts,
 		__entry->deadline_ktime,
 		__entry->expiry_us,
-		__entry->signaled_ktime)
+		__entry->signaled_ktime,
+		__entry->deadline_offset)
 );
 
 /*

@@ -3316,6 +3316,9 @@ int gen8_probe_common(struct platform_device *pdev,
 
 	device->pwrctrl.rt_bus_hint = gen8_core->rt_bus_hint;
 
+	if (adreno_is_gen8_11_x(adreno_dev))
+		device->pwrctrl.skip_cx_gdsc_wait = true;
+
 	device->cx_host_irq_num = kgsl_request_irq_optional(pdev,
 		"cx_host_irq", gen8_cx_host_irq_handler, device);
 

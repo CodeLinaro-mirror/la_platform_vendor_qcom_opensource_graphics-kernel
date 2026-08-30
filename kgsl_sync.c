@@ -510,8 +510,9 @@ static void _hw_fence_destroy(struct kgsl_sync_fence *kfence)
 
 void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
 {
-	/* soccp should be powered on */
-	WARN_RATELIMIT(!test_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags),
+	/* soccp should be powered on when signaling hw fences */
+	WARN_RATELIMIT((kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_HW_FENCE) &&
+		!test_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags),
 		"signaling hw fence via cpu without soccp powered up\n");
 
 	if (kfence->synx_handle)

@@ -190,6 +190,20 @@
 #define ADRENO_GMU_AB BIT(28)
 /* Enable GMU Fast Context Destroy optimization */
 #define ADRENO_GMU_FAST_CONTEXT_DESTROY BIT(29)
+/* Enable AHB timeout recovery */
+#define ADRENO_AHB_TIMEOUT_RECOVERY BIT(30)
+/* Enable SPEL (System Power and Energy Limits) */
+#define ADRENO_GMU_SPEL BIT(31)
+/* Enable ACD AVG (Adaptive Voltage Guardband) */
+#define ADRENO_ACD_AVG BIT_ULL(32)
+/* GMU and kernel supports synx */
+#define ADRENO_SYNX BIT_ULL(33)
+/* Enable tracking and handling of fence deadlines */
+#define ADRENO_FENCE_DEADLINE_BOOST BIT_ULL(34)
+/* GMU supports thinmem_cfg feature */
+#define ADRENO_GMU_THINMEM_CFG BIT_ULL(35)
+/* Enable dynamic context priority (RB migration) */
+#define ADRENO_GMU_DYNAMIC_CTX_PRIORITY BIT_ULL(36)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -1364,6 +1378,12 @@ static inline int adreno_is_a619_malabar(struct adreno_device *adreno_dev)
 {
 	return of_device_is_compatible(adreno_dev->dev.pdev->dev.of_node,
 		"qcom,adreno-gpu-a619-malabar");
+}
+
+static inline int adreno_is_a619_bourtzi(struct adreno_device *adreno_dev)
+{
+        return of_device_is_compatible(adreno_dev->dev.pdev->dev.of_node,
+                "qcom,adreno-gpu-a619-bourtzi");
 }
 
 static inline int adreno_is_a620(struct adreno_device *adreno_dev)

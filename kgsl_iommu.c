@@ -420,11 +420,13 @@ static size_t _iopgtbl_map_page_to_range(struct kgsl_iommu_pt *pt,
 		struct page *page, u64 gpuaddr, size_t range, int prot)
 {
 	struct io_pgtable_ops *ops = pt->pgtbl_ops;
-	size_t mapped = 0, map_size = 0;
+	size_t mapped = 0;
 	u64 addr = gpuaddr;
 	int ret;
 
 	while (range) {
+		size_t map_size = 0;
+
 		ret = ops->map_pages(ops, addr, page_to_phys(page), PAGE_SIZE,
 				     1, prot, GFP_KERNEL, &map_size);
 		if (ret) {
@@ -2356,9 +2358,9 @@ static int kgsl_iommu_set_svm_region(struct kgsl_pagetable *pagetable,
 	 * Protect access to the gpuaddr here to prevent multiple vmas from
 	 * trying to map a SVM region at the same time
 	 */
-	spin_lock(&memdesc->lock);
+	mutex_lock(&memdesc->lock);
 	if (memdesc->gpuaddr) {
-		spin_unlock(&memdesc->lock);
+		mutex_unlock(&memdesc->lock);
 		kmem_cache_free(addr_entry_cache, new);
 		return -EBUSY;
 	}
@@ -2387,14 +2389,14 @@ out:
 	spin_unlock(&pagetable->lock);
 
 	if (ret) {
-		spin_unlock(&memdesc->lock);
+		mutex_unlock(&memdesc->lock);
 		kmem_cache_free(addr_entry_cache, new);
 		return ret;
 	}
 
 	memdesc->gpuaddr = gpuaddr;
 	memdesc->pagetable = pagetable;
-	spin_unlock(&memdesc->lock);
+	mutex_unlock(&memdesc->lock);
 
 	return ret;
 }

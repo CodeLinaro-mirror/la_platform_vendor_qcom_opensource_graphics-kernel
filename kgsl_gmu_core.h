@@ -689,6 +689,7 @@ void gmu_core_close(struct kgsl_device *device);
 bool gmu_core_gpmu_isenabled(struct kgsl_device *device);
 bool gmu_core_scales_bandwidth(struct kgsl_device *device);
 bool gmu_core_isenabled(struct kgsl_device *device);
+bool gmu_device_is_enabled(struct device_node *node);
 int gmu_core_dev_acd_set(struct kgsl_device *device, bool val);
 void gmu_core_regread(struct kgsl_device *device, unsigned int offsetwords,
 		unsigned int *value);

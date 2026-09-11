@@ -2840,6 +2840,9 @@ static void adreno_hwsched_work(struct kthread_work *work)
 
 #define DEADLINE_BOOST_DEBOUNCE_WINDOW_US    4000
 
+/* Account for bootup latency and ignore deadline notifications within this window */
+#define BOOT_COMPLETE_COOLDOWN_WINDOW_US    16000
+
 static void adreno_hwsched_hint_missed_deadline(struct kgsl_context *context, u32 timestamp,
 		ktime_t deadline)
 {
@@ -2856,17 +2859,33 @@ static void adreno_hwsched_hint_missed_deadline(struct kgsl_context *context, u3
 
 		/*
 		 * Ignore duplicate deadline boosts within a short period. We only want one
-		 * boost per frame in this path.
+		 * boost per frame in this path. Also account for bootup latency and ignore
+		 * notifications within a short cooldown period after boot complete, since the
+		 * GPU could be in slumber or still in the process of booting up, to avoid
+		 * unwanted GPU frequency boosts.
 		 */
-		if (ktime_us_delta(now, device->prev_deadline_ktime) <
-				DEADLINE_BOOST_DEBOUNCE_WINDOW_US)
+		if ((ktime_us_delta(now, device->prev_deadline_ktime) <
+						DEADLINE_BOOST_DEBOUNCE_WINDOW_US) ||
+			(!device->bootcomplete_ktime) ||
+			(ktime_us_delta(now, device->bootcomplete_ktime) <
+						BOOT_COMPLETE_COOLDOWN_WINDOW_US))
 			return;
 
 		trace_kgsl_missed_deadline(context->id, timestamp, 0);
 		hwsched_ops->notify_deadline_boost(adreno_dev, context->id);
 		device->prev_deadline_ktime = now;
 	} else if (ktime_after(deadline, device->prev_missed_deadline)) {
-		/* Ignore multiple boosts for same deadline */
+		/*
+		 * Ignore multiple boosts for same deadline. The GPU could alos be in slumber
+		 * or still in the process of booting up. Account for bootup latency and ignore
+		 * notifications within a short cooldown period after boot complete to avoid
+		 * unwanted GPU frequency boosts.
+		 */
+		if (!device->bootcomplete_ktime || ktime_before(deadline,
+				ktime_add_us(device->bootcomplete_ktime,
+					BOOT_COMPLETE_COOLDOWN_WINDOW_US)))
+			return;
+
 		trace_kgsl_missed_deadline(context->id, timestamp, ktime_to_ns(deadline));
 		hwsched_ops->notify_deadline_boost(adreno_dev, context->id);
 		device->prev_missed_deadline = deadline;

@@ -1562,9 +1562,6 @@ static int kgsl_iommu_get_context_bank(struct kgsl_pagetable *pt, struct kgsl_co
 	struct kgsl_iommu *iommu = to_kgsl_iommu(pt);
 	struct iommu_domain *domain;
 
-	if (WARN_ON_ONCE(iommu->secure_context.is_proxy_device))
-		return -EINVAL;
-
 	if (kgsl_context_is_lpac(context))
 		domain = to_iommu_domain(&iommu->lpac_context);
 	else
@@ -1577,9 +1574,6 @@ static int kgsl_iommu_get_asid(struct kgsl_pagetable *pt, struct kgsl_context *c
 {
 	struct kgsl_iommu *iommu = to_kgsl_iommu(pt);
 	struct iommu_domain *domain;
-
-	if (WARN_ON_ONCE(iommu->secure_context.is_proxy_device))
-		return -EINVAL;
 
 	if (kgsl_context_is_lpac(context))
 		domain = to_iommu_domain(&iommu->lpac_context);

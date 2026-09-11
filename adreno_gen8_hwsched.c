@@ -2124,6 +2124,10 @@ static const char * const dcvs_tunables_strings[] = {
 	static struct kobj_attribute dcvs_attr_##_name = \
 			__ATTR(_name, 0444, _name##_show, NULL)
 
+#define DCVS_SYSFS_RW(_name) \
+	static struct kobj_attribute dcvs_attr_##_name = \
+			__ATTR(_name, 0644, _name##_show, _name##_store)
+
 static ssize_t aggregated_max_gpuclk_show(struct kobject *kobj, struct kobj_attribute *attr,
 		char *buf)
 {
@@ -2298,11 +2302,40 @@ static ssize_t thermal_mitigation_store(struct device *dev, struct device_attrib
 	return count;
 }
 
+static ssize_t fence_deadline_boost_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", device->fence_deadline_boost);
+}
+
+static ssize_t fence_deadline_boost_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	bool val;
+	int ret;
+
+	ret = kstrtobool(buf, &val);
+	if (ret)
+		return ret;
+
+	device->fence_deadline_boost = val;
+
+	return count;
+}
+
 DCVS_SYSFS_RO(aggregated_max_gpuclk);
 DCVS_SYSFS_RO(gpu_maxclk_constraints);
 DCVS_SYSFS_RO(dcvs_tunables_default);
 DCVS_SYSFS_RO(dcvs_tunables_cur);
 DCVS_SYSFS_RO(gpu_load);
+DCVS_SYSFS_RW(fence_deadline_boost);
 
 DEVICE_ATTR_RW(thermal_mitigation);
 
@@ -2312,6 +2345,7 @@ static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_dcvs_tunables_cur.attr,
 	&dcvs_attr_gpu_load.attr,
 	&dcvs_attr_gpu_maxclk_constraints.attr,
+	&dcvs_attr_fence_deadline_boost.attr,
 	NULL,
 };
 

@@ -2484,22 +2484,41 @@ static bool adreno_hwsched_context_is_guilty(struct adreno_context *drawctxt)
 	return context_is_guilty(context, cmd->error);
 }
 
-static void print_fault_syncobj(struct adreno_device *adreno_dev,
+static struct kgsl_drawobj *find_fault_syncobj(struct adreno_device *adreno_dev,
 				u32 ctxt_id, u32 ts)
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct cmd_list_obj *obj;
+	struct kgsl_drawobj *fault_drawobj = NULL;
 
 	list_for_each_entry(obj, &hwsched->cmd_list, node) {
 		struct kgsl_drawobj *drawobj = obj->drawobj;
 
 		if (drawobj->type == SYNCOBJ_TYPE) {
 			if ((ctxt_id == drawobj->context->id) &&
-			(ts == drawobj->timestamp))
-				kgsl_drawobj_log_hw_syncobj(KGSL_DEVICE(adreno_dev),
-					SYNCOBJ(drawobj));
+				(ts == drawobj->timestamp)) {
+				fault_drawobj = drawobj;
+				break;
+			}
 		}
 	}
+
+	return fault_drawobj;
+}
+
+static bool skip_snapshot(struct kgsl_context *context, struct kgsl_context *context_lpac)
+{
+	/* Take snapshot if no context is found */
+	if (!context && !context_lpac)
+		return false;
+
+	if (context && !(context->flags & KGSL_CONTEXT_NO_SNAPSHOT))
+		return false;
+
+	if (context_lpac && !(context_lpac->flags & KGSL_CONTEXT_NO_SNAPSHOT))
+		return false;
+
+	return true;
 }
 
 static void adreno_hwsched_snapshot_legacy(struct adreno_device *adreno_dev, int fault)
@@ -2515,8 +2534,13 @@ static void adreno_hwsched_snapshot_legacy(struct adreno_device *adreno_dev, int
 		srcu_notifier_call_chain(&device->nh, GPU_SSR_BEGIN, NULL);
 
 	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
-		print_fault_syncobj(adreno_dev, cmd->ctxt_id, cmd->ts);
-		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
+		drawobj = find_fault_syncobj(adreno_dev, cmd->ctxt_id, cmd->ts);
+		if (drawobj) {
+			kgsl_drawobj_log_hw_syncobj(device, SYNCOBJ(drawobj));
+			context = drawobj->context;
+		}
+		if (!skip_snapshot(context, NULL))
+			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		return;
 	}
 
@@ -2559,7 +2583,8 @@ static void adreno_hwsched_snapshot_legacy(struct adreno_device *adreno_dev, int
 
 	do_fault_header(adreno_dev, drawobj, fault);
 
-	kgsl_device_snapshot(device, context, NULL, false);
+	if (!skip_snapshot(context, NULL))
+		kgsl_device_snapshot(device, context, NULL, false);
 
 	force_retire_timestamp(device, drawobj);
 
@@ -2596,8 +2621,13 @@ static int adreno_hwsched_snapshot_and_soft_reset(struct adreno_device *adreno_d
 		adreno_dev->hwsched.reset_type = GMU_GPU_HARD_RESET;
 
 	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
-		print_fault_syncobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
-		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
+		drawobj = find_fault_syncobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
+		if (drawobj) {
+			kgsl_drawobj_log_hw_syncobj(device, SYNCOBJ(drawobj));
+			context = drawobj->context;
+		}
+		if (!skip_snapshot(context, NULL))
+			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		ret = -ETIMEDOUT;
 		goto done;
 	}
@@ -2661,7 +2691,9 @@ static int adreno_hwsched_snapshot_and_soft_reset(struct adreno_device *adreno_d
 	if (drawobj_lpac && drawobj_lpac->context)
 		set_bit(ADRENO_CONTEXT_FAULT, &drawobj_lpac->context->priv);
 
-	kgsl_device_snapshot(device, context, context_lpac, false);
+	if (!skip_snapshot(context, context_lpac))
+		kgsl_device_snapshot(device, context, context_lpac, false);
+
 	adreno_gpufault_stats(adreno_dev, drawobj, drawobj_lpac, fault);
 
 	if (drawobj) {

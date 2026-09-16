@@ -983,6 +983,7 @@ static void kgsl_destroy_process_private(struct kref *kref)
 
 	kfree(private->cmdline);
 	put_pid(private->pid);
+	mmdrop(private->mm);
 	idr_destroy(&private->mem_idr);
 	idr_destroy(&private->syncsource_idr);
 
@@ -1199,6 +1200,8 @@ static struct kgsl_process_private *kgsl_process_private_new(
 
 	private->fd_count = 1;
 	private->pid = cur_pid;
+	private->mm = current->mm;
+	mmgrab(current->mm);
 	get_task_comm(private->comm, current->group_leader);
 	private->cmdline = kstrdup_quotable_cmdline(current, GFP_KERNEL);
 
@@ -1221,6 +1224,7 @@ static struct kgsl_process_private *kgsl_process_private_new(
 		idr_destroy(&private->mem_idr);
 		idr_destroy(&private->syncsource_idr);
 		put_pid(private->pid);
+		mmdrop(private->mm);
 
 		kfree(private);
 		private = ERR_PTR(err);
@@ -3028,16 +3032,15 @@ static int kgsl_setup_anon_useraddr(struct kgsl_device *device, struct kgsl_page
 	entry->memdesc.ops = &kgsl_usermem_ops;
 
 	if (kgsl_memdesc_use_cpu_map(&entry->memdesc)) {
-
 		/* Register the address in the database */
 		ret = kgsl_mmu_set_svm_region(pagetable,
-			(uint64_t) hostptr, (uint64_t) size);
+			&entry->memdesc, (uint64_t) hostptr, (uint64_t) size);
 
 		/* if OOM, retry once after flushing lockless_workqueue */
 		if (ret == -ENOMEM) {
 			flush_workqueue(kgsl_driver.lockless_workqueue);
 			ret = kgsl_mmu_set_svm_region(pagetable,
-				(uint64_t) hostptr, (uint64_t) size);
+				&entry->memdesc, (uint64_t) hostptr, (uint64_t) size);
 		}
 
 		if (ret)
@@ -4591,6 +4594,12 @@ kgsl_mmap_memstore(struct file *file, struct kgsl_device *device,
 	vma->vm_ops = &kgsl_memstore_vm_ops;
 	vma->vm_file = file;
 
+	/*
+	 * We use vm_pgoff to identify the memstore at mmap time. It has a different meaning to
+	 * other kernel layers so reset it to 0.
+	 */
+	vma->vm_pgoff = 0;
+
 	return 0;
 }
 
@@ -4603,8 +4612,10 @@ static void kgsl_gpumem_vm_open(struct vm_area_struct *vma)
 {
 	struct kgsl_mem_entry *entry = vma->vm_private_data;
 
-	if (!kgsl_mem_entry_get(entry))
+	if (!kgsl_mem_entry_get(entry)) {
 		vma->vm_private_data = NULL;
+		return;
+	}
 
 	atomic_inc(&entry->map_count);
 }
@@ -4702,29 +4713,11 @@ static unsigned long _gpu_set_svm_region(struct kgsl_process_private *private,
 {
 	int ret;
 
-	/*
-	 * Protect access to the gpuaddr here to prevent multiple vmas from
-	 * trying to map a SVM region at the same time
-	 */
-	spin_lock(&entry->memdesc.lock);
+	ret = kgsl_mmu_set_svm_region(private->pagetable,  &entry->memdesc,
+		(uint64_t) addr, (uint64_t) size);
 
-	if (entry->memdesc.gpuaddr) {
-		spin_unlock(&entry->memdesc.lock);
-		return (unsigned long) -EBUSY;
-	}
-
-	ret = kgsl_mmu_set_svm_region(private->pagetable, (uint64_t) addr,
-		(uint64_t) size);
-
-	if (ret != 0) {
-		spin_unlock(&entry->memdesc.lock);
+	if (ret != 0)
 		return (unsigned long) ret;
-	}
-
-	entry->memdesc.gpuaddr = (uint64_t) addr;
-	spin_unlock(&entry->memdesc.lock);
-
-	entry->memdesc.pagetable = private->pagetable;
 
 	ret = kgsl_mmu_map(private->pagetable, &entry->memdesc);
 	if (ret) {
@@ -4900,6 +4893,9 @@ static int kgsl_mmap(struct file *file, struct vm_area_struct *vma)
 	struct kgsl_device *device = dev_priv->device;
 	uint64_t flags;
 	int ret;
+
+	if (vma->vm_mm != private->mm)
+		return -EACCES;
 
 	/* Handle leagacy behavior for memstore */
 

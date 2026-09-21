@@ -508,6 +508,10 @@ int kgsl_pool_alloc_page(int *page_size, struct page **pages,
 				size = PAGE_SIZE <<
 					kgsl_pools[pool_idx-1].pool_order;
 				goto eagain;
+			} else if (order > 0) {
+				/* No order 0 pool to step down to. Use base pages */
+				size = PAGE_SIZE;
+				goto eagain;
 			} else
 				return -ENOMEM;
 		}

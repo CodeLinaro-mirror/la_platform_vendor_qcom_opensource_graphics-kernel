@@ -706,6 +706,7 @@ adreno_identify_gpu(struct platform_device *pdev, u32 *chipid)
 
 static const struct of_device_id adreno_match_table[] = {
 	{ .compatible = "qcom,kgsl-3d0", .data = &device_3d0 },
+	{ .compatible = "qcom,kgsl", .data = &device_3d0 },
 	{ },
 };
 

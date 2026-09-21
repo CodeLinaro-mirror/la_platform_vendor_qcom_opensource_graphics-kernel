@@ -524,7 +524,8 @@ static int tz_handler(struct devfreq *devfreq, unsigned int event, void *data)
 	int result;
 	struct device_node *node = devfreq->dev.parent->of_node;
 
-	if (!of_device_is_compatible(node, "qcom,kgsl-3d0"))
+	if (!(of_device_is_compatible(node, "qcom,kgsl-3d0") ||
+		of_device_is_compatible(node, "qcom,kgsl")))
 		return -EINVAL;
 
 	switch (event) {

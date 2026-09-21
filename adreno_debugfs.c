@@ -1334,97 +1334,103 @@ static int spel_config_show(struct seq_file *s, void *unused)
 
 	raw = spel->config[0];
 	seq_printf(s, "RAW[0] = 0x%08x\n", raw);
-	seq_printf(s, "    forced_telemetry_window   = %lu\n",
+	seq_printf(s, "    forced_telemetry_window      = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_FORCED_TELEMETRY_WINDOW, raw));
-	seq_printf(s, "    min_perf_level            = %lu\n",
+	seq_printf(s, "    min_perf_level               = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_MIN_PERF_LEVEL, raw));
-	seq_printf(s, "    short_dce_margin_scale_en = %lu\n",
+	seq_printf(s, "    short_dce_margin_scale_en    = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_SHORT_DCE_MARGIN_SCALE_EN, raw));
-	seq_printf(s, "    local_pmic_loss_calc_en   = %lu\n",
+	seq_printf(s, "    local_pmic_loss_calc_en      = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_LOCAL_PMIC_LOSS_CALC_EN, raw));
-	seq_printf(s, "    cdyn_hist_en              = %lu\n",
+	seq_printf(s, "    cdyn_hist_en                 = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_CDYN_HIST_EN, raw));
-	seq_printf(s, "    long_desired_pwr_en       = %lu\n",
+	seq_printf(s, "    long_desired_pwr_en          = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_LONG_DESIRED_PWR_EN, raw));
-	seq_printf(s, "    short_desired_pwr_en      = %lu\n",
+	seq_printf(s, "    short_desired_pwr_en         = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_SHORT_DESIRED_PWR_EN, raw));
-	seq_printf(s, "    telemetry_en              = %lu\n",
+	seq_printf(s, "    telemetry_en                 = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_TELEMETRY_EN, raw));
-	seq_printf(s, "    long_pwr_budget_enforce   = %lu\n",
+	seq_printf(s, "    long_pwr_budget_enforce      = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_LONG_PWR_BUDGET_ENFORCE, raw));
-	seq_printf(s, "    long_en                   = %lu\n",
+	seq_printf(s, "    long_en                      = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_LONG_EN, raw));
-	seq_printf(s, "    short_en                  = %lu\n",
+	seq_printf(s, "    short_en                     = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_SHORT_EN, raw));
-	seq_printf(s, "    lkg_en                    = %lu\n",
+	seq_printf(s, "    lkg_en                       = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_LKG_EN, raw));
-	seq_printf(s, "    dyn_en                    = %lu\n",
+	seq_printf(s, "    dyn_en                       = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_DYN_EN, raw));
 	seq_puts(s, "\n");
 
 	raw = spel->config[1];
 	seq_printf(s, "RAW[1] = 0x%08x\n", raw);
-	seq_printf(s, "    dce_cdyn_bx_scale         = %lu\n",
+	seq_printf(s, "    dce_cdyn_bx_scale            = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_DCE_CDYN_BX_SCALE, raw));
-	seq_printf(s, "    dce_cdyn_mx_scale         = %lu\n",
+	seq_printf(s, "    dce_cdyn_mx_scale            = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_DCE_CDYN_MX_SCALE, raw));
-	seq_printf(s, "    max_budget_cdyn_gfx_short = %lu\n",
+	seq_printf(s, "    max_budget_cdyn_gfx_short    = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_MAX_BUDGET_CDYN_GFX_SHORT, raw));
-	seq_printf(s, "    max_budget_cdyn_gfx       = %lu\n",
+	seq_printf(s, "    max_budget_cdyn_gfx          = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_MAX_BUDGET_CDYN_GFX, raw));
-	seq_printf(s, "    des_pwr_alpha             = %lu\n",
+	seq_printf(s, "    des_pwr_alpha                = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_DES_PWR_ALPHA, raw));
 	seq_puts(s, "\n");
 
 	raw = spel->config[2];
 	seq_printf(s, "RAW[2] = 0x%08x\n", raw);
-	seq_printf(s, "    num_samples_2             = %lu\n",
+	seq_printf(s, "    num_samples_2                = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_NUM_SAMPLES_2, raw));
-	seq_printf(s, "    cdyn_accum_config_0       = %lu\n",
+	seq_printf(s, "    cdyn_accum_config_0          = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_CDYN_ACCUM_CONFIG_0, raw));
-	seq_printf(s, "    cdyn_hist_alpha           = %lu\n",
+	seq_printf(s, "    cdyn_hist_alpha              = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_CDYN_HIST_ALPHA, raw));
-	seq_printf(s, "    cdyn_scale_factor_en      = %lu\n",
+	seq_printf(s, "    cdyn_scale_factor_en         = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_CDYN_SCALE_FACTOR_EN, raw));
-	seq_printf(s, "    num_samples               = %lu\n",
+	seq_printf(s, "    num_samples                  = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_NUM_SAMPLES, raw));
 	seq_puts(s, "\n");
 
 	raw = spel->config[3];
 	seq_printf(s, "RAW[3] = 0x%08x\n", raw);
-	seq_printf(s, "    reserved_3                = 0x%lx\n",
+	seq_printf(s, "    reserved_3                   = 0x%lx\n",
 		FIELD_GET(GMU_PWR_BUDGET_RESERVED_3, raw));
-	seq_printf(s, "    use_static_cdyn_bp        = %lu\n",
+	seq_printf(s, "    dampener_factor              = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_DAMPENER_FACTOR, raw));
+	seq_printf(s, "    des_pwr_freq_scale_factor_m1 = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_DES_PWR_FREQ_SCALE_FACTOR_M1, raw));
+	seq_printf(s, "    des_pwr_freq_scale_factor_m0 = %lu\n",
+		FIELD_GET(GMU_PWR_BUDGET_DES_PWR_FREQ_SCALE_FACTOR_M0, raw));
+	seq_printf(s, "    use_static_cdyn_bp           = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_USE_STATIC_CDYN_BP, raw));
-	seq_printf(s, "    sys_fw_vote_enforce       = %lu\n",
+	seq_printf(s, "    sys_fw_vote_enforce          = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_SYS_FW_VOTE_ENFORCE, raw));
-	seq_printf(s, "    skip_delayed_gx_vote      = %lu\n",
+	seq_printf(s, "    skip_delayed_gx_vote         = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_SKIP_DELAYED_GX_VOTE, raw));
-	seq_printf(s, "    pwr_limits_mode_val       = %lu\n",
+	seq_printf(s, "    pwr_limits_mode_val          = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_PWR_LIMITS_MODE_VAL, raw));
-	seq_printf(s, "    pwr_limits_mode_en        = %lu\n",
+	seq_printf(s, "    pwr_limits_mode_en           = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_PWR_LIMITS_MODE_EN, raw));
-	seq_printf(s, "    forced_time_const_mul_2   = %lu\n",
+	seq_printf(s, "    forced_time_const_mul_2      = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_FORCED_TIME_CONST_MUL_2, raw));
-	seq_printf(s, "    forced_time_const_mul_1   = %lu\n",
+	seq_printf(s, "    forced_time_const_mul_1      = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_FORCED_TIME_CONST_MUL_1, raw));
 	seq_puts(s, "\n");
 
 	raw = spel->config[4];
 	seq_printf(s, "RAW[4] = 0x%08x\n", raw);
-	seq_printf(s, "    forced_long_budget        = %lu\n",
+	seq_printf(s, "    forced_long_budget           = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_FORCED_LONG_BUDGET, raw));
 	seq_puts(s, "\n");
 
 	raw = spel->config[5];
 	seq_printf(s, "RAW[5] = 0x%08x\n", raw);
-	seq_printf(s, "    forced_long_time_const    = %lu\n",
+	seq_printf(s, "    forced_long_time_const       = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_FORCED_LONG_TIME_CONST, raw));
 	seq_puts(s, "\n");
 
 	raw = spel->config[6];
 	seq_printf(s, "RAW[6] = 0x%08x\n", raw);
-	seq_printf(s, "    forced_short_budget       = %lu\n",
+	seq_printf(s, "    forced_short_budget          = %lu\n",
 		FIELD_GET(GMU_PWR_BUDGET_FORCED_SHORT_BUDGET, raw));
 
 	return 0;

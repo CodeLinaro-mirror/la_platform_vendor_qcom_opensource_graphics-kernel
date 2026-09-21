@@ -1228,7 +1228,7 @@ int kgsl_drawobj_add_bind(struct kgsl_device_private *dev_priv,
 		struct kgsl_drawobj_bind *bindobj,
 		void __user *src, u64 cmdsize)
 {
-	struct kgsl_gpu_aux_command_bind cmd;
+	struct kgsl_gpu_aux_command_bind cmd = { 0 };
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_sharedmem_bind_op *op;
 	int ret;

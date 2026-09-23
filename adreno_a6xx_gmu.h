@@ -334,8 +334,10 @@ int a6xx_load_pdc_ucode(struct adreno_device *adreno_dev);
 /**
  * a6xx_load_rsc_ucode - Load rscc sequence
  * @adreno_dev: Pointer to the adreno device
+ *
+ * Return: 0 on success or negative error on failure
  */
-void a6xx_load_rsc_ucode(struct adreno_device *adreno_dev);
+int a6xx_load_rsc_ucode(struct adreno_device *adreno_dev);
 
 /**
  * a6xx_gmu_remove - Clean up gmu probed resources

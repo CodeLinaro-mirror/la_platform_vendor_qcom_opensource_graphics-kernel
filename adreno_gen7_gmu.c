@@ -225,7 +225,7 @@ static int gen7_timed_poll_check_rscc(struct gen7_gmu_device *gmu,
 		unsigned int offset, unsigned int expected_ret,
 		unsigned int timeout, unsigned int mask)
 {
-	u32 value;
+	u32 value = 0;
 
 	return readl_poll_timeout(gmu->rscc_virt + (offset << 2), value,
 		(value & mask) == expected_ret, 100, timeout * 1000);

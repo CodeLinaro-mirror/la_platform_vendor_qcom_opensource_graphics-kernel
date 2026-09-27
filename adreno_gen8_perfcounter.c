@@ -53,12 +53,12 @@ static int gen8_counter_br_enable(struct adreno_device *adreno_dev,
 	struct adreno_perfcount_register *reg = &group->regs[counter];
 	int ret;
 
-	gen8_host_aperture_set(adreno_dev, PIPE_BR, 0, 0);
+	gen8_host_aperture_pipe_clear(adreno_dev, PIPE_BR);
 
 	ret = gen8_perfcounter_update(adreno_dev, reg, true,
 			FIELD_PREP(GENMASK(15, 12), PIPE_BR), group->flags);
 
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 
 	if (!ret)
 		reg->value = 0;
@@ -73,12 +73,12 @@ static int gen8_counter_bv_enable(struct adreno_device *adreno_dev,
 	struct adreno_perfcount_register *reg = &group->regs[counter];
 	int ret;
 
-	gen8_host_aperture_set(adreno_dev, PIPE_BV, 0, 0);
+	gen8_host_aperture_pipe_clear(adreno_dev, PIPE_BV);
 
 	ret = gen8_perfcounter_update(adreno_dev, reg, true,
 				FIELD_PREP(GENMASK(15, 12), PIPE_BV), group->flags);
 
-	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+	gen8_host_aperture_clear(adreno_dev);
 
 	if (!ret)
 		reg->value = 0;

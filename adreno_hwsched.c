@@ -377,14 +377,14 @@ static struct hfi_mem_alloc_entry *get_preempt_record_entry(struct adreno_device
 }
 
 static int adreno_hwsched_alloc_preempt_record_gmem(struct adreno_device *adreno_dev,
-	struct adreno_context *drawctxt)
+	struct adreno_context *drawctxt, u32 level)
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct kgsl_context *context = &drawctxt->base;
 	struct kgsl_device *device = context->device;
 	struct hfi_mem_alloc_entry *entry = NULL;
 	struct kgsl_memdesc *pr_md, **md = NULL;
-	u32 priv = 0, level = adreno_get_level(context);
+	u32 priv = 0;
 	u64 curr_gmem_size = adreno_gmem_size(adreno_dev);
 	u64 flags = 0;
 	int ret = 0;
@@ -446,6 +446,34 @@ static int adreno_hwsched_alloc_preempt_record_gmem(struct adreno_device *adreno
 unlock:
 	kgsl_mutex_unlock(&device->mutex);
 	return ret;
+}
+
+static int adreno_hwsched_ensure_gmem_for_priority(struct adreno_device *adreno_dev,
+	struct adreno_context *drawctxt, u32 new_ctx_pri)
+{
+	struct kgsl_context *context = &drawctxt->base;
+	u32 new_level, old_level;
+
+	if (context->flags & KGSL_CONTEXT_LPAC)
+		return 0;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION) ||
+		!ADRENO_FEATURE(adreno_dev, ADRENO_DEFER_GMEM_ALLOC))
+		return 0;
+
+	old_level = adreno_get_level(context);
+	new_level = KGSL_CTX_PRI_TO_RB_LEVEL(new_ctx_pri);
+	new_level = min_t(u32, new_level, KGSL_PRIORITY_MAX_RB_LEVELS - 1);
+
+	if (new_level <= old_level)
+		return 0;
+
+	/*
+	 * Allocate the GMEM portion of the preemption record for the target RB
+	 * level if it has not been allocated yet.
+	 */
+	return adreno_hwsched_alloc_preempt_record_gmem(
+		adreno_dev, drawctxt, new_level);
 }
 
 static bool is_cmdobj(struct kgsl_drawobj *drawobj)
@@ -773,7 +801,7 @@ static int hwsched_queue_context(struct adreno_device *adreno_dev,
 	job->drawctxt = drawctxt;
 
 	trace_dispatch_queue_context(drawctxt);
-	llist_add(&job->node, &hwsched->jobs[drawctxt->base.priority]);
+	llist_add(&job->node, &hwsched->jobs[adreno_get_level(&drawctxt->base)]);
 
 	return 0;
 }
@@ -1052,9 +1080,11 @@ static void hwsched_handle_jobs_list(struct adreno_device *adreno_dev,
 		 * happened and it should go back on the regular queue
 		 */
 		if (ret == -ENOSPC)
-			llist_add(&job->node, &hwsched->requeue[id]);
+			llist_add(&job->node,
+				&hwsched->requeue[adreno_get_level(&job->drawctxt->base)]);
 		else
-			llist_add(&job->node, &hwsched->jobs[id]);
+			llist_add(&job->node,
+				&hwsched->jobs[adreno_get_level(&job->drawctxt->base)]);
 	}
 }
 
@@ -1117,7 +1147,7 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 	spin_unlock(&device->submit_lock);
 
 	/* If the dispatcher is busy then schedule the work for later */
-	if (!mutex_trylock(&hwsched->mutex)) {
+	if (!kgsl_mutex_trylock(&hwsched->mutex)) {
 		_decrement_submit_now(device);
 		goto done;
 	}
@@ -1132,7 +1162,7 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 		kgsl_mutex_unlock(&device->mutex);
 	}
 
-	mutex_unlock(&hwsched->mutex);
+	kgsl_mutex_unlock(&hwsched->mutex);
 	_decrement_submit_now(device);
 	return;
 
@@ -1486,7 +1516,7 @@ static int adreno_hwsched_queue_cmds(struct kgsl_device_private *dev_priv,
 	/* Add the context to the dispatcher pending list */
 	if (_kgsl_context_get(&drawctxt->base)) {
 		trace_dispatch_queue_context(drawctxt);
-		llist_add(&job->node, &hwsched->jobs[drawctxt->base.priority]);
+		llist_add(&job->node, &hwsched->jobs[adreno_get_level(&drawctxt->base)]);
 		adreno_hwsched_issuecmds(adreno_dev);
 
 	} else
@@ -1718,15 +1748,154 @@ static bool _ft_long_ib_detect_show(struct adreno_device *adreno_dev)
 	return adreno_dev->long_ib_detect;
 }
 
+static ssize_t ctx_pri_req_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "Format: <pid>#<ctxid>#<priority>#\n"
+		"Use ctxid=0 to update all contexts of the process.\n");
+}
+
+static int _ctx_pri_req_update_single(struct kgsl_device *device,
+		struct adreno_device *adreno_dev,
+		struct kgsl_context *context, u32 priority)
+{
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	const struct adreno_hwsched_ops *hwsched_ops = adreno_dev->hwsched.hwsched_ops;
+	int ret;
+
+	ret = adreno_hwsched_ensure_gmem_for_priority(adreno_dev,
+			drawctxt, priority);
+	if (ret)
+		return ret;
+
+	if (hwsched_ops && hwsched_ops->context_priority_update) {
+		kgsl_mutex_lock(&device->mutex);
+		ret = hwsched_ops->context_priority_update(adreno_dev, context, priority);
+		kgsl_mutex_unlock(&device->mutex);
+	} else {
+		ret = -EOPNOTSUPP;
+	}
+
+	return ret;
+}
+
+static int _ctx_pri_req_update_all_for_pid(struct kgsl_device *device,
+		struct adreno_device *adreno_dev, struct pid *pid_s, u32 new_ctx_pri)
+{
+	struct kgsl_context *context;
+	int id, ret = 0;
+
+	read_lock(&device->context_lock);
+	idr_for_each_entry(&device->context_idr, context, id) {
+		if (context->proc_priv->pid != pid_s)
+			continue;
+		if (context->flags & KGSL_CONTEXT_LPAC)
+			continue;
+		if (!_kgsl_context_get(context))
+			continue;
+
+		read_unlock(&device->context_lock);
+
+		if (!ret)
+			ret = _ctx_pri_req_update_single(device, adreno_dev,
+					context, new_ctx_pri);
+		kgsl_context_put(context);
+
+		read_lock(&device->context_lock);
+	}
+	read_unlock(&device->context_lock);
+
+	return ret;
+}
+
+static ssize_t ctx_pri_req_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct kgsl_device *device = dev_get_drvdata(dev);
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_context *context;
+	struct pid *pid_s;
+	struct pid *current_pid;
+	u32 pid, ctxid, priority;
+	int ret;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_DYNAMIC_CTX_PRIORITY))
+		return -EOPNOTSUPP;
+
+	if (!gmu_core_capabilities_enabled(&KGSL_DEVICE(adreno_dev)->gmu_core.platform_caps,
+		FAC_DYNAMIC_CTX_PRI_UPDATE))
+		return -EOPNOTSUPP;
+
+	/*
+	 * Format: "pid#ctxid#priority#", e.g. "1020#5#3#"
+	 * Use ctxid=0 to update all contexts belonging to the given pid.
+	 */
+	if (sscanf(buf, "%u#%u#%u#", &pid, &ctxid, &priority) != 3)
+		return -EINVAL;
+
+	if (priority > (KGSL_CONTEXT_PRIORITY_MASK >>
+			KGSL_CONTEXT_PRIORITY_SHIFT))
+		return -EINVAL;
+
+	pid_s = find_get_pid((pid_t)pid);
+	if (!pid_s)
+		return -EINVAL;
+
+	/*
+	 * Unprivileged callers may only update contexts belonging to their
+	 * own process.
+	 */
+	if (!capable(CAP_SYS_ADMIN)) {
+		current_pid = get_task_pid(current->group_leader, PIDTYPE_PID);
+
+		if (current_pid != pid_s) {
+			put_pid(current_pid);
+			put_pid(pid_s);
+			return -EPERM;
+		}
+		put_pid(current_pid);
+	}
+
+	/* ctxid=0: update all contexts in the process */
+	if (ctxid == 0) {
+		ret = _ctx_pri_req_update_all_for_pid(device, adreno_dev,
+				pid_s, priority);
+		put_pid(pid_s);
+		return ret ? ret : (ssize_t)count;
+	}
+
+	/* Single-context path */
+	context = kgsl_context_get(device, ctxid);
+	if (!context) {
+		put_pid(pid_s);
+		return -EINVAL;
+	}
+
+	/* Reject if the context does not belong to the given pid. */
+	if (context->proc_priv->pid != pid_s) {
+		put_pid(pid_s);
+		ret = -EINVAL;
+		goto done;
+	}
+
+	put_pid(pid_s);
+	ret = _ctx_pri_req_update_single(device, adreno_dev, context, priority);
+done:
+	kgsl_context_put(context);
+	return ret ? ret : (ssize_t)count;
+}
+
 static ADRENO_SYSFS_BOOL(preemption);
 static ADRENO_SYSFS_RO_U32(preempt_count);
 static ADRENO_SYSFS_BOOL(ft_long_ib_detect);
+static ADRENO_SYSFS_CUSTOM(ctx_pri_req);
 
 static const struct attribute *_hwsched_attr_list[] = {
 	&adreno_attr_preemption.attr.attr,
 	&adreno_attr_preempt_count.attr.attr,
 	&adreno_attr_preempt_info.attr,
 	&adreno_attr_ft_long_ib_detect.attr.attr,
+	&adreno_attr_ctx_pri_req.attr,
 	NULL,
 };
 
@@ -2411,10 +2580,9 @@ static void adreno_hwsched_work(struct kthread_work *work)
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	mutex_lock(&hwsched->mutex);
-
+	kgsl_mutex_lock(&hwsched->mutex);
 	if (adreno_hwsched_do_fault(adreno_dev)) {
-		mutex_unlock(&hwsched->mutex);
+		kgsl_mutex_unlock(&hwsched->mutex);
 		return;
 	}
 
@@ -2439,7 +2607,7 @@ static void adreno_hwsched_work(struct kthread_work *work)
 		kgsl_mutex_unlock(&device->mutex);
 	}
 
-	mutex_unlock(&hwsched->mutex);
+	kgsl_mutex_unlock(&hwsched->mutex);
 }
 
 static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
@@ -2463,7 +2631,8 @@ static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 static int adreno_hwsched_setup_context(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt)
 {
-	return adreno_hwsched_alloc_preempt_record_gmem(adreno_dev, drawctxt);
+	return adreno_hwsched_alloc_preempt_record_gmem(adreno_dev, drawctxt,
+		adreno_get_level(&drawctxt->base));
 }
 
 static const struct adreno_dispatch_ops hwsched_ops = {
@@ -2518,7 +2687,7 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
 		return PTR_ERR(adreno_dev->scheduler_worker);
 	}
 
-	mutex_init(&hwsched->mutex);
+	kgsl_mutex_init(&hwsched->mutex);
 
 	kthread_init_work(&adreno_dev->scheduler_work, adreno_hwsched_work);
 
@@ -2846,14 +3015,18 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 
 int adreno_hwsched_ctxt_unregister_wait_completion(
 	struct adreno_device *adreno_dev,
-	struct device *dev, struct pending_cmd *ack,
+	struct device *dev, struct kgsl_context *context, struct pending_cmd *ack,
 	void (*process_msgq)(struct adreno_device *adreno_dev),
 	struct hfi_unregister_ctxt_cmd *cmd)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	int rb = adreno_get_level(context);
 	int ret;
+	bool fast = adreno_is_fast_context_destroy_enabled(adreno_dev);
 	u64 start, end;
+	char prefix[60];
 
 	start = gpudev->read_alwayson(adreno_dev);
 	kgsl_mutex_unlock(&device->mutex);
@@ -2873,15 +3046,20 @@ int adreno_hwsched_ctxt_unregister_wait_completion(
 	end = gpudev->read_alwayson(adreno_dev);
 
 	if (completion_done(&ack->complete)) {
+		snprintf(prefix, sizeof(prefix),
+			"Ack unprocessed for %scontext unregister", fast ? "fast " : "");
 		dev_err_ratelimited(dev,
-			"Ack unprocessed for context unregister seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
-			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id,
-			cmd->ts, start, end);
+			"%s type: %s rb: %d seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+			prefix, kgsl_context_type(drawctxt->type), rb,
+			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
 		return 0;
 	}
 
+	snprintf(prefix, sizeof(prefix),
+		"Ack timeout for %scontext unregister", fast ? "fast " : "");
 	dev_err_ratelimited(dev,
-		"Ack timeout for context unregister seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+		"%s type: %s rb: %d seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+		prefix, kgsl_context_type(drawctxt->type), rb,
 		MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
 	return -ETIMEDOUT;
 }

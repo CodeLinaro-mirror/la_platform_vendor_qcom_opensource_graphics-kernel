@@ -692,4 +692,14 @@ static inline bool kgsl_addr_range_overlap(uint64_t gpuaddr1,
  */
 void kgsl_work_period_update(struct kgsl_device *device,
 			struct gpu_work_period *period, u64 active);
+
+/*
+ * kgsl_nth_page - 6.18 compatibility wrapper for nth_page removal
+ * nth_page was removed in 6.18; use page + offset arithmetic instead
+ */
+static inline struct page *kgsl_nth_page(struct page *page, int n)
+{
+	return page + n;
+}
+
 #endif /* __KGSL_H */

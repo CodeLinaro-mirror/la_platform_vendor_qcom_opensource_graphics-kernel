@@ -4,6 +4,9 @@
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <linux/version.h>
+#include <linux/shrinker.h>
+#include <linux/vmalloc.h>
 #include <asm/cacheflush.h>
 #include <linux/debugfs.h>
 #include <linux/highmem.h>
@@ -528,7 +531,7 @@ done:
 	kgsl_zero_page(page, order, dev);
 
 	for (j = 0; j < (*page_size >> PAGE_SHIFT); j++) {
-		p = nth_page(page, j);
+		p = kgsl_nth_page(page, j);
 		pages[pcount] = p;
 		pcount++;
 	}
@@ -590,6 +593,9 @@ kgsl_pool_shrink_count_objects(struct shrinker *shrinker,
 	return kgsl_pool_size_nonreserved();
 }
 
+static struct shrinker *kgsl_pool_shrinker_ptr;
+
+#if (KERNEL_VERSION(6, 7, 0) > LINUX_VERSION_CODE)
 /* Shrinker callback data*/
 static struct shrinker kgsl_pool_shrinker = {
 	.count_objects = kgsl_pool_shrink_count_objects,
@@ -597,6 +603,7 @@ static struct shrinker kgsl_pool_shrinker = {
 	.seeks = DEFAULT_SEEKS,
 	.batch = 0,
 };
+#endif
 
 int kgsl_pool_reserved_get(void *data, u64 *val)
 {
@@ -707,7 +714,18 @@ void kgsl_probe_page_pools(void)
 	of_node_put(node);
 
 	/* Initialize shrinker */
-	register_shrinker(&kgsl_pool_shrinker);
+#if (KERNEL_VERSION(6, 7, 0) > LINUX_VERSION_CODE)
+	register_shrinker(&kgsl_pool_shrinker, "kgsl-pool");
+#else
+	kgsl_pool_shrinker_ptr = shrinker_alloc(0, "kgsl_pool_shrinker");
+	if (kgsl_pool_shrinker_ptr) {
+		kgsl_pool_shrinker_ptr->count_objects = kgsl_pool_shrink_count_objects;
+		kgsl_pool_shrinker_ptr->scan_objects = kgsl_pool_shrink_scan_objects;
+		kgsl_pool_shrinker_ptr->seeks = DEFAULT_SEEKS;
+		kgsl_pool_shrinker_ptr->batch = 0;
+		shrinker_register(kgsl_pool_shrinker_ptr);
+	}
+#endif
 }
 
 void kgsl_exit_page_pools(void)
@@ -718,7 +736,12 @@ void kgsl_exit_page_pools(void)
 	kgsl_pool_reduce(INT_MAX, true);
 
 	/* Unregister shrinker */
-	unregister_shrinker(&kgsl_pool_shrinker);
+#if (KERNEL_VERSION(6, 7, 0) > LINUX_VERSION_CODE)
+	unregister_shrinker(&kgsl_pool_shrinker, "kgsl-pool");
+#else
+	if (kgsl_pool_shrinker_ptr)
+		shrinker_free(kgsl_pool_shrinker_ptr);
+#endif
 
 	/* Destroy helper structures */
 	for (i = 0; i < kgsl_num_pools; i++)

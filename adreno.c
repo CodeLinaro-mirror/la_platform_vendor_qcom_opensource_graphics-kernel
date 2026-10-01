@@ -21,7 +21,7 @@
 #include <linux/version.h>
 #include <soc/qcom/dcvs.h>
 #include <soc/qcom/socinfo.h>
-#include <soc/qcom/boot_stats.h>
+#include <linux/soc/qcom/socinfo.h>
 
 #include "adreno.h"
 #include "adreno_a3xx.h"
@@ -1040,7 +1040,7 @@ const char *adreno_get_gpu_model(struct kgsl_device *device)
 	if (model)
 		goto done;
 
-	scnprintf(gpu_model, sizeof(gpu_model), "Adreno%d%d%dv%d",
+	scnprintf(gpu_model, sizeof(gpu_model), "Adreno%lu%lu%luv%lu",
 		ADRENO_CHIPID_CORE(ADRENO_DEVICE(device)->chipid),
 		ADRENO_CHIPID_MAJOR(ADRENO_DEVICE(device)->chipid),
 		ADRENO_CHIPID_MINOR(ADRENO_DEVICE(device)->chipid),
@@ -1206,7 +1206,6 @@ int adreno_device_probe(struct platform_device *pdev,
 	int status;
 	u32 size;
 
-	place_marker("M - DRIVER GPU Init");
 
 	/* Initialize the adreno device structure */
 	adreno_setup_device(adreno_dev);
@@ -1370,7 +1369,6 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	kgsl_qcom_va_md_register(device);
 
-	place_marker("M - DRIVER GPU Ready");
 
 	return 0;
 err:
@@ -2045,7 +2043,7 @@ static int adreno_prop_gpu_model(struct kgsl_device *device,
 {
 	struct kgsl_gpu_model model = {0};
 
-	strlcpy(model.gpu_model, adreno_get_gpu_model(device),
+	strscpy(model.gpu_model, adreno_get_gpu_model(device),
 			sizeof(model.gpu_model));
 
 	return copy_prop(param, &model, sizeof(model));
@@ -3369,12 +3367,22 @@ static int adreno_probe(struct platform_device *pdev)
 			&adreno_ops, match);
 }
 
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+static void adreno_remove(struct platform_device *pdev)
+{
+	component_master_del(&pdev->dev, &adreno_ops);
+
+	/* void return */
+}
+#else
 static int adreno_remove(struct platform_device *pdev)
 {
 	component_master_del(&pdev->dev, &adreno_ops);
 
 	return 0;
 }
+#endif
+
 
 #if IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION)
 #if IS_ENABLED(CONFIG_QCOM_SECURE_BUFFER)
@@ -3625,5 +3633,9 @@ MODULE_DESCRIPTION("3D Graphics driver");
 MODULE_LICENSE("GPL v2");
 MODULE_SOFTDEP("pre: arm_smmu nvmem_qfprom socinfo");
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+MODULE_IMPORT_NS("DMA_BUF");
+#else
 MODULE_IMPORT_NS(DMA_BUF);
+#endif
 #endif

@@ -1,0 +1,271 @@
+load("@rules_pkg//pkg:install.bzl", "pkg_install")
+load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers", "ddk_module", "kernel_module_group")
+load(":build/target_variants.bzl", "get_16k_tv", "get_all_variants", "targets")
+
+msm_kgsl_includes = [
+    "include/linux/msm_kgsl.h",
+    "include/uapi/linux/msm_kgsl.h",
+]
+
+microxr_kernel_build = select({
+    "//build/kernel/kleaf:microxr_kernel_build_true": True,
+    "//build/kernel/kleaf:microxr_kernel_build_false": False,
+})
+
+def kgsl_get_srcs():
+    # Match the unconditional Wrynose legacy Kbuild msm_kgsl-y lists.
+    #
+    # Conditional sources remain in ddk_module(conditional_srcs), below.
+    srcs = [
+        # KGSL core
+        "kgsl.c",
+        "kgsl_bus.c",
+        "kgsl_drawobj.c",
+        "kgsl_events.c",
+        "kgsl_eventlog.c",
+        "kgsl_gmu_core.c",
+        "kgsl_ioctl.c",
+        "kgsl_mmu.c",
+        "kgsl_pwrctrl.c",
+        "kgsl_pwrscale.c",
+        "kgsl_regmap.c",
+        "kgsl_sharedmem.c",
+        "kgsl_snapshot.c",
+        "kgsl_timeline.c",
+        "kgsl_trace.c",
+        "kgsl_util.c",
+        "kgsl_vbo.c",
+
+        # Adreno common
+        "adreno.c",
+        "adreno_cp_parser.c",
+        "adreno_dispatch.c",
+        "adreno_drawctxt.c",
+        "adreno_hwsched.c",
+        "adreno_ioctl.c",
+        "adreno_perfcounter.c",
+        "adreno_ringbuffer.c",
+        "adreno_snapshot.c",
+        "adreno_sysfs.c",
+        "adreno_trace.c",
+
+        # A3xx -- present in Wrynose legacy Kbuild, absent in Maili DDK list
+        "adreno_a3xx.c",
+        "adreno_a3xx_perfcounter.c",
+        "adreno_a3xx_ringbuffer.c",
+        "adreno_a3xx_snapshot.c",
+
+        # A5xx
+        "adreno_a5xx.c",
+        "adreno_a5xx_perfcounter.c",
+        "adreno_a5xx_preempt.c",
+        "adreno_a5xx_ringbuffer.c",
+        "adreno_a5xx_snapshot.c",
+
+        # A6xx / Kalama
+        "adreno_a6xx.c",
+        "adreno_a6xx_gmu.c",
+        "adreno_a6xx_gmu_snapshot.c",
+        "adreno_a6xx_hfi.c",
+        "adreno_a6xx_hwsched.c",
+        "adreno_a6xx_hwsched_hfi.c",
+        "adreno_a6xx_perfcounter.c",
+        "adreno_a6xx_preempt.c",
+        "adreno_a6xx_rgmu.c",
+        "adreno_a6xx_ringbuffer.c",
+        "adreno_a6xx_rpmh.c",
+        "adreno_a6xx_snapshot.c",
+
+        # Gen7 sources retained from the Wrynose Kbuild
+        "adreno_gen7.c",
+        "adreno_gen7_gmu.c",
+        "adreno_gen7_gmu_snapshot.c",
+        "adreno_gen7_hfi.c",
+        "adreno_gen7_hwsched.c",
+        "adreno_gen7_hwsched_hfi.c",
+        "adreno_gen7_perfcounter.c",
+        "adreno_gen7_preempt.c",
+        "adreno_gen7_ringbuffer.c",
+        "adreno_gen7_rpmh.c",
+        "adreno_gen7_snapshot.c",
+    ]
+
+    # Let DDK track local headers as build inputs.
+    return srcs + native.glob(["*.h"]) + msm_kgsl_includes
+
+def external_deps(target, variant):
+    tv = "{}_{}".format(target, variant)
+    deplist = []
+    defconfigs = []
+
+    # Add msm_hw_fence in the dependency and defconfig lists for targets that use it
+    if target in ["pineapple"]:
+        deplist = deplist + [
+            "//vendor/qcom/opensource/mm-drivers/hw_fence:{}_msm_hw_fence".format(tv),
+            "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers",
+        ]
+        defconfigs = defconfigs + [
+            "//vendor/qcom/opensource/mm-drivers/hw_fence:defconfig",
+        ]
+
+    # Add synx-kernel in the dependency list for targets that use it for hardware fences
+    if target in ["sun", "niobe", "seraph", "canoe", "art", "pebble-le", "art16k"]:
+        deplist = deplist + [
+            "//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
+            "//vendor/qcom/opensource/synx-kernel:synx_headers",
+        ]
+
+    if target in [
+        "monaco",
+        "parrot",
+        "vienna",
+        "vienna-le",
+        "lahaina",
+        "art",
+        "art16k",
+        "bengal",
+        "chora",
+        "malabar",
+    ]:
+        deplist = deplist + [
+            "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers",
+        ]
+
+    native.genrule(
+        name = "{}_defconfig".format(tv),
+        srcs = defconfigs + ["config/{}_gpuconf".format(tv)],
+        outs = ["{}_defconfig.generated".format(tv)],
+        cmd = "cat $(SRCS) > $@",
+    )
+
+    return deplist
+
+def define_target_variant_module(target, variant):
+    tv = "{}_{}".format(target, variant)
+    rule_name = "{}_msm_kgsl".format(tv)
+
+    if target in ["neo-la"]:
+        kernel_build = select({
+            "//build/kernel/kleaf:microxr_kernel_build_true": "//:target_kernel_build",
+            "//build/qcom_build_extensions:qtisocrepo_true": "//soc-repo:{}_base_kernel".format(tv),
+            "//conditions:default": "//msm-kernel:{}".format(tv),
+        })
+    else:
+        kernel_build = select({
+            "//build/qcom_build_extensions:qtisocrepo_true": "//soc-repo:{}_base_kernel".format(tv),
+            "//build/qcom_build_extensions:qtisocrepo_false": "//msm-kernel:{}".format(tv),
+        })
+
+    ext_deps = external_deps(target, variant)
+
+    smci_dep = []
+    if target == "hamoa":
+        smci_dep = [
+            "//soc-repo:{}/drivers/firmware/qcom/qcom_scm_smci".format(tv),
+            "//soc-repo:{}/drivers/firmware/qcom/si_core/si_core_module".format(tv),
+        ]
+
+    ddk_deps = select({
+        "//build/qcom_build_extensions:qtisocrepo_true": [
+            "//soc-repo:all_headers",
+            "//soc-repo:{}/drivers/clk/qcom/clk-qcom".format(tv),
+            "//soc-repo:{}/drivers/devfreq/governor_msm_adreno_tz".format(tv),
+            "//soc-repo:{}/drivers/firmware/qcom/qcom-scm".format(tv),
+            "//soc-repo:{}/drivers/hwtracing/coresight/coresight".format(tv),
+            "//soc-repo:{}/drivers/hwtracing/coresight/coresight-qmi".format(tv),
+            "//soc-repo:{}/drivers/iommu/qcom_iommu_util".format(tv),
+            "//soc-repo:{}/drivers/remoteproc/qcom_q6v5_pas".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/cmd-db".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/dcvs/qcom-dcvs".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/llcc-qcom".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/mdt_loader".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/minidump".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/msm_performance".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/qcom_aoss".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/qcom_va_minidump".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/secure_buffer".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/socinfo".format(tv),
+            "//soc-repo:{}/kernel/msm_sysstats".format(tv),
+            "//soc-repo:{}/drivers/soc/qcom/qmi_helpers".format(tv),
+            #"//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
+        ] + smci_dep,
+        "//build/qcom_build_extensions:qtisocrepo_false": ["//msm-kernel:all_headers"],
+    })
+
+    ddk_module(
+        name = rule_name,
+        out = "msm_kgsl.ko",
+        srcs = kgsl_get_srcs(),
+        defconfig = "{}_defconfig".format(tv),
+        kconfig = "Kconfig",
+        conditional_srcs = {
+            "CONFIG_ARM_SMMU": {True: ["kgsl_iommu.c"]},
+            "CONFIG_COMPAT": {True: ["kgsl_compat.c", "adreno_compat.c"]},
+            "CONFIG_DEBUG_FS": {True: ["kgsl_debugfs.c", "adreno_debugfs.c", "adreno_profile.c"]},
+            "CONFIG_QCOM_KGSL_CORESIGHT": {True: [
+                "adreno_coresight.c",
+                "adreno_a3xx_coresight.c",
+                "adreno_a5xx_coresight.c",
+                "adreno_a6xx_coresight.c",
+                "adreno_gen7_coresight.c",
+            ]},
+            "CONFIG_QCOM_KGSL_USE_SHMEM": {False: ["kgsl_pool.c"]},
+            "CONFIG_QCOM_KGSL_PROCESS_RECLAIM": {True: ["kgsl_reclaim.c"]},
+            "CONFIG_SYNC_FILE": {True: ["kgsl_sync.c"]},
+            "CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ": {False: ["governor_msm_adreno_tz.c"]},
+            "CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON": {False: ["governor_gpubw_mon.c"]},
+        },
+        deps = ddk_deps + ext_deps,
+        includes = ["include", "."],
+        kernel_build = kernel_build,
+        visibility = ["//visibility:private"],
+    )
+
+    if microxr_kernel_build:
+        kernel_module_group(
+            name = "{}_modules".format(tv),
+            srcs = [rule_name],
+            visibility = ["//visibility:public"],
+        )
+
+    pkg_files(
+        name = rule_name + "_dist_files",
+        srcs = [rule_name],
+        visibility = ["//visibility:private"],
+        strip_prefix = strip_prefix.files_only(),
+    )
+
+    pkg_install(
+        name = "{}_dist".format(rule_name),
+        srcs = [":{}_dist_files".format(rule_name)],
+        destdir = "out/target/product/{}/dlkm/lib/modules/".format(target),
+    )
+
+def matching_la_variant(target_16k):
+    for target in targets:
+        if target_16k.startswith(target):
+            return target
+    return None
+
+def define_16k_aliases(target_16k, variant):
+    tv_16k = "{}_{}".format(target_16k, variant)
+    tv = "{}_{}".format(matching_la_variant(target_16k), variant)
+    native.alias(
+        name = "config/{}_gpuconf".format(tv_16k),
+        actual = "config/{}_gpuconf".format(tv),
+    )
+
+def define_target_modules():
+    ddk_headers(
+        name = "kgsl_uapi_headers",
+        hdrs = native.glob(["include/uapi/linux/*.h"]),
+        includes = ["include/uapi/linux"],
+        visibility = ["//visibility:public"],
+    )
+
+    for target, variant in get_16k_tv():
+        define_16k_aliases(target, variant)
+    for target, variant in get_all_variants():
+        define_target_variant_module(target, variant)

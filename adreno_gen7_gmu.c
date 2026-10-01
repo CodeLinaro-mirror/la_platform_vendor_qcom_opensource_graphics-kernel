@@ -4,6 +4,8 @@
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
+#include <linux/vmalloc.h>
+#include <linux/timer.h>
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
 #include <linux/clk.h>
 #include <linux/component.h>
@@ -1039,7 +1041,7 @@ static int _map_gmu_dynamic(struct gen7_gmu_device *gmu,
 
 	/* Failed to map to GMU */
 	dev_err(&gmu->pdev->dev,
-		"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+		"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 		addr, md->size, ret);
 
 	spin_lock(&vma->lock);
@@ -1065,7 +1067,7 @@ static int _map_gmu_static(struct gen7_gmu_device *gmu,
 	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
 	if (ret) {
 		dev_err(&gmu->pdev->dev,
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 			addr, md->size, ret);
 		return ret;
 	}
@@ -1146,7 +1148,7 @@ struct kgsl_memdesc *gen7_reserve_gmu_kernel_block_fixed(struct gen7_gmu_device 
 		gmu->global_entries++;
 	else {
 		dev_err(&gmu->pdev->dev,
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 			addr, md->size, ret);
 		memset(md, 0x0, sizeof(*md));
 		md = ERR_PTR(ret);
@@ -2345,7 +2347,7 @@ static int gen7_gmu_iommu_init(struct gen7_gmu_device *gmu)
 {
 	int ret;
 
-	gmu->domain = iommu_domain_alloc(&platform_bus_type);
+	gmu->domain = iommu_paging_domain_alloc(&gmu->pdev->dev);
 	if (gmu->domain == NULL) {
 		dev_err(&gmu->pdev->dev, "Unable to allocate GMU IOMMU domain\n");
 		return -ENODEV;
@@ -2866,7 +2868,7 @@ no_gx_power:
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
-	del_timer_sync(&device->idle_timer);
+	timer_delete_sync(&device->idle_timer);
 
 	kgsl_pwrscale_sleep(device);
 
@@ -3243,11 +3245,18 @@ static int gen7_gmu_probe_dev(struct platform_device *pdev)
 	return component_add(&pdev->dev, &gen7_gmu_component_ops);
 }
 
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+static void gen7_gmu_remove_dev(struct platform_device *pdev)
+{
+	component_del(&pdev->dev, &gen7_gmu_component_ops);
+}
+#else
 static int gen7_gmu_remove_dev(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &gen7_gmu_component_ops);
 	return 0;
 }
+#endif
 
 static const struct of_device_id gen7_gmu_match_table[] = {
 	{ .compatible = "qcom,gen7-gmu" },

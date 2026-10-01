@@ -4,11 +4,12 @@
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <linux/timer.h>
 #include <linux/iommu.h>
 #include <linux/sched/clock.h>
-#include <soc/qcom/msm_performance.h>
 
 #include "adreno.h"
+#include <soc/qcom/msm_performance.h>
 #include "adreno_gen7.h"
 #include "adreno_gen7_hwsched.h"
 #include "adreno_hfi.h"
@@ -960,9 +961,11 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 	 * HFI_MEMKIND_MEMSTORE
 	 */
 	switch (desc->mem_kind) {
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 	case HFI_MEMKIND_HW_FENCE:
 		entry->md = &adreno_dev->hwsched.hw_fence.memdesc;
 		break;
+#endif
 	case HFI_MEMKIND_MEMSTORE:
 		entry->md = device->memstore;
 		break;
@@ -1284,7 +1287,9 @@ static int gen7_hfi_send_hw_fence_feature_ctrl(struct adreno_device *adreno_dev)
 	ret = gen7_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_HW_FENCE, 1, 0);
 	if (ret && (ret == -ENOENT)) {
 		dev_err(&gmu->pdev->dev, "GMU doesn't support HW_FENCE feature\n");
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 		adreno_hwsched_deregister_hw_fence(hwsched->hw_fence.handle);
+#endif
 		return 0;
 	}
 
@@ -1901,7 +1906,7 @@ static void populate_ibs(struct adreno_device *adreno_dev,
 
 #define DISPQ_IRQ_BIT(_idx) BIT((_idx) + HFI_DSP_IRQ_BASE)
 
-int gen7_gmu_context_queue_write(struct adreno_device *adreno_dev,
+static int gen7_gmu_context_queue_write(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt, u32 *msg,
 	struct kgsl_drawobj_cmd *cmdobj, struct adreno_submit_time *time)
 {
@@ -1995,7 +2000,9 @@ static int check_context_inflight_fences(struct adreno_device *adreno_dev,
 			return -EINVAL;
 		}
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 		adreno_hwsched_remove_hw_fence_entry(adreno_dev, fence);
+#endif
 	}
 
 	return ret;
@@ -2352,7 +2359,7 @@ int gen7_hwsched_send_recurring_cmdobj(struct adreno_device *adreno_dev,
 
 	if (test_bit(CMDOBJ_RECURRING_STOP, &cmdobj->priv)) {
 		adreno_hwsched_retire_cmdobj(hwsched, hwsched->recurring_cmdobj);
-		del_timer_sync(&hwsched->lsr_timer);
+		timer_delete_sync(&hwsched->lsr_timer);
 		hwsched->recurring_cmdobj = NULL;
 		if (active)
 			adreno_active_count_put(adreno_dev);
@@ -2374,9 +2381,13 @@ static void drain_context_hw_fence_cpu(struct adreno_device *adreno_dev,
 
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_list, node) {
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 		adreno_hwsched_trigger_hw_fence_cpu(adreno_dev, entry);
+#endif
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
+#endif
 	}
 }
 
@@ -2392,7 +2403,9 @@ int gen7_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
 		if (ret)
 			return ret;
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
+#endif
 	}
 
 	return 0;

@@ -3,6 +3,8 @@
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
  */
 
+#include <linux/vmalloc.h>
+#include <linux/string.h>
 #include <linux/ctype.h>
 #include <linux/debugfs.h>
 #include <linux/sched/signal.h>
@@ -296,7 +298,7 @@ static bool _add_to_assignments_list(struct adreno_profile *profile,
 	entry->offset = offset;
 	entry->offset_hi = offset_hi;
 
-	strlcpy(entry->name, str, sizeof(entry->name));
+	strscpy(entry->name, str, sizeof(entry->name));
 
 	profile->assignment_count++;
 

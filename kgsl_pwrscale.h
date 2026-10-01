@@ -7,9 +7,12 @@
 #ifndef __KGSL_PWRSCALE_H
 #define __KGSL_PWRSCALE_H
 
-#include "governor.h"
 #include "kgsl_pwrctrl.h"
+#if IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ)
+#include <linux/soc/qcom/msm_adreno_devfreq.h>
+#else
 #include "msm_adreno_devfreq.h"
+#endif
 
 /* devfreq governor call window in usec */
 #define KGSL_GOVERNOR_CALL_INTERVAL 10000
@@ -26,7 +29,6 @@ struct kgsl_power_stats {
  * @gpu_profile - GPU profile data for the devfreq device
  * @bus_profile - Bus specific data for the bus devfreq device
  * @freq_table - GPU frequencies for the DCVS algorithm
- * @last_governor - Prior devfreq governor
  * @accum_stats - Accumulated statistics for various frequency calculations
  * @enabled - Whether or not power scaling is enabled
  * @time - Last submitted sample timestamp
@@ -49,7 +51,6 @@ struct kgsl_pwrscale {
 	struct msm_adreno_extended_profile gpu_profile;
 	struct msm_busmon_extended_profile bus_profile;
 	unsigned long freq_table[KGSL_MAX_PWRLEVELS];
-	char last_governor[DEVFREQ_NAME_LEN];
 	struct kgsl_power_stats accum_stats;
 	bool enabled;
 	ktime_t time;
@@ -102,15 +103,23 @@ int kgsl_busmon_get_dev_status(struct device *dev,
 			struct devfreq_dev_status *stat);
 int kgsl_busmon_get_cur_freq(struct device *dev, unsigned long *freq);
 
+#if IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ)
 int msm_adreno_tz_init(void);
-
 int msm_adreno_tz_reinit(struct devfreq *devfreq);
-
 void msm_adreno_tz_exit(void);
+#else
+static inline int msm_adreno_tz_init(void) { return 0; }
+static inline int msm_adreno_tz_reinit(struct devfreq *devfreq) { return 0; }
+static inline void msm_adreno_tz_exit(void) { }
+#endif
 
+#if IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON)
 int devfreq_gpubw_init(void);
-
 void devfreq_gpubw_exit(void);
+#else
+static inline int devfreq_gpubw_init(void) { return 0; }
+static inline void devfreq_gpubw_exit(void) { }
+#endif
 
 void kgsl_pwrscale_fast_bus_hint(bool on);
 #endif

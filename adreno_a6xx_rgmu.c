@@ -4,6 +4,8 @@
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
+#include <linux/version.h>
+#include <linux/timer.h>
 #include <linux/clk-provider.h>
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -1095,7 +1097,7 @@ no_gx_power:
 
 	clear_bit(RGMU_PRIV_GPU_STARTED, &rgmu->flags);
 
-	del_timer_sync(&device->idle_timer);
+	timer_delete_sync(&device->idle_timer);
 
 	kgsl_pwrscale_sleep(device);
 
@@ -1398,10 +1400,14 @@ static int a6xx_rgmu_probe_dev(struct platform_device *pdev)
 	return component_add(&pdev->dev, &a6xx_rgmu_component_ops);
 }
 
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+static void a6xx_rgmu_remove_dev(struct platform_device *pdev)
+#else
 static int a6xx_rgmu_remove_dev(struct platform_device *pdev)
+#endif
 {
 	component_del(&pdev->dev, &a6xx_rgmu_component_ops);
-	return 0;
+	return;
 }
 
 static const struct of_device_id a6xx_rgmu_match_table[] = {

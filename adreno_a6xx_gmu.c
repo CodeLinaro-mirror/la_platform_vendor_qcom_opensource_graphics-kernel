@@ -4,6 +4,8 @@
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
+#include <linux/vmalloc.h>
+#include <linux/timer.h>
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
 #include <linux/clk.h>
 #include <linux/component.h>
@@ -22,7 +24,6 @@
 #include <linux/mailbox/qmp.h>
 #include <linux/version.h>
 #include <soc/qcom/cmd-db.h>
-#include <soc/qcom/boot_stats.h>
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -1488,7 +1489,7 @@ struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
 		IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV);
 	if (ret) {
 		dev_err(&gmu->pdev->dev,
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 			addr, md->size, ret);
 		kgsl_sharedmem_free(md);
 		memset(md, 0, sizeof(*md));
@@ -1526,7 +1527,7 @@ struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
 
 	if ((vma->next_va + md->size) > (vma->start + vma->size)) {
 		dev_err(&gmu->pdev->dev,
-			"GMU mapping too big. available: %d required: %d\n",
+			"GMU mapping too big. available: %u required: %llu\n",
 			vma->next_va - vma->start, md->size);
 			md =  ERR_PTR(-ENOMEM);
 			goto done;
@@ -1535,7 +1536,7 @@ struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
 	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
 	if (ret) {
 		dev_err(&gmu->pdev->dev,
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 			addr, md->size, ret);
 		md =  ERR_PTR(-ENOMEM);
 		goto done;
@@ -2764,7 +2765,7 @@ static int a6xx_gmu_iommu_init(struct a6xx_gmu_device *gmu)
 {
 	int ret;
 
-	gmu->domain = iommu_domain_alloc(&platform_bus_type);
+	gmu->domain = iommu_paging_domain_alloc(&gmu->pdev->dev);
 	if (gmu->domain == NULL) {
 		dev_err(&gmu->pdev->dev, "Unable to allocate GMU IOMMU domain\n");
 		return -ENODEV;
@@ -3140,7 +3141,6 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 		return 0;
 	}
 
-	place_marker("M - DRIVER ADRENO Init");
 
 	ret = a6xx_ringbuffer_init(adreno_dev);
 	if (ret)
@@ -3207,7 +3207,6 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_ACTIVE);
 
-	place_marker("M - DRIVER ADRENO Ready");
 
 	return 0;
 }
@@ -3296,7 +3295,7 @@ no_gx_power:
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
-	del_timer_sync(&device->idle_timer);
+	timer_delete_sync(&device->idle_timer);
 
 	kgsl_pwrscale_sleep(device);
 
@@ -3679,11 +3678,18 @@ static int a6xx_gmu_probe_dev(struct platform_device *pdev)
 	return component_add(&pdev->dev, &a6xx_gmu_component_ops);
 }
 
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+static void a6xx_gmu_remove_dev(struct platform_device *pdev)
+{
+	component_del(&pdev->dev, &a6xx_gmu_component_ops);
+}
+#else
 static int a6xx_gmu_remove_dev(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &a6xx_gmu_component_ops);
 	return 0;
 }
+#endif
 
 static const struct of_device_id a6xx_gmu_match_table[] = {
 	{ .compatible = "qcom,gpu-gmu" },

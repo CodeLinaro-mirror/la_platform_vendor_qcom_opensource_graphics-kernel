@@ -4,6 +4,7 @@
  * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <linux/version.h>
 #include <linux/component.h>
 #include <linux/of_platform.h>
 #include <linux/slab.h>
@@ -686,6 +687,20 @@ static int kgsl_mmu_dev_probe(struct platform_device *pdev)
 	return component_add(&pdev->dev, &kgsl_mmu_component_ops);
 }
 
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+static void kgsl_mmu_dev_remove(struct platform_device *pdev)
+{
+	if (of_device_is_compatible(pdev->dev.of_node,
+				"qcom,smmu-kgsl-cb")) {
+		component_del(&pdev->dev, &kgsl_mmu_cb_component_ops);
+		return;
+	}
+
+	component_del(&pdev->dev, &kgsl_mmu_component_ops);
+
+	of_platform_depopulate(&pdev->dev);
+}
+#else
 static int kgsl_mmu_dev_remove(struct platform_device *pdev)
 {
 	if (of_device_is_compatible(pdev->dev.of_node,
@@ -699,6 +714,7 @@ static int kgsl_mmu_dev_remove(struct platform_device *pdev)
 	of_platform_depopulate(&pdev->dev);
 	return 0;
 }
+#endif
 
 static const struct of_device_id mmu_match_table[] = {
 	{ .compatible = "qcom,kgsl-smmu-v2" },

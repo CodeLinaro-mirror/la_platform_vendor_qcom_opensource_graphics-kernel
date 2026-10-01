@@ -4,9 +4,12 @@
  * Copyright (c) 2022,2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <linux/version.h>
 #include <linux/file.h>
 #include <linux/slab.h>
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 #include <linux/soc/qcom/msm_hw_fence.h>
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 #include <linux/sync_file.h>
 
 #include "kgsl_device.h"
@@ -66,8 +69,10 @@ static void kgsl_sync_fence_release(struct dma_fence *fence)
 {
 	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 	if (test_bit(MSM_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags))
 		msm_hw_fence_destroy(kfence->hw_fence_handle, fence);
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
 	kgsl_sync_timeline_put(kfence->parent);
 	kfree(kfence);
@@ -256,7 +261,7 @@ out:
 	return ret;
 }
 
-static void kgsl_sync_timeline_value_str(struct dma_fence *fence,
+static __maybe_unused void kgsl_sync_timeline_value_str(struct dma_fence *fence,
 					char *str, int size)
 {
 	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
@@ -299,7 +304,7 @@ put_timeline:
 	kgsl_sync_timeline_put(ktimeline);
 }
 
-static void kgsl_sync_fence_value_str(struct dma_fence *fence,
+static __maybe_unused void kgsl_sync_fence_value_str(struct dma_fence *fence,
 					char *str, int size)
 {
 	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
@@ -417,8 +422,12 @@ static const struct dma_fence_ops kgsl_sync_fence_ops = {
 	.wait = dma_fence_default_wait,
 	.release = kgsl_sync_fence_release,
 
+#if (KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE)
 	.fence_value_str = kgsl_sync_fence_value_str,
 	.timeline_value_str = kgsl_sync_timeline_value_str,
+#endif
+#endif
 };
 
 static void kgsl_sync_fence_callback(struct dma_fence *fence,
@@ -466,12 +475,14 @@ static void kgsl_get_fence_names(struct dma_fence *fence,
 			f->ops->get_driver_name(f),
 			f->ops->get_timeline_name(f));
 
+#if (KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE)
 		if (f->ops->fence_value_str) {
 			len += scnprintf(fi->name + len, sizeof(fi->name) - len,
 				": ");
 			f->ops->fence_value_str(f, fi->name + len,
 				sizeof(fi->name) - len);
 		}
+#endif
 	}
 }
 
@@ -861,7 +872,7 @@ static const char *kgsl_syncsource_driver_name(struct dma_fence *fence)
 	return "kgsl-syncsource-timeline";
 }
 
-static void kgsl_syncsource_fence_value_str(struct dma_fence *fence,
+static __maybe_unused void kgsl_syncsource_fence_value_str(struct dma_fence *fence,
 						char *str, int size)
 {
 	/*
@@ -878,6 +889,10 @@ static const struct dma_fence_ops kgsl_syncsource_fence_ops = {
 	.wait = dma_fence_default_wait,
 	.release = kgsl_syncsource_fence_release,
 
+#if (KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE)
 	.fence_value_str = kgsl_syncsource_fence_value_str,
+#endif
+#endif
 };
 

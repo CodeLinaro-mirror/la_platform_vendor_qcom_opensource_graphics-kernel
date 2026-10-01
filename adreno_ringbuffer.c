@@ -6,6 +6,7 @@
 #include <linux/interconnect.h>
 #include <linux/sched/clock.h>
 #include <linux/slab.h>
+#include <linux/timer.h>
 #include <soc/qcom/dcvs.h>
 
 #include "a3xx_reg.h"
@@ -156,7 +157,7 @@ int adreno_ringbuffer_setup(struct adreno_device *adreno_dev,
 
 void adreno_preemption_timer(struct timer_list *t)
 {
-	struct adreno_preemption *preempt = from_timer(preempt, t, timer);
+	struct adreno_preemption *preempt = timer_container_of(preempt, t, timer);
 	struct adreno_device *adreno_dev = container_of(preempt,
 						struct adreno_device, preempt);
 

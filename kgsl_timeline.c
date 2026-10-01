@@ -3,6 +3,7 @@
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  */
 
+#include <linux/version.h>
 #include <linux/dma-fence.h>
 #include <linux/file.h>
 #include <linux/list.h>
@@ -192,8 +193,12 @@ static bool timeline_fence_signaled(struct dma_fence *fence)
 {
 	struct kgsl_timeline_fence *f = to_timeline_fence(fence);
 
+#if (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
+	return !__dma_fence_is_later(fence, fence->seqno, f->timeline->value);
+#else
 	return !__dma_fence_is_later(fence->seqno, f->timeline->value,
-		fence->ops);
+			fence->ops);
+#endif
 }
 
 static bool timeline_fence_enable_signaling(struct dma_fence *fence)
@@ -218,6 +223,7 @@ static const char *timeline_get_timeline_name(struct dma_fence *fence)
 	return f->timeline->name;
 }
 
+#if (KERNEL_VERSION(6, 17, 0) > LINUX_VERSION_CODE)
 static void timeline_get_value_str(struct dma_fence *fence,
 		char *str, int size)
 {
@@ -225,6 +231,7 @@ static void timeline_get_value_str(struct dma_fence *fence,
 
 	snprintf(str, size, "%lld", f->timeline->value);
 }
+#endif
 
 static const struct dma_fence_ops timeline_fence_ops = {
 	.get_driver_name = timeline_get_driver_name,
@@ -232,8 +239,10 @@ static const struct dma_fence_ops timeline_fence_ops = {
 	.signaled = timeline_fence_signaled,
 	.release = timeline_fence_release,
 	.enable_signaling = timeline_fence_enable_signaling,
+#if (KERNEL_VERSION(6, 17, 0) > LINUX_VERSION_CODE)
 	.timeline_value_str = timeline_get_value_str,
 	.use_64bit_seqno = true,
+#endif
 };
 
 static void kgsl_timeline_add_fence(struct kgsl_timeline *timeline,

@@ -329,6 +329,8 @@ int devfreq_gpubw_init(void)
 {
 	return devfreq_add_governor(&devfreq_gpubw);
 }
+EXPORT_SYMBOL(devfreq_gpubw_init);
+
 
 void devfreq_gpubw_exit(void)
 {

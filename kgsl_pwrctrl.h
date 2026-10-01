@@ -300,3 +300,4 @@ void kgsl_pwrctrl_disable_cx_gdsc(struct kgsl_device *device);
 int kgsl_pwrctrl_probe_regulators(struct kgsl_device *device,
 		struct platform_device *pdev);
 #endif /* __KGSL_PWRCTRL_H */
+int kgsl_register_gdsc_notifier(struct kgsl_device *device);

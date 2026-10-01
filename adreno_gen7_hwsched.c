@@ -4,6 +4,8 @@
  *Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
+#include <linux/vmalloc.h>
+#include <linux/timer.h>
 #include <linux/clk.h>
 #include <linux/component.h>
 #include <linux/interconnect.h>
@@ -400,7 +402,9 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 			set_bit(ADRENO_HWSCHED_CONTEXT_QUEUE, &adreno_dev->hwsched.flags);
 	}
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 	adreno_hwsched_register_hw_fence(adreno_dev);
+#endif
 
 	icc_set_bw(pwr->icc_path, 0, 0);
 
@@ -858,8 +862,12 @@ static void drain_hwsched_hw_fence_list_cpu(struct adreno_device *adreno_dev)
 	struct adreno_hw_fence_entry *fence, *tmp;
 
 	list_for_each_entry_safe(fence, tmp, &hwsched->hw_fence_list, node) {
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 		adreno_hwsched_trigger_hw_fence_cpu(adreno_dev, fence);
+#endif
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 		adreno_hwsched_remove_hw_fence_entry(adreno_dev, fence);
+#endif
 	}
 }
 
@@ -885,7 +893,9 @@ static int check_pending_hw_fence_list(struct adreno_device *adreno_dev)
 			return -EINVAL;
 		}
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 		adreno_hwsched_remove_hw_fence_entry(adreno_dev, fence);
+#endif
 	}
 
 	return 0;
@@ -944,7 +954,7 @@ no_gx_power:
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
-	del_timer_sync(&device->idle_timer);
+	timer_delete_sync(&device->idle_timer);
 
 	kgsl_pwrscale_sleep(device);
 
@@ -1277,7 +1287,9 @@ static int process_inflight_fences(struct adreno_device *adreno_dev)
 
 		/* Delete the fences that GMU has sent to the TxQueue */
 		if (timestamp_cmp(hdr->out_fence_ts, kfence->timestamp) >= 0) {
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 			adreno_hwsched_remove_hw_fence_entry(adreno_dev, fence);
+#endif
 			continue;
 		}
 
@@ -1289,7 +1301,9 @@ static int process_inflight_fences(struct adreno_device *adreno_dev)
 			ret = gen7_hwsched_trigger_hw_fence(adreno_dev, fence);
 			if (ret)
 				return ret;
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 			adreno_hwsched_remove_hw_fence_entry(adreno_dev, fence);
+#endif
 			continue;
 		}
 

@@ -4,6 +4,8 @@
  * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <linux/vmalloc.h>
+#include <linux/string.h>
 #include <asm/cacheflush.h>
 #include <linux/of_platform.h>
 #include <linux/highmem.h>
@@ -940,7 +942,7 @@ void kgsl_get_memory_usage(char *name, size_t name_size, uint64_t memflags)
 	for (i = 0; memtype_attrs[i]; i++) {
 		memtype = container_of(memtype_attrs[i], struct kgsl_memtype, attr);
 		if (memtype->type == type) {
-			strlcpy(name, memtype->attr.name, name_size);
+			strscpy(name, memtype->attr.name, name_size);
 			return;
 		}
 	}
@@ -1102,7 +1104,7 @@ void kgsl_zero_page(struct page *p, unsigned int order,
 	int i;
 
 	for (i = 0; i < (1 << order); i++) {
-		struct page *page = nth_page(p, i);
+		struct page *page = kgsl_nth_page(p, i);
 
 		clear_highpage(page);
 	}
@@ -1285,7 +1287,7 @@ static void kgsl_free_pages_from_sgt(struct kgsl_memdesc *memdesc)
 
 		while (j < (sg->length/PAGE_SIZE)) {
 			count = 1 << compound_order(p);
-			next = nth_page(p, count);
+			next = kgsl_nth_page(p, count);
 			kgsl_free_page(p);
 
 			p = next;

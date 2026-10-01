@@ -9,15 +9,20 @@
 #include <linux/io.h>
 #include <linux/iopoll.h>
 #include <linux/of_platform.h>
+#include <linux/of_device.h>
 #include <linux/scatterlist.h>
 #include <linux/qcom-iommu-util.h>
 #include <linux/qcom-io-pgtable.h>
 #include <linux/seq_file.h>
 #include <linux/delay.h>
+#include <linux/version.h>
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+#include <linux/firmware/qcom/qcom_scm.h>
+#else
 #include <linux/qcom_scm.h>
+#endif
 #include <linux/random.h>
 #include <linux/regulator/consumer.h>
-#include <linux/version.h>
 #include <soc/qcom/secure_buffer.h>
 
 #include "adreno.h"
@@ -285,7 +290,7 @@ static int _iopgtbl_unmap(struct kgsl_iommu_pt *pt, u64 gpuaddr, size_t size)
 	}
 
 	while (size) {
-		if ((ops->unmap(ops, gpuaddr, PAGE_SIZE, NULL)) != PAGE_SIZE)
+		if ((ops->unmap_pages(ops, gpuaddr, PAGE_SIZE, 1, NULL)) != PAGE_SIZE)
 			return -EINVAL;
 
 		gpuaddr += PAGE_SIZE;
@@ -324,6 +329,7 @@ static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 	u64 addr = gpuaddr;
 	int ret, i;
 
+#if (KERNEL_VERSION(6, 3, 0) > LINUX_VERSION_CODE)
 	if (ops->map_sg) {
 		ret = ops->map_sg(ops, addr, sgt->sgl, sgt->nents, prot,
 			GFP_KERNEL, &mapped);
@@ -333,13 +339,14 @@ static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 		}
 		return mapped;
 	}
-
+#else
 	for_each_sg(sgt->sgl, sg, sgt->nents, i) {
 		size_t size = sg->length;
 		phys_addr_t phys = sg_phys(sg);
 
 		while (size) {
-			ret = ops->map(ops, addr, phys, PAGE_SIZE, prot, GFP_KERNEL);
+			ret = ops->map_pages(ops, addr, phys,
+					PAGE_SIZE, 1, prot, GFP_KERNEL, NULL);
 
 			if (ret) {
 				_iopgtbl_unmap(pt, gpuaddr, mapped);
@@ -354,6 +361,7 @@ static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 	}
 
 	return mapped;
+#endif
 }
 
 
@@ -431,8 +439,9 @@ static size_t _iopgtbl_map_page_to_range(struct kgsl_iommu_pt *pt,
 	int ret;
 
 	while (range) {
-		ret = ops->map(ops, addr, page_to_phys(page), PAGE_SIZE,
-			prot, GFP_KERNEL);
+		ret = ops->map_pages(ops, addr,
+				page_to_phys(page), PAGE_SIZE,
+				1, prot, GFP_KERNEL, NULL);
 		if (ret) {
 			_iopgtbl_unmap(pt, gpuaddr, mapped);
 			return 0;
@@ -562,7 +571,7 @@ static size_t _iommu_map_page_to_range(struct iommu_domain *domain,
 
 	while (range) {
 		int ret = iommu_map(domain, addr, page_to_phys(page),
-			PAGE_SIZE, prot);
+				PAGE_SIZE, prot, GFP_KERNEL);
 		if (ret) {
 			iommu_unmap(domain, gpuaddr, mapped);
 			return 0;
@@ -583,7 +592,7 @@ static ssize_t _iommu_map_sg(struct iommu_domain *domain, u64 gpuaddr,
 	if (gpuaddr & (1ULL << 48))
 		gpuaddr |= 0xffff000000000000;
 
-	return iommu_map_sg(domain, gpuaddr, sgt->sgl, sgt->orig_nents, prot);
+	return iommu_map_sg(domain, gpuaddr, sgt->sgl, sgt->orig_nents, prot, GFP_KERNEL);
 }
 
 static int
@@ -826,7 +835,7 @@ static u64 global_get_offset(struct kgsl_device *device, u64 size,
 	if (priv & KGSL_MEMDESC_RANDOM) {
 		u32 offset = KGSL_GLOBAL_MEM_PAGES - (size >> PAGE_SHIFT);
 
-		start = get_random_int() % offset;
+		start = get_random_u32() % offset;
 	}
 
 	while (start >= 0) {
@@ -2322,6 +2331,18 @@ static bool kgsl_iommu_addr_in_range(struct kgsl_pagetable *pagetable,
 	return false;
 }
 
+#if (KERNEL_VERSION(6, 11, 0) <= LINUX_VERSION_CODE)
+static struct iommu_domain *kgsl_iommu_domain_alloc(struct device *dev)
+{
+	return iommu_paging_domain_alloc(dev);
+}
+#else
+static struct iommu_domain *kgsl_iommu_domain_alloc(struct device *dev)
+{
+	return iommu_domain_alloc(&platform_bus_type);
+}
+#endif
+
 static int kgsl_iommu_setup_context(struct kgsl_mmu *mmu,
 		struct device_node *parent,
 		struct kgsl_iommu_context *context, const char *name,
@@ -2352,7 +2373,7 @@ static int kgsl_iommu_setup_context(struct kgsl_mmu *mmu,
 	dev_set_drvdata(&pdev->dev, &context->adreno_smmu);
 
 	/* Create a new context */
-	context->domain = iommu_domain_alloc(&platform_bus_type);
+	context->domain = kgsl_iommu_domain_alloc(&context->pdev->dev);
 	if (!context->domain) {
 		/*FIXME: Put back the pdev here? */
 		return -ENODEV;
@@ -2479,7 +2500,7 @@ static int iommu_probe_secure_context(struct kgsl_device *device,
 	context->pdev = pdev;
 	ratelimit_default_init(&context->ratelimit);
 
-	context->domain = iommu_domain_alloc(&platform_bus_type);
+	context->domain = kgsl_iommu_domain_alloc(&context->pdev->dev);
 	if (!context->domain) {
 		/* FIXME: put away the device */
 		return -ENODEV;

@@ -4,11 +4,12 @@
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <linux/timer.h>
 #include <linux/iommu.h>
 #include <linux/sched/clock.h>
-#include <soc/qcom/msm_performance.h>
 
 #include "adreno.h"
+#include <soc/qcom/msm_performance.h>
 #include "adreno_a6xx.h"
 #include "adreno_a6xx_hwsched.h"
 #include "adreno_hfi.h"
@@ -1846,7 +1847,7 @@ int a6xx_hwsched_send_recurring_cmdobj(struct adreno_device *adreno_dev,
 	if (test_bit(CMDOBJ_RECURRING_STOP, &cmdobj->priv)) {
 		adreno_hwsched_retire_cmdobj(hwsched, hwsched->recurring_cmdobj);
 		hwsched->recurring_cmdobj = NULL;
-		del_timer_sync(&hwsched->lsr_timer);
+		timer_delete_sync(&hwsched->lsr_timer);
 		if (active)
 			adreno_active_count_put(adreno_dev);
 		active = false;

@@ -535,7 +535,7 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 	struct device *dev = &pwrscale->busmondev;
 	struct msm_busmon_extended_profile *bus_profile;
 	struct devfreq *bus_devfreq;
-	int i, ret;
+	int i, ret = 0;
 
 	bus_profile = &pwrscale->bus_profile;
 	bus_profile->private_data = &adreno_tz_data;
@@ -562,7 +562,9 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 		dev_pm_opp_add(dev, pwr->pwrlevels[i].gpu_freq, 0);
 	}
 
+#if !IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON)
 	ret = devfreq_gpubw_init();
+#endif
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to add busmon governor: %d\n", ret);
 		put_device(dev);
@@ -574,7 +576,9 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 
 	if (IS_ERR_OR_NULL(bus_devfreq)) {
 		dev_err(&pdev->dev, "Bus scaling not enabled\n");
+#if !IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON)
 		devfreq_gpubw_exit();
+#endif
 		put_device(dev);
 		return;
 	}
@@ -687,7 +691,7 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct devfreq *devfreq;
 	struct msm_adreno_extended_profile *gpu_profile;
-	int i, ret;
+	int i, ret = 0;
 
 	gpu_profile = &pwrscale->gpu_profile;
 	gpu_profile->private_data = &adreno_tz_data;
@@ -753,7 +757,9 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 		return -ENOMEM;
 	}
 
+#if !IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ)
 	ret = msm_adreno_tz_init();
+#endif
 	if (ret) {
 		dev_err(device->dev, "Failed to add adreno tz governor: %d\n", ret);
 		device->pwrscale.enabled = false;
@@ -766,7 +772,9 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 	if (ret) {
 		dev_err(device->dev, "Unable to register notifier call for thermal: %d\n", ret);
 		device->pwrscale.enabled = false;
+#if !IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ)
 		msm_adreno_tz_exit();
+#endif
 		return ret;
 	}
 
@@ -774,7 +782,9 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 			governor, &adreno_tz_data);
 	if (IS_ERR_OR_NULL(devfreq)) {
 		device->pwrscale.enabled = false;
+#if !IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ)
 		msm_adreno_tz_exit();
+#endif
 		return IS_ERR(devfreq) ? PTR_ERR(devfreq) : -EINVAL;
 	}
 
@@ -819,7 +829,9 @@ void kgsl_pwrscale_close(struct kgsl_device *device)
 		devfreq_remove_device(pwrscale->bus_devfreq);
 		pwrscale->bus_devfreq = NULL;
 		put_device(&pwrscale->busmondev);
+#if !IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON)
 		devfreq_gpubw_exit();
+#endif
 	}
 
 	if (!pwrscale->devfreqptr)
@@ -836,7 +848,9 @@ void kgsl_pwrscale_close(struct kgsl_device *device)
 	devfreq_remove_device(device->pwrscale.devfreqptr);
 	device->pwrscale.devfreqptr = NULL;
 	dev_pm_qos_remove_notifier(&device->pdev->dev, &pwr->nb_max, DEV_PM_QOS_MAX_FREQUENCY);
+#if !IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ)
 	msm_adreno_tz_exit();
+#endif
 }
 
 static void do_devfreq_suspend(struct work_struct *work)

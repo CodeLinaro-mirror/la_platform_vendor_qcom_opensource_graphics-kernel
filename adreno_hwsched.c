@@ -5,10 +5,12 @@
  */
 
 #include <dt-bindings/soc/qcom,ipcc.h>
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 #include <linux/soc/qcom/msm_hw_fence.h>
-#include <soc/qcom/msm_performance.h>
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
 #include "adreno.h"
+#include <soc/qcom/msm_performance.h>
 #include "adreno_hfi.h"
 #include "adreno_snapshot.h"
 #include "adreno_sysfs.h"
@@ -380,6 +382,7 @@ void adreno_hwsched_flush(struct adreno_device *adreno_dev)
 	kthread_flush_worker(hwsched->worker);
 }
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
 	struct adreno_hw_fence_entry *entry)
 {
@@ -395,11 +398,13 @@ void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
 	list_del_init(&entry->node);
 	kmem_cache_free(hwsched->hw_fence_cache, entry);
 }
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
 /**
  * allocate_hw_fence_entry - Allocate an entry to keep track of a hardware fence. This is free'd
  * when we know GMU has sent this fence to the TxQueue
  */
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 static struct adreno_hw_fence_entry *allocate_hw_fence_entry(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt, struct kgsl_sync_fence *kfence)
 {
@@ -418,6 +423,7 @@ static struct adreno_hw_fence_entry *allocate_hw_fence_entry(struct adreno_devic
 
 	return entry;
 }
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
 /**
  * adreno_hwsched_process_hw_fence_list - This function walks the list of hardware fences
@@ -439,7 +445,9 @@ static void adreno_hwsched_process_hw_fence_list(struct adreno_device *adreno_de
 		if (pending)
 			continue;
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 		adreno_hwsched_remove_hw_fence_entry(adreno_dev, fence);
+#endif
 	}
 }
 
@@ -1258,6 +1266,7 @@ static const struct attribute *_hwsched_attr_list[] = {
 	NULL,
 };
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 void adreno_hwsched_deregister_hw_fence(struct adreno_device *adreno_dev)
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
@@ -1277,6 +1286,7 @@ void adreno_hwsched_deregister_hw_fence(struct adreno_device *adreno_dev)
 
 	clear_bit(ADRENO_HWSCHED_HW_FENCE, &hwsched->flags);
 }
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
 static void adreno_hwsched_dispatcher_close(struct adreno_device *adreno_dev)
 {
@@ -1295,7 +1305,9 @@ static void adreno_hwsched_dispatcher_close(struct adreno_device *adreno_dev)
 
 	kfree(hwsched->ctxt_bad);
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 	adreno_hwsched_deregister_hw_fence(adreno_dev);
+#endif
 }
 
 static void force_retire_timestamp(struct kgsl_device *device,
@@ -1849,6 +1861,7 @@ void adreno_hwsched_clear_fault(struct adreno_device *adreno_dev)
 	smp_wmb();
 }
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 /**
  * drawctxt_queue_hw_fence - Add a hardware fence to draw context's hardware fence list and make
  * sure the list remains sorted (with the fence with the largest timestamp at the end)
@@ -1877,7 +1890,9 @@ static void drawctxt_queue_hw_fence(struct adreno_context *drawctxt,
 		return;
 	}
 }
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 static bool is_tx_slot_available(struct adreno_device *adreno_dev)
 {
 	void *ptr = adreno_dev->hwsched.hw_fence.mem_descriptor.virtual_addr;
@@ -1897,10 +1912,12 @@ static bool is_tx_slot_available(struct adreno_device *adreno_dev)
 
 	return true;
 }
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
 #define DRAWCTXT_SLOT_AVAILABLE(count)	\
 	((count + 1) < (HW_FENCE_QUEUE_SIZE / sizeof(struct hfi_hw_fence_info)))
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	struct kgsl_sync_fence *kfence)
 {
@@ -1999,6 +2016,7 @@ context_put:
 unlock:
 	mutex_unlock(&device->mutex);
 }
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
 static const struct adreno_dispatch_ops hwsched_ops = {
 	.close = adreno_hwsched_dispatcher_close,
@@ -2006,7 +2024,9 @@ static const struct adreno_dispatch_ops hwsched_ops = {
 	.queue_context = adreno_hwsched_queue_context,
 	.fault = adreno_hwsched_fault,
 	.idle = adreno_hwsched_idle,
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 	.create_hw_fence = adreno_hwsched_create_hw_fence,
+#endif
 };
 
 static void hwsched_lsr_check(struct work_struct *work)
@@ -2237,6 +2257,7 @@ int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 	return -ETIMEDOUT;
 }
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev)
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
@@ -2288,7 +2309,9 @@ void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev)
 
 	set_bit(ADRENO_HWSCHED_HW_FENCE, &hwsched->flags);
 }
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 void adreno_hwsched_trigger_hw_fence_cpu(struct adreno_device *adreno_dev,
 	struct adreno_hw_fence_entry *fence)
 {
@@ -2306,6 +2329,7 @@ void adreno_hwsched_trigger_hw_fence_cpu(struct adreno_device *adreno_dev,
 	msm_hw_fence_trigger_signal(kfence->hw_fence_handle, IPCC_CLIENT_GPU,
 		IPCC_CLIENT_APSS, 0);
 }
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
 int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	struct device *dev, struct pending_cmd *ack,

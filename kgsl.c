@@ -4,6 +4,9 @@
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
+#include <linux/vmalloc.h>
+#include <linux/version.h>
+#include <linux/timer.h>
 #include <uapi/linux/sched/types.h>
 #include <linux/bitfield.h>
 #include <linux/ctype.h>
@@ -26,7 +29,6 @@
 #include <linux/string_helpers.h>
 #include <soc/qcom/of_common.h>
 #include <soc/qcom/secure_buffer.h>
-#include <soc/qcom/boot_stats.h>
 
 #include "kgsl_compat.h"
 #include "kgsl_debugfs.h"
@@ -370,13 +372,13 @@ static void kgsl_destroy_anon(struct kgsl_memdesc *memdesc)
 			 * were writable by the GPU.
 			 */
 			if (!(memdesc->flags & KGSL_MEMFLAGS_GPUREADONLY))
-				set_page_dirty_lock(nth_page(page, j));
+				set_page_dirty_lock(kgsl_nth_page(page, j));
 
 			/*
 			 * Put the page reference taken using get_user_pages
 			 * during memdesc_sg_virt.
 			 */
-			put_page(nth_page(page, j));
+			put_page(kgsl_nth_page(page, j));
 		}
 	}
 
@@ -1091,7 +1093,7 @@ static void _log_gpu_work_events(struct work_struct *work)
 
 static void kgsl_work_period_timer(struct timer_list *t)
 {
-	struct kgsl_device *device = from_timer(device, t, work_period_timer);
+	struct kgsl_device *device = timer_container_of(device, t, work_period_timer);
 
 	queue_work(kgsl_driver.lockless_workqueue, &device->work_period_ws);
 }
@@ -2838,7 +2840,7 @@ static int memdesc_sg_virt(struct kgsl_memdesc *memdesc, unsigned long useraddr)
 		goto out;
 	}
 
-	npages = get_user_pages(useraddr, sglen, write, pages, NULL);
+	npages = get_user_pages(useraddr, sglen, write, pages);
 	mmap_read_unlock(current->mm);
 
 	ret = (npages < 0) ? (int)npages : 0;
@@ -3067,7 +3069,7 @@ static void kgsl_process_add_stats(struct kgsl_process_private *priv,
 		priv->stats[type].max = ret;
 }
 
-u64 kgsl_get_stats(pid_t pid)
+static __maybe_unused u64 kgsl_get_stats(pid_t pid)
 {
 	struct kgsl_process_private *process;
 	u64 ret;
@@ -3085,7 +3087,6 @@ u64 kgsl_get_stats(pid_t pid)
 
 	return ret;
 }
-EXPORT_SYMBOL(kgsl_get_stats);
 
 long kgsl_ioctl_gpuobj_import(struct kgsl_device_private *dev_priv,
 		unsigned int cmd, void *data)
@@ -4405,6 +4406,34 @@ kgsl_memstore_vm_fault(struct vm_fault *vmf)
 	return memdesc->ops->vmfault(memdesc, vmf->vma, vmf);
 }
 
+/* 6.18: vm_flags is const, use wrappers */
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+static inline void kgsl_vm_flags_clear(struct vm_area_struct *vma, vm_flags_t flags)
+{
+	vm_flags_clear(vma, flags);
+}
+
+static inline void kgsl_vm_flags_set(struct vm_area_struct *vma, vm_flags_t flags)
+{
+	vm_flags_set(vma, flags);
+}
+#else
+static inline void kgsl_vm_flags_clear(struct vm_area_struct *vma, vm_flags_t flags)
+{
+	vma->vm_flags &= ~flags;
+}
+
+static inline void kgsl_vm_flags_set(struct vm_area_struct *vma, vm_flags_t flags)
+{
+	vma->vm_flags |= flags;
+}
+#endif
+
+static unsigned long kgsl_mm_get_unmapped_area(
+		struct mm_struct *mm, struct file *file,
+		unsigned long addr, unsigned long len,
+		unsigned long pgoff, unsigned long flags);
+
 static const struct vm_operations_struct kgsl_memstore_vm_ops = {
 	.fault = kgsl_memstore_vm_fault,
 };
@@ -4421,7 +4450,7 @@ kgsl_mmap_memstore(struct file *file, struct kgsl_device *device,
 	if (vma->vm_flags & VM_WRITE)
 		return -EPERM;
 
-	vma->vm_flags &= ~VM_MAYWRITE;
+	kgsl_vm_flags_clear(vma, VM_MAYWRITE);
 
 	if (memdesc->size  != vma_size) {
 		dev_err(device->dev, "Cannot partially map the memstore\n");
@@ -4430,7 +4459,7 @@ kgsl_mmap_memstore(struct file *file, struct kgsl_device *device,
 
 	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
 	vma->vm_private_data = memdesc;
-	vma->vm_flags |= memdesc->ops->vmflags;
+	kgsl_vm_flags_set(vma, memdesc->ops->vmflags);
 	vma->vm_ops = &kgsl_memstore_vm_ops;
 	vma->vm_file = file;
 
@@ -4610,7 +4639,7 @@ static unsigned long set_svm_area(struct file *file,
 	 * Do additoinal constraints checking on the address. Passing MAP_FIXED
 	 * ensures that the address we want gets checked
 	 */
-	ret = current->mm->get_unmapped_area(file, addr, len, 0,
+	ret = kgsl_mm_get_unmapped_area(current->mm, file, addr, len, 0,
 		flags & MAP_FIXED);
 
 	/* If it passes, attempt to set the region in the SVM */
@@ -4685,6 +4714,22 @@ static unsigned long get_svm_unmapped_area(struct file *file,
 	return -ENOMEM;
 }
 
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+static unsigned long kgsl_mm_get_unmapped_area(struct mm_struct *mm, struct file *file,
+		unsigned long addr, unsigned long len, unsigned long pgoff,
+		unsigned long flags)
+{
+	return mm_get_unmapped_area(mm, file, addr, len, pgoff, flags);
+}
+#else
+static unsigned long kgsl_mm_get_unmapped_area(struct mm_struct *mm, struct file *file,
+		unsigned long addr, unsigned long len, unsigned long pgoff,
+		unsigned long flags)
+{
+	return mm->get_unmapped_area(file, addr, len, pgoff, flags);
+}
+#endif
+
 static unsigned long
 kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 			unsigned long len, unsigned long pgoff,
@@ -4711,7 +4756,7 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 	}
 
 	if (!kgsl_memdesc_use_cpu_map(&entry->memdesc)) {
-		val = current->mm->get_unmapped_area(file, addr, len, 0, flags);
+		val = kgsl_mm_get_unmapped_area(current->mm, file, addr, len, 0, flags);
 		if (IS_ERR_VALUE(val))
 			dev_err_ratelimited(device->dev,
 					       "get_unmapped_area: pid %d addr %lx pgoff %lx len %ld failed error %d\n",
@@ -4763,7 +4808,7 @@ static int kgsl_mmap(struct file *file, struct vm_area_struct *vma)
 	if (ret)
 		return ret;
 
-	vma->vm_flags |= entry->memdesc.ops->vmflags;
+	kgsl_vm_flags_set(vma, entry->memdesc.ops->vmflags);
 
 	vma->vm_private_data = entry;
 
@@ -5091,7 +5136,7 @@ error:
 
 void kgsl_device_platform_remove(struct kgsl_device *device)
 {
-	del_timer(&device->work_period_timer);
+	timer_delete(&device->work_period_timer);
 
 	kthread_destroy_worker(device->events_worker);
 
@@ -5158,10 +5203,8 @@ void kgsl_core_exit(void)
 
 int __init kgsl_core_init(void)
 {
+	pr_info("msm_kgsl: *** MODULE LOADED SUCCESSFULLY on kernel 6.18 ***\n");
 	int result = 0;
-
-	place_marker("M - DRIVER KGSL Init");
-
 	/* alloc major and minor device numbers */
 	result = alloc_chrdev_region(&kgsl_driver.major, 0,
 		ARRAY_SIZE(kgsl_driver.devp), "kgsl");
@@ -5184,7 +5227,11 @@ int __init kgsl_core_init(void)
 		goto err;
 	}
 
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+	kgsl_driver.class = class_create("kgsl");
+#else
 	kgsl_driver.class = class_create(THIS_MODULE, "kgsl");
+#endif
 
 	if (IS_ERR(kgsl_driver.class)) {
 		result = PTR_ERR(kgsl_driver.class);
@@ -5259,9 +5306,6 @@ int __init kgsl_core_init(void)
 
 	memfree.list = kcalloc(MEMFREE_ENTRIES, sizeof(struct memfree_entry),
 		GFP_KERNEL);
-
-	place_marker("M - DRIVER KGSL Ready");
-
 	return 0;
 
 err:

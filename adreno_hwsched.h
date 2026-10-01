@@ -7,7 +7,9 @@
 #ifndef _ADRENO_HWSCHED_H_
 #define _ADRENO_HWSCHED_H_
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 #include <linux/soc/qcom/msm_hw_fence.h>
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
 #include "kgsl_sync.h"
 
@@ -46,6 +48,7 @@ struct adreno_hwsched_ops {
 
 };
 
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 /**
  * struct adreno_hw_fence - Container for hardware fences instance
  */
@@ -57,6 +60,7 @@ struct adreno_hw_fence {
 	/** @memdesc: Kgsl memory descriptor for hardware fences queue */
 	struct kgsl_memdesc memdesc;
 };
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 
 /**
  * struct adreno_hwsched - Container for the hardware scheduler
@@ -93,8 +97,10 @@ struct adreno_hwsched {
 	struct timer_list lsr_timer;
 	/** @lsr_check_ws: Lsr work to update power stats */
 	struct work_struct lsr_check_ws;
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 	/** @hw_fence: Container for the hw fences instance */
 	struct adreno_hw_fence hw_fence;
+#endif /* IS_ENABLED(CONFIG_QTI_HW_FENCE) */
 	/** @hw_fence_cache: kmem cache for storing hardware output fences */
 	struct kmem_cache *hw_fence_cache;
 	/** @hw_fence_list: List of hardware fences sent to GMU */
@@ -209,7 +215,9 @@ bool adreno_hwsched_context_queue_enabled(struct adreno_device *adreno_dev);
  * for hardware fences. Also, set up the memory descriptor for mapping the
  * client queue to the GMU.
  */
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev);
+#endif
 
 /**
  * adreno_hwsched_deregister_hw_fence - Deregister GPU as a hardware fence client
@@ -218,7 +226,9 @@ void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev);
  * Deregister with the hardware fence driver and free up any resources allocated
  * as part of registering with the hardware fence driver
  */
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 void adreno_hwsched_deregister_hw_fence(struct adreno_device *adreno_dev);
+#endif
 
 /**
  * adreno_hwsched_remove_hw_fence_entry - Remove hardware fence entry
@@ -236,7 +246,9 @@ void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
  * Trigger the hardware fence by sending it to GMU's Tx Queue and raise the
  * interrupt from GMU to APPS
  */
+#if IS_ENABLED(CONFIG_QTI_HW_FENCE)
 void adreno_hwsched_trigger_hw_fence_cpu(struct adreno_device *adreno_dev,
 	struct adreno_hw_fence_entry *fence);
+#endif
 
 #endif

@@ -197,7 +197,8 @@ int a6xx_init(struct adreno_device *adreno_dev)
 			adreno_is_a642l(adreno_dev) ||
 			adreno_is_a643(adreno_dev) ||
 			adreno_is_a662(adreno_dev) ||
-			adreno_is_gen6_3_26_0(adreno_dev))
+			adreno_is_gen6_3_26_0(adreno_dev) ||
+			adreno_is_a619_bourtzi(adreno_dev))
 			adreno_dev->highest_bank_bit = 14;
 		else if ((adreno_is_a650(adreno_dev) ||
 				adreno_is_a660(adreno_dev)))
@@ -541,7 +542,8 @@ static void a6xx_deassert_gbif_halt(struct adreno_device *adreno_dev)
 
 	kgsl_regwrite(device, A6XX_GBIF_HALT, 0x0);
 
-	if (adreno_is_a619_holi(adreno_dev) || adreno_is_a619_malabar(adreno_dev))
+	if (adreno_is_a619_holi(adreno_dev) || adreno_is_a619_malabar(adreno_dev)
+			|| adreno_is_a619_bourtzi(adreno_dev))
 		kgsl_regwrite(device, A6XX_RBBM_GPR0_CNTL, 0x0);
 	else
 		kgsl_regwrite(device, A6XX_RBBM_GBIF_HALT, 0x0);
@@ -1413,7 +1415,8 @@ static int a6xx_clear_pending_transactions(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 
-	if (adreno_is_a619_holi(adreno_dev) || adreno_is_a619_malabar(adreno_dev)) {
+	if (adreno_is_a619_holi(adreno_dev) || adreno_is_a619_malabar(adreno_dev)
+			|| adreno_is_a619_bourtzi(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_RBBM_GPR0_CNTL, 0x1e0);
 		ret = adreno_wait_for_halt_ack(device,
 			A6XX_RBBM_VBIF_GX_RESET_STATUS, 0xf0);
@@ -2259,7 +2262,7 @@ static int a619_holi_sptprac_enable(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	void __iomem *addr = kgsl_regmap_virt(&device->regmap,
 		A6XX_GMU_SPTPRAC_PWR_CLK_STATUS);
-	u32 val;
+	u32 val = 0;
 
 	if (test_bit(ADRENO_DEVICE_GPU_REGULATOR_ENABLED, &adreno_dev->priv))
 		return 0;
@@ -2283,7 +2286,7 @@ static void a619_holi_sptprac_disable(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	void __iomem *addr = kgsl_regmap_virt(&device->regmap,
 		A6XX_GMU_SPTPRAC_PWR_CLK_STATUS);
-	u32 val;
+	u32 val = 0;
 
 	if (!test_and_clear_bit(ADRENO_DEVICE_GPU_REGULATOR_ENABLED,
 		&adreno_dev->priv))

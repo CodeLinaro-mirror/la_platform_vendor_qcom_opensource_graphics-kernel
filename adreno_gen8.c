@@ -1321,13 +1321,17 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
 
-	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_x(adreno_dev)) {
+	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_x(adreno_dev) ||
+			adreno_is_gen8_1_0(adreno_dev) || adreno_is_gen8_10_0(adreno_dev)) {
 		if (adreno_slice_mask_override != U32_MAX)
 			kgsl_regwrite(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_TEST,
 					adreno_slice_mask_override);
 
 		kgsl_regread(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_FINAL, &slice_mask);
-		slice_mask = GET_SLICE_MASK(3, slice_mask);
+		if (adreno_is_gen8_1_0(adreno_dev))
+			slice_mask = GET_SLICE_MASK(GEN8_1_0_NUM_PHYSICAL_SLICES, slice_mask);
+		else
+			slice_mask = GET_SLICE_MASK(3, slice_mask);
 
 		/*
 		 * Update the chipid with the number of active slices. This is the number
@@ -2317,8 +2321,13 @@ int gen8_start(struct adreno_device *adreno_dev)
 	/*
 	 * Enable hardware clock gating here to prevent any register access
 	 * issue due to internal clock gating.
+	 *
+	 * Gen8_2_0, gen8_1_0 and gen8_10_0 need to set up HW clock gating after
+	 * CP INIT in the bootup sequence.
 	 */
-	if (!adreno_is_gen8_2_x(adreno_dev))
+	if (!(adreno_is_gen8_2_x(adreno_dev) ||
+		  adreno_is_gen8_1_0(adreno_dev) ||
+		  adreno_is_gen8_10_0(adreno_dev)))
 		gen8_hwcg_set(adreno_dev, true);
 
 	/* Ensure very last register write is finished before we return from this function */
@@ -2376,8 +2385,12 @@ int gen8_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
 	 * If scm call returned EOPNOTSUPP, either we are on a kernel version
 	 * lesser than 6.1 where scm call is not supported or we are sending an
 	 * empty request. Ignore the error in such cases.
+	 *
+	 * -EIO indicates that the GPU init SCM call is not supported
+	 * by the TZ firmware. In this case, defer BCL/CLX
+	 * initialization until after the first successful GMU boot.
 	 */
-	return (ret == -EOPNOTSUPP) ? 0 : ret;
+	return (ret == -EOPNOTSUPP || ret == -EIO) ? 0 : ret;
 }
 
 void gen8_spin_idle_debug(struct adreno_device *adreno_dev,
@@ -2607,7 +2620,8 @@ int gen8_rb_start(struct adreno_device *adreno_dev)
 	}
 
 	ret = gen8_post_start(adreno_dev);
-	if (!ret && adreno_is_gen8_2_x(adreno_dev))
+	if (!ret && (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_1_0(adreno_dev) ||
+			adreno_is_gen8_10_0(adreno_dev)))
 		gen8_hwcg_set(adreno_dev, true);
 
 	return ret;
@@ -3316,6 +3330,9 @@ int gen8_probe_common(struct platform_device *pdev,
 
 	device->pwrctrl.rt_bus_hint = gen8_core->rt_bus_hint;
 
+	if (adreno_is_gen8_11_x(adreno_dev))
+		device->pwrctrl.skip_cx_gdsc_wait = true;
+
 	device->cx_host_irq_num = kgsl_request_irq_optional(pdev,
 		"cx_host_irq", gen8_cx_host_irq_handler, device);
 
@@ -3977,6 +3994,10 @@ done:
  */
 u32 gen8_get_gmem_size(struct adreno_device *adreno_dev)
 {
+	if (adreno_is_gen8_1_0(adreno_dev))
+		return (adreno_dev->gpucore->gmem_size / GEN8_1_0_NUM_PHYSICAL_SLICES) *
+			gen8_get_num_slices(adreno_dev);
+
 	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_x(adreno_dev)) {
 		if (adreno_is_gen8_9_0(adreno_dev))
 			return (adreno_dev->gpucore->gmem_size / GEN8_9_0_NUM_PHYSICAL_SLICES) *
@@ -3988,6 +4009,11 @@ u32 gen8_get_gmem_size(struct adreno_device *adreno_dev)
 			return (adreno_dev->gpucore->gmem_size / GEN8_2_0_NUM_PHYSICAL_SLICES) *
 			gen8_get_num_slices(adreno_dev);
 	}
+
+	if (adreno_is_gen8_10_0(adreno_dev))
+		return (adreno_dev->gpucore->gmem_size / GEN8_10_0_NUM_PHYSICAL_SLICES) *
+			gen8_get_num_slices(adreno_dev);
+
 	return adreno_dev->gpucore->gmem_size;
 }
 
@@ -3997,7 +4023,8 @@ static int gen8_get_speed_bin(struct adreno_device *adreno_dev)
 	int status;
 	u32 val;
 
-	if (!adreno_is_gen8_11_x(adreno_dev))
+	if (!(adreno_is_gen8_11_x(adreno_dev) || adreno_is_gen8_1_0(adreno_dev) ||
+			adreno_is_gen8_10_0(adreno_dev)))
 		return -EOPNOTSUPP;
 
 	status = kgsl_scm_gpu_init_regs(&device->pdev->dev, GPU_PROBE);
@@ -4044,6 +4071,7 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.get_gmem_size = gen8_get_gmem_size,
 		.get_speed_bin = gen8_get_speed_bin,
 		.remove = gen8_hwsched_remove,
+		.pwrlevel_change_settings = gen8_hwsched_pwrlevel_change_settings,
 	},
 	.hfi_probe = gen8_hwsched_hfi_probe,
 	.hfi_remove = gen8_hwsched_hfi_remove,

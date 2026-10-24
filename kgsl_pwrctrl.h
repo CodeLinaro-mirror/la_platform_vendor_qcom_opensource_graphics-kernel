@@ -159,6 +159,8 @@ struct kgsl_pwrctrl {
 	struct completion cx_gdsc_gate;
 	/** @cx_gdsc_wait: Whether to wait for cx gdsc to turn off */
 	bool cx_gdsc_wait;
+	/** @skip_cx_gdsc_wait: Skip waiting for cx gdsc to collapse for 8_11_x target. */
+	bool skip_cx_gdsc_wait;
 	/** @cx_cfg_gdsc_offset: Offset of CX CFG GDSC register */
 	u32 cx_cfg_gdsc_offset;
 	int isense_clk_indx;

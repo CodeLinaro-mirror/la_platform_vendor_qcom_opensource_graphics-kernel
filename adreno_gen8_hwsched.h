@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _ADRENO_GEN8_HWSCHED_H_
@@ -126,4 +126,14 @@ void gen8_hwsched_set_pwrconstraint(struct adreno_device *adreno_dev, u32 contex
  * @adreno_dev: A handle to adreno device
  */
 void gen8_hwsched_init_ucode_regs(struct adreno_device *adreno_dev);
+
+/**
+ * gen8_hwsched_pwrlevel_change_settings - Handle powerlevel change notification
+ * @adreno_dev: A handle to adreno device
+ * @prelevel: Powerlevel index prior to powerlevel change
+ * @postlevel: Powerlevel index after the powerlevel change
+ * @post: True if post pwrlevel notification
+ */
+void gen8_hwsched_pwrlevel_change_settings(struct adreno_device *adreno_dev,
+				u32 prelevel, u32 postlevel, bool post);
 #endif

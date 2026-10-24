@@ -267,6 +267,10 @@ enum gmu_vrb_idx {
 	VRB_IPCC_SIZE_BYTES = 23,
 	/* Contains the address of SPEL trace buffer */
 	VRB_SPEL_TRACE_BUFFER_ADDR_IDX = 24,
+	/* Non-CL long IB bail-out timeout in ms, 0 = firmware default */
+	VRB_LONG_IB_TIMEOUT = 26,
+	/* Set by GMU when it disables power interrupts during hang recovery */
+	VRB_GMU_PWR_HALT = 27,
 };
 
 /* For GMU Trace */
@@ -361,7 +365,7 @@ struct gmu_trace_header {
 enum gmu_trace_id {
 	GMU_TRACE_PREEMPT_TRIGGER = 1,
 	GMU_TRACE_PREEMPT_DONE = 2,
-	GMU_TRACE_EXTERNAL_HW_FENCE_SIGNAL = 3,
+	GMU_TRACE_INPUT_HW_FENCE_SIGNAL = 3,
 	GMU_TRACE_SYNCOBJ_RETIRE = 4,
 	GMU_TRACE_DCVS_PWRLVL = 5,
 	GMU_TRACE_DCVS_BUSLVL = 6,
@@ -373,6 +377,10 @@ enum gmu_trace_id {
 	GMU_TRACE_CTX_PRI_UPDATE_DONE     = 12,
 	GMU_TRACE_CTX_PRI_REQ_DEFERRED    = 13,
 	GMU_TRACE_SPEL_CAP_PWRLEVEL       = 14,
+	GMU_TRACE_PREEMPT_TELEMETRY       = 15,
+	GMU_TRACE_OUTPUT_HW_FENCE_SIGNAL  = 16,
+	GMU_TRACE_OUTPUT_SYNX_SIGNAL      = 17,
+	GMU_TRACE_INPUT_SYNX_SIGNAL       = 18,
 	GMU_TRACE_MAX,
 };
 
@@ -388,10 +396,24 @@ struct trace_preempt_done {
 	u32 ctx_switch_cntl;
 } __packed;
 
-struct trace_ext_hw_fence_signal {
+struct trace_input_hw_fence_signal_legacy {
 	u64 context;
 	u64 seq_no;
-	u32 flags;
+	u32 status;
+} __packed;
+
+struct trace_input_hw_fence_signal {
+	u64 context;
+	u64 seq_no;
+	u32 status;
+	u32 handle;
+} __packed;
+
+struct trace_input_synx_signal {
+	u64 context;
+	u64 seq_no;
+	u32 status;
+	u32 handle;
 } __packed;
 
 struct trace_syncobj_retire {
@@ -401,6 +423,23 @@ struct trace_syncobj_retire {
 
 struct trace_spel_cap_pwrlevel {
 	u32 pwrlevel;
+} __packed;
+
+struct trace_output_hw_fence_signal {
+	u32 gpu_context_id;
+	u64 dma_fence_context_id;
+	u64 dma_fence_seqno;
+	u64 hash;
+	u64 flags;
+} __packed;
+
+struct trace_output_synx_signal {
+	u32 gpu_context_id;
+	u32 remote_host_id;
+	u64 dma_fence_context_id;
+	u64 dma_fence_seqno;
+	u64 hash;
+	u64 flags;
 } __packed;
 
 #define TRACE_FLAG_BIT_DCVS_VOTE	0

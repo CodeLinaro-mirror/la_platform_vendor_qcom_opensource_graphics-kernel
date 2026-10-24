@@ -5,6 +5,7 @@ targets = [
     "bluey",
     "canoe",
     "chora",
+    "glymur",
     "lahaina",
     "malabar",
     "monaco",

@@ -1292,72 +1292,79 @@ struct hfi_profile_register {
 /**
  * Power budget configuration
  * DATA[0]
- *     [31:26] FORCED_TELEMETRY_WINDOW   - Forced Telemetry window size {yy,zzzz} which represents
- *                                         (1.yy)*(2^(zzzz))*(20 XO clocks). If non-zero, use only
- *                                         the forced value.
- *     [25:20] MIN_PERF_LEVEL            - Min perf level to be used by control loop. Perf level 1
- *                                         used by default if this field is 0 or > number of levels
- *                                         in perf table
- *     [19:18] SHORT_DCE_MARGIN_SCALE_EN - 1: GPU will use linearly scaled DCE error margins in
- *                                            short-term budgeting.
- *                                         0: (Default) GPU will do no linear margin scaling
- *     [17:16] LOCAL_PMIC_LOSS_CALC_EN   - 1: GPU will estimate PMIC loss locally. Short budget
- *                                            provided needs to include PMIC loss.
- *                                         0: (Default) SPEL will estimate and remove PMIC loss
- *     [15:14] CDYN_HIST_EN              - Enable Cdyn histogram for desired power
- *     [13:12] LONG_DESIRED_PWR_EN       - Enable long desired power calculations
- *     [11:10] SHORT_DESIRED_PWR_EN      - Enable short desired power calculations
- *       [9:8] TELEMETRY_EN              - Enable telemetry
- *       [7:6] LONG_PWR_BUDGET_ENFORCE   - Enforce DCVS switching
- *       [5:4] LONG_EN                   - Enable long power budgeting
- *       [3:2] SHORT_EN                  - Enable short power budgeting
- *       [1:1] LKG_EN                    - Enable leakage power calculations
- *       [0:0] DYN_EN                    - Enable dynamic power calculations
+ *     [31:26] FORCED_TELEMETRY_WINDOW      - Forced Telemetry window size {yy,zzzz} which
+ *                                            represents (1.yy)*(2^(zzzz))*(20 XO clocks). If
+ *                                            non-zero, use only the forced value.
+ *     [25:20] MIN_PERF_LEVEL               - Min perf level to be used by control loop. Perf level
+ *                                            1 used by default if this field is 0 or > number of
+ *                                            levels in perf table
+ *     [19:18] SHORT_DCE_MARGIN_SCALE_EN    - 1: GPU will use linearly scaled DCE error margins in
+ *                                               short-term budgeting.
+ *                                            0: (Default) GPU will do no linear margin scaling
+ *     [17:16] LOCAL_PMIC_LOSS_CALC_EN      - 1: GPU will estimate PMIC loss locally. Short budget
+ *                                               provided needs to include PMIC loss.
+ *                                            0: (Default) SPEL will estimate and remove PMIC loss
+ *     [15:14] CDYN_HIST_EN                 - Enable Cdyn histogram for desired power
+ *     [13:12] LONG_DESIRED_PWR_EN          - Enable long desired power calculations
+ *     [11:10] SHORT_DESIRED_PWR_EN         - Enable short desired power calculations
+ *       [9:8] TELEMETRY_EN                 - Enable telemetry
+ *       [7:6] LONG_PWR_BUDGET_ENFORCE      - Enforce DCVS switching
+ *       [5:4] LONG_EN                      - Enable long power budgeting
+ *       [3:2] SHORT_EN                     - Enable short power budgeting
+ *       [1:1] LKG_EN                       - Enable leakage power calculations
+ *       [0:0] DYN_EN                       - Enable dynamic power calculations
  * DATA[1]
- *     [31:26] DCE_CDYN_BX_SCALE         - BX power as a fraction of GX power
- *     [25:20] DCE_CDYN_MX_SCALE         - MX power as a fraction of GX power
- *     [19:13] MAX_BUDGET_CDYN_GFX_SHORT - GX Cdyn to be set in GMUCX_PWRLM_MAX_CDYN_GX for short
- *                                         power limiting
- *      [12:7] MAX_BUDGET_CDYN_GFX       - GX Cdyn for calculating long power consumed at every
- *                                         DCVS level
- *       [6:0] DES_PWR_ALPHA             - Alpha, out of 127, to be used for desired power EWMA
- *                                         calculations. If 0, assume 50% alpha
+ *     [31:26] DCE_CDYN_BX_SCALE            - BX power as a fraction of GX power
+ *     [25:20] DCE_CDYN_MX_SCALE            - MX power as a fraction of GX power
+ *     [19:13] MAX_BUDGET_CDYN_GFX_SHORT    - GX Cdyn to be set in GMUCX_PWRLM_MAX_CDYN_GX for
+ *                                            short power limiting
+ *      [12:7] MAX_BUDGET_CDYN_GFX          - GX Cdyn for calculating long power consumed at every
+ *                                            DCVS level
+ *       [6:0] DES_PWR_ALPHA                - Alpha, out of 127, to be used for desired power EWMA
+ *                                            calculations. If 0, assume 50% alpha
  * DATA[2]
- *     [31:27] NUM_SAMPLES_2             - Number of samples in the running sum buffer 2 (sustained
- *                                         perf)
- *     [26:15] CDYN_ACCUM_CONFIG_0       - Value for GMUCX_CDYN_ACCUM_CONFIG_0 for Cdyn histogram.
- *                                         If 0, 10 will be used as default value
- *      [14:8] CDYN_HIST_ALPHA           - Alpha, out of 127, to be used for cdyn histogram EWMA
- *                                         calculations. If 0, assume 50% alpha
- *       [7:7] CDYN_SCALE_FACTOR_EN      - Scale the boot table Cdyn by a factor before making DCVS
- *                                         decisions
- *       [6:0] NUM_SAMPLES               - Number of samples in the running sum buffer (battery
- *                                         limits)
+ *     [31:27] NUM_SAMPLES_2                - Number of samples in the running sum buffer 2
+ *                                            (sustained perf)
+ *     [26:15] CDYN_ACCUM_CONFIG_0          - Value for GMUCX_CDYN_ACCUM_CONFIG_0 for Cdyn
+ *                                            histogram. If 0, 10 will be used as default value
+ *      [14:8] CDYN_HIST_ALPHA              - Alpha, out of 127, to be used for cdyn histogram EWMA
+ *                                            calculations. If 0, assume 50% alpha
+ *       [7:7] CDYN_SCALE_FACTOR_EN         - Scale the boot table Cdyn by a factor before making
+ *                                            DCVS decisions
+ *       [6:0] NUM_SAMPLES                  - Number of samples in the running sum buffer (battery
+ *                                            limits)
  * DATA[3]
- *     [31:15] RESERVED_3                - Reserved field
- *     [14:14] USE_STATIC_CDYN_BP        - For battery limits, use static cdyn instead of histogram
- *                                         cdyn value
- *     [13:13] SYS_FW_VOTE_ENFORCE       - Switching to new vote managed by power limits or SysFW
- *                                         0: Power limits enforces DCVS switching
- *                                         1: Power limits suggests vote to KMD and KMD should
- *                                            enforce it
- *     [12:12] SKIP_DELAYED_GX_VOTE      - Process incoming GX vote immediately instead of at the
- *                                         sample period boundary
- *     [11:11] PWR_LIMITS_MODE_VAL       - Battery limits or sustained perf
- *     [10:10] PWR_LIMITS_MODE_EN        - Use HFI to determine whether battery limits or sustained
- *                                         perf window should be applied
- *       [9:3] FORCED_TIME_CONST_MUL_2   - Multiplier for second long window (typically 26)
- *       [2:0] FORCED_TIME_CONST_MUL_1   - Multiplier for first long window
+ *     [31:31] RESERVED_3                   - Reserved field
+ *     [30:27] DAMPENER_FACTOR              - Number of samples for which we remain at P_L before
+ *                                            switching to P_H
+ *     [26:21] DES_PWR_FREQ_SCALE_FACTOR_M1 - Scale the KMD frequency by a factor out of 64 and
+ *                                            find desired power at the new (V, F) corner for Mode1
+ *     [20:15] DES_PWR_FREQ_SCALE_FACTOR_M0 - Scale the KMD frequency by a factor out of 64 and
+ *                                            find desired power at the new (V, F) corner for Mode0
+ *     [14:14] USE_STATIC_CDYN_BP           - For battery limits, use static cdyn instead of
+ *                                            histogram cdyn value
+ *     [13:13] SYS_FW_VOTE_ENFORCE          - Switching to new vote managed by power limits or
+ *                                            SysFW
+ *                                            0: Power limits enforces DCVS switching
+ *                                            1: Power limits suggests vote to KMD and KMD should
+ *                                               enforce it
+ *     [12:12] SKIP_DELAYED_GX_VOTE         - Process incoming GX vote immediately instead of at
+ *                                            the sample period boundary
+ *     [11:11] PWR_LIMITS_MODE_VAL          - Battery limits or sustained perf
+ *     [10:10] PWR_LIMITS_MODE_EN           - Use HFI to determine whether battery limits or
+ *                                            sustained perf window should be applied
+ *       [9:3] FORCED_TIME_CONST_MUL_2      - Multiplier for second long window (typically 26)
+ *       [2:0] FORCED_TIME_CONST_MUL_1      - Multiplier for first long window
  * DATA[4]
- *      [31:0] FORCED_LONG_BUDGET        - Forced long power budget in mW. If non-zero, use only
- *                                         the forced value
+ *      [31:0] FORCED_LONG_BUDGET           - Forced long power budget in mW. If non-zero, use only
+ *                                            the forced value
  * DATA[5]
- *      [31:0] FORCED_LONG_TIME_CONST    - Forced long time constant in the format {yyy,zzzzz}
- *                                         which represents (1.yyy)*(2^(zzzzz))*(20 XO clocks)).
- *                                         If non-zero, use only the forced value.
+ *      [31:0] FORCED_LONG_TIME_CONST       - Forced long time constant in the format {yyy,zzzzz}
+ *                                            which represents (1.yyy)*(2^(zzzzz))*(20 XO clocks)).
+ *                                            If non-zero, use only the forced value.
  * DATA[6]
- *      [31:0] FORCED_SHORT_BUDGET       - Forced short power budget in mW. If non-zero, use this
- *                                         value during boot
+ *      [31:0] FORCED_SHORT_BUDGET          - Forced short power budget in mW. If non-zero, use
+ *                                            this value during boot
  */
 #define GMU_PWR_BUDGET_FORCED_TELEMETRY_WINDOW		GENMASK(31, 26)
 #define GMU_PWR_BUDGET_MIN_PERF_LEVEL			GENMASK(25, 20)
@@ -1382,7 +1389,10 @@ struct hfi_profile_register {
 #define GMU_PWR_BUDGET_CDYN_HIST_ALPHA			GENMASK(14, 8)
 #define GMU_PWR_BUDGET_CDYN_SCALE_FACTOR_EN		GENMASK(7, 7)
 #define GMU_PWR_BUDGET_NUM_SAMPLES			GENMASK(6, 0)
-#define GMU_PWR_BUDGET_RESERVED_3			GENMASK(31, 15)
+#define GMU_PWR_BUDGET_RESERVED_3			GENMASK(31, 31)
+#define GMU_PWR_BUDGET_DAMPENER_FACTOR			GENMASK(30, 27)
+#define GMU_PWR_BUDGET_DES_PWR_FREQ_SCALE_FACTOR_M1	GENMASK(26, 21)
+#define GMU_PWR_BUDGET_DES_PWR_FREQ_SCALE_FACTOR_M0	GENMASK(20, 15)
 #define GMU_PWR_BUDGET_USE_STATIC_CDYN_BP		GENMASK(14, 14)
 #define GMU_PWR_BUDGET_SYS_FW_VOTE_ENFORCE		GENMASK(13, 13)
 #define GMU_PWR_BUDGET_SKIP_DELAYED_GX_VOTE		GENMASK(12, 12)
@@ -1620,6 +1630,7 @@ enum gpu_tuning_attr {
 	GPU_TUNING_KEY_DEADLINE_BOOST_PWRLEVEL_BASE = 17,
 	GPU_TUNING_KEY_DEADLINE_BOOST_STRIDE_PERCENTAGE = 18,
 	GPU_TUNING_KEY_DEADLINE_BOOST_RELEASE_NUM_FRAMES = 19,
+	GPU_TUNING_KEY_DEADLINE_BOOST_ENABLE_SINGLE_CTXT = 20,
 	GPU_TUNING_KEY_MAX,
 };
 

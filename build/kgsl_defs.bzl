@@ -129,6 +129,11 @@ def external_deps(target, variant):
             "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers",
         ]
 
+    if target in ["art", "art16k"]:
+        deplist = deplist + [
+            "//soc-repo:{}/kernel/sched/walt/sched-walt".format(tv),
+        ]
+
     native.genrule(
         name = "{}_defconfig".format(tv),
         srcs = defconfigs + ["config/{}_gpuconf".format(tv)],
@@ -157,7 +162,7 @@ def define_target_variant_module(target, variant):
     ext_deps = external_deps(target, variant)
 
     smci_dep = []
-    if target == "hamoa":
+    if target in ["hamoa", "glymur"]:
         smci_dep = [
             "//soc-repo:{}/drivers/firmware/qcom/qcom_scm_smci".format(tv),
             "//soc-repo:{}/drivers/firmware/qcom/si_core/si_core_module".format(tv),

@@ -505,6 +505,20 @@ static void trigger_reset_recovery(struct adreno_device *adreno_dev,
 	adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 }
 
+static bool _pwr_is_halted(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 halt = 0;
+
+	if (adreno_gpu_fault(adreno_dev))
+		return true;
+
+	if (gmu_core_get_vrb_register(device->gmu_core.vrb, VRB_GMU_PWR_HALT, &halt))
+		return false;
+
+	return halt ? true : false;
+}
+
 int gen8_gmu_oob_set(struct kgsl_device *device,
 		enum oob_request req)
 {
@@ -512,6 +526,9 @@ int gen8_gmu_oob_set(struct kgsl_device *device,
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	int ret = 0;
 	int set, check;
+
+	if (_pwr_is_halted(adreno_dev))
+		return -EBUSY;
 
 	if (req == oob_perfcntr && gmu->num_oob_perfcntr++)
 		return 0;
@@ -532,12 +549,18 @@ int gen8_gmu_oob_set(struct kgsl_device *device,
 				100, check)) {
 		if (req == oob_perfcntr)
 			gmu->num_oob_perfcntr--;
+
+		if (_pwr_is_halted(adreno_dev)) {
+			ret = -EBUSY;
+			goto done;
+		}
 		WARN(1, "OOB request %s timed out\n", oob_to_str(req));
 		ret = -ETIMEDOUT;
 		gmu_core_fault_snapshot(device, GMU_FAULT_OOB_SET);
 		trigger_reset_recovery(adreno_dev, req);
 	}
 
+done:
 	gmu_core_regwrite(device, GEN8_GMUCX_GMU2HOST_INTR_CLR, check);
 
 	trace_kgsl_gmu_oob_set(set);

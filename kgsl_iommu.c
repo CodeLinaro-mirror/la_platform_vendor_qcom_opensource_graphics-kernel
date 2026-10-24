@@ -409,32 +409,27 @@ static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 	return mapped;
 }
 
-static void kgsl_iommu_send_tlb_hint(struct kgsl_mmu *mmu, u32 tlb_hint)
+static void kgsl_iommu_send_tlb_hint(struct kgsl_mmu *mmu, bool skip)
 {
 	struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
 	struct kgsl_iommu *iommu = &mmu->iommu;
-	bool skip_tlb_mgnt = tlb_hint & KGSL_MMU_TLB_HINT_SKIP_MGNT;
-	bool skip_tlb_flush = tlb_hint & KGSL_MMU_TLB_HINT_SKIP_FLUSH;
 
 	/*
 	 * Send skip TLB hints for user context, LPAC context, and GMU domains
 	 * to the SMMU driver to skip TLB operations during slumber. This will
 	 * help avoid unnecessary CX GDSC toggling.
 	 */
-	qcom_skip_tlb_management(&iommu->user_context.pdev->dev,
-		skip_tlb_mgnt);
+	qcom_skip_tlb_management(&iommu->user_context.pdev->dev, skip);
 	if (iommu->lpac_context.domain)
-		qcom_skip_tlb_management(&iommu->lpac_context.pdev->dev,
-			skip_tlb_mgnt);
+		qcom_skip_tlb_management(&iommu->lpac_context.pdev->dev, skip);
 	if (device->gmu_core.domain)
-		qcom_skip_tlb_management(&device->gmu_core.pdev->dev,
-			skip_tlb_mgnt);
+		qcom_skip_tlb_management(&device->gmu_core.pdev->dev, skip);
 	/*
 	 * TLB operations are skipped during slumber. Incase CX doesn't
 	 * go down, it can result in incorrect translations due to stale
 	 * TLB entries. Flush TLB before boot up to ensure fresh start.
 	 */
-	if (!skip_tlb_mgnt && !skip_tlb_flush)
+	if (!skip)
 		kgsl_iommu_flush_tlb(mmu);
 }
 
@@ -1562,9 +1557,6 @@ static int kgsl_iommu_get_context_bank(struct kgsl_pagetable *pt, struct kgsl_co
 	struct kgsl_iommu *iommu = to_kgsl_iommu(pt);
 	struct iommu_domain *domain;
 
-	if (WARN_ON_ONCE(iommu->secure_context.is_proxy_device))
-		return -EINVAL;
-
 	if (kgsl_context_is_lpac(context))
 		domain = to_iommu_domain(&iommu->lpac_context);
 	else
@@ -1577,9 +1569,6 @@ static int kgsl_iommu_get_asid(struct kgsl_pagetable *pt, struct kgsl_context *c
 {
 	struct kgsl_iommu *iommu = to_kgsl_iommu(pt);
 	struct iommu_domain *domain;
-
-	if (WARN_ON_ONCE(iommu->secure_context.is_proxy_device))
-		return -EINVAL;
 
 	if (kgsl_context_is_lpac(context))
 		domain = to_iommu_domain(&iommu->lpac_context);

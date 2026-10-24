@@ -1495,6 +1495,9 @@ int gen7_hwsched_reset_replay(struct adreno_device *adreno_dev)
 	/* Reset the unack count back to zero as we start afresh */
 	hwf->unack_count = 0;
 
+	/* Avoid creating new hardware fences until recovery is complete */
+	set_bit(GEN7_HWSCHED_HW_FENCE_ABORT_BIT, &hwf->flags);
+
 	spin_unlock(&hwf->lock);
 
 	/*

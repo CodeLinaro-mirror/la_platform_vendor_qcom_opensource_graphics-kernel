@@ -5,6 +5,11 @@
  */
 
 #include <linux/interconnect.h>
+#include <linux/version.h>
+
+#if (KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE)
+#include <linux/sched/walt.h>
+#endif
 
 #include "adreno.h"
 #include "adreno_gen8.h"
@@ -259,7 +264,7 @@ static void gen8_hwsched_init_spel_config(struct adreno_device *adreno_dev)
 	memset(spel->config, 0, sizeof(spel->config));
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_DYN_EN, 1);
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_LKG_EN, 1);
-	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_SHORT_EN, 1);
+	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_SHORT_EN, 2);
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_LONG_EN, 1);
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_LONG_PWR_BUDGET_ENFORCE, 1);
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_TELEMETRY_EN, 1);
@@ -267,12 +272,10 @@ static void gen8_hwsched_init_spel_config(struct adreno_device *adreno_dev)
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_LONG_DESIRED_PWR_EN, 1);
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_CDYN_HIST_EN, 1);
 	spel->config[0] |= FIELD_PREP(GMU_PWR_BUDGET_MIN_PERF_LEVEL, 1);
-	spel->config[2] |= FIELD_PREP(GMU_PWR_BUDGET_NUM_SAMPLES, 5);
 	spel->config[2] |= FIELD_PREP(GMU_PWR_BUDGET_CDYN_SCALE_FACTOR_EN, 1);
-	spel->config[2] |= FIELD_PREP(GMU_PWR_BUDGET_NUM_SAMPLES_2, 10);
-	spel->config[3] |= FIELD_PREP(GMU_PWR_BUDGET_FORCED_TIME_CONST_MUL_1, 1);
-	spel->config[3] |= FIELD_PREP(GMU_PWR_BUDGET_FORCED_TIME_CONST_MUL_2, 26);
 	spel->config[3] |= FIELD_PREP(GMU_PWR_BUDGET_SKIP_DELAYED_GX_VOTE, 1);
+	spel->config[3] |= FIELD_PREP(GMU_PWR_BUDGET_SYS_FW_VOTE_ENFORCE, 1);
+	spel->config[3] |= FIELD_PREP(GMU_PWR_BUDGET_DAMPENER_FACTOR, 3);
 	spel->config[5] |= FIELD_PREP(GMU_PWR_BUDGET_FORCED_LONG_TIME_CONST, 46);
 	spel->config[6] |= FIELD_PREP(GMU_PWR_BUDGET_FORCED_SHORT_BUDGET, 0xFFFFFF);
 }
@@ -1749,6 +1752,9 @@ int gen8_hwsched_reset_replay(struct adreno_device *adreno_dev)
 	/* Reset the unack count back to zero as we start afresh */
 	hwf->unack_count = 0;
 
+	/* Avoid creating new hardware fences until recovery is complete */
+	set_bit(GEN8_HWSCHED_HW_FENCE_ABORT_BIT, &hwf->flags);
+
 	spin_unlock(&hwf->lock);
 
 	/*
@@ -1992,6 +1998,48 @@ static ssize_t dcvs_tuning_store(struct kobject *kobj,
 	return count;
 }
 
+/* Default value (disabled) for the deadline offset percentage tunable */
+#define DEADLINE_OFFSET_DEFAULT 0
+
+static ssize_t deadline_offset_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, tunables_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", device->deadline_offset);
+}
+
+static ssize_t deadline_offset_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, tunables_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int val = 0;
+	int ret;
+
+	ret = kstrtoint(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	/* Valid input range is -1 to 100 */
+	if ((val < -1) || (val > 100))
+		return -EINVAL;
+
+	if (val == -1)
+		val = DEADLINE_OFFSET_DEFAULT;
+
+	device->deadline_offset = (u32)val;
+
+	return count;
+}
+
+static struct adreno_dcvs_tuning_attribute dcvs_attr_deadline_offset_percentage = {
+	.attr = __ATTR(deadline_offset_percentage, 0644, deadline_offset_show,
+			deadline_offset_store),
+};
+
 DCVS_TUNABLES_SYSFS(penalty_up, GPU_TUNING_KEY_BUSY_PENALTY_UP);
 DCVS_TUNABLES_SYSFS(penalty_down, GPU_TUNING_KEY_BUSY_PENALTY_DOWN);
 DCVS_TUNABLES_SYSFS(first_step_down, GPU_TUNING_KEY_FIRST_STEP_DOWN_COUNT);
@@ -2012,6 +2060,8 @@ DCVS_TUNABLES_SYSFS(deadline_boost_stride_percentage,
 		GPU_TUNING_KEY_DEADLINE_BOOST_STRIDE_PERCENTAGE);
 DCVS_TUNABLES_SYSFS(deadline_boost_release_num_frames,
 		GPU_TUNING_KEY_DEADLINE_BOOST_RELEASE_NUM_FRAMES);
+DCVS_TUNABLES_SYSFS(deadline_boost_enable_single_context,
+		GPU_TUNING_KEY_DEADLINE_BOOST_ENABLE_SINGLE_CTXT);
 
 static struct attribute *dcvs_tunables_attrs[] = {
 	&dcvs_attr_penalty_up.attr.attr,
@@ -2032,6 +2082,8 @@ static struct attribute *dcvs_tunables_attrs[] = {
 	&dcvs_attr_deadline_boost_base_freq_mhz.attr.attr,
 	&dcvs_attr_deadline_boost_stride_percentage.attr.attr,
 	&dcvs_attr_deadline_boost_release_num_frames.attr.attr,
+	&dcvs_attr_deadline_boost_enable_single_context.attr.attr,
+	&dcvs_attr_deadline_offset_percentage.attr.attr,
 	NULL,
 };
 
@@ -2067,12 +2119,17 @@ static const char * const dcvs_tunables_strings[] = {
 	[GPU_TUNING_KEY_DEADLINE_BOOST_PWRLEVEL_BASE] = "deadline_boost_base_freq_mhz",
 	[GPU_TUNING_KEY_DEADLINE_BOOST_STRIDE_PERCENTAGE] = "deadline_boost_stride_percentage",
 	[GPU_TUNING_KEY_DEADLINE_BOOST_RELEASE_NUM_FRAMES] = "deadline_boost_release_num_frames",
+	[GPU_TUNING_KEY_DEADLINE_BOOST_ENABLE_SINGLE_CTXT] = "deadline_boost_enable_single_context",
 	[GPU_TUNING_KEY_MAX] = NULL
 };
 
 #define DCVS_SYSFS_RO(_name) \
 	static struct kobj_attribute dcvs_attr_##_name = \
 			__ATTR(_name, 0444, _name##_show, NULL)
+
+#define DCVS_SYSFS_RW(_name) \
+	static struct kobj_attribute dcvs_attr_##_name = \
+			__ATTR(_name, 0644, _name##_show, _name##_store)
 
 static ssize_t aggregated_max_gpuclk_show(struct kobject *kobj, struct kobj_attribute *attr,
 		char *buf)
@@ -2248,11 +2305,40 @@ static ssize_t thermal_mitigation_store(struct device *dev, struct device_attrib
 	return count;
 }
 
+static ssize_t fence_deadline_boost_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", device->fence_deadline_boost);
+}
+
+static ssize_t fence_deadline_boost_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct adreno_hwsched *hwsched = container_of(kobj, struct adreno_hwsched, dcvs_kobj);
+	struct adreno_device *adreno_dev = container_of(hwsched, struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	bool val;
+	int ret;
+
+	ret = kstrtobool(buf, &val);
+	if (ret)
+		return ret;
+
+	device->fence_deadline_boost = val;
+
+	return count;
+}
+
 DCVS_SYSFS_RO(aggregated_max_gpuclk);
 DCVS_SYSFS_RO(gpu_maxclk_constraints);
 DCVS_SYSFS_RO(dcvs_tunables_default);
 DCVS_SYSFS_RO(dcvs_tunables_cur);
 DCVS_SYSFS_RO(gpu_load);
+DCVS_SYSFS_RW(fence_deadline_boost);
 
 DEVICE_ATTR_RW(thermal_mitigation);
 
@@ -2262,6 +2348,7 @@ static struct attribute *dcvs_attrs[] = {
 	&dcvs_attr_dcvs_tunables_cur.attr,
 	&dcvs_attr_gpu_load.attr,
 	&dcvs_attr_gpu_maxclk_constraints.attr,
+	&dcvs_attr_fence_deadline_boost.attr,
 	NULL,
 };
 
@@ -2545,4 +2632,67 @@ int gen8_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 	}
 
 	return ret;
+}
+
+/* The GPU boost sched/walt API is available from Kernel version 6.18 */
+#if IS_ENABLED(CONFIG_SCHED_WALT) && (KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE)
+#define GEN8_11_X_GPU_BUSY_THRESHOLD (65)
+#define GEN8_11_X_GPU_FREQ_THRESHOLD (1400 * 1000 * 1000)
+
+/*
+ * Make the vote based on the enable/disable param.
+ * Return true on enable, false if skipped or disabled.
+ */
+static bool _cpu_perf_vote_req(struct adreno_device *adreno_dev, bool enable)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_clk_stats *stats = &device->pwrctrl.clk_stats;
+	u32 busy_percent = 0;
+	int ret;
+
+	/* Get GPU busy percentage */
+	if (stats->total_old != 0)
+		busy_percent = (stats->busy_old * 100) / stats->total_old;
+
+	/* Skip if enabling AND we aren't busy */
+	if (enable && (busy_percent <= GEN8_11_X_GPU_BUSY_THRESHOLD))
+		return false;
+
+	ret = walt_gpu_boost(enable);
+
+	/* Return the previous state if we failed to boost */
+	if (ret)
+		return !enable;
+
+	/* Return the requested enablement */
+	return enable;
+}
+
+static void _cpu_perf_vote(struct adreno_device *adreno_dev, u32 postlevel)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	static bool cpu_vote_state;
+	u32 freq;
+
+	freq = device->pwrctrl.pwrlevels[postlevel].gpu_freq;
+
+	if (!cpu_vote_state && (freq >= GEN8_11_X_GPU_FREQ_THRESHOLD))
+		cpu_vote_state = _cpu_perf_vote_req(adreno_dev, true);
+	else if (cpu_vote_state && (freq < GEN8_11_X_GPU_FREQ_THRESHOLD))
+		cpu_vote_state = _cpu_perf_vote_req(adreno_dev, false);
+}
+#else
+static void _cpu_perf_vote(struct adreno_device *adreno_dev, u32 postlevel)
+{
+}
+#endif
+
+void gen8_hwsched_pwrlevel_change_settings(struct adreno_device *adreno_dev,
+				u32 prelevel, u32 postlevel, bool post)
+{
+	if (!post)
+		return;
+
+	if (adreno_is_gen8_11_x(adreno_dev))
+		_cpu_perf_vote(adreno_dev, postlevel);
 }

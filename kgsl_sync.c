@@ -52,6 +52,10 @@ static __maybe_unused void add_hw_fence(struct kgsl_sync_fence *kfence)
 		__set_bit(KGSL_FENCE_FLAG_SIGNAL_REFCOUNT, &kfence->flags);
 	}
 	kgsl_dma_fence_unlock_irqrestore(fence, flags);
+
+	trace_kgsl_hw_fence_create(kfence->context_id, kfence->fence.context, kfence->fence.seqno,
+		kfence->fence_type, kfence->hw_fence_handle, kfence->synx_handle,
+		kfence->fence.flags);
 }
 
 static __maybe_unused void destroy_all_hw_fences(void)
@@ -510,9 +514,14 @@ static void _hw_fence_destroy(struct kgsl_sync_fence *kfence)
 
 void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
 {
-	/* soccp should be powered on */
-	WARN_RATELIMIT(!test_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags),
+	/* soccp should be powered on when signaling hw fences */
+	WARN_RATELIMIT((kfence->fence_type & KGSL_OUTPUT_FENCE_TYPE_HW_FENCE) &&
+		!test_bit(GMU_SOCCP_VOTE_ON, &device->gmu_core.flags),
 		"signaling hw fence via cpu without soccp powered up\n");
+
+	trace_kgsl_hw_fence_signal_cpu(kfence->context_id, kfence->fence.context,
+		kfence->fence.seqno, kfence->fence_type, kfence->hw_fence_handle,
+		kfence->synx_handle, kfence->fence.flags);
 
 	if (kfence->synx_handle)
 		synx_signal(kgsl_synx.synx_session, (u32)kfence->synx_handle,
@@ -1063,11 +1072,16 @@ void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 	unsigned long flags;
 	struct kgsl_sync_fence *kfence, *next;
 	struct list_head hw_fence_put_list;
+	bool deadline_supported;
 
 	INIT_LIST_HEAD(&hw_fence_put_list);
 
 	if (!kref_get_unless_zero(&ktimeline->kref))
 		return;
+
+	/* Skip deadline bookkeeping below on targets that don't support deadline boost */
+	deadline_supported = ktimeline->device &&
+		!IS_ERR_OR_NULL(ktimeline->device->deadline_worker);
 
 	spin_lock_irqsave(&ktimeline->lock, flags);
 	if (timestamp_cmp(timestamp, ktimeline->last_timestamp) > 0)
@@ -1076,10 +1090,13 @@ void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 	list_for_each_entry_safe(kfence, next, &ktimeline->child_list_head,
 				child_list) {
 		if (dma_fence_is_signaled_locked(&kfence->fence)) {
-			kfence->signaled = ktime_get();
-			/* Now that the fence is signaled, cancel the timer if needed */
-			if (__test_and_clear_bit(KGSL_FENCE_FLAG_TIMER_TRIGGERED, &kfence->flags))
-				hrtimer_cancel(&kfence->deadline_timer);
+			if (deadline_supported) {
+				kfence->signaled = ktime_get();
+				/* Now that the fence is signaled, cancel the timer if needed */
+				if (__test_and_clear_bit(KGSL_FENCE_FLAG_TIMER_TRIGGERED,
+						&kfence->flags))
+					hrtimer_cancel(&kfence->deadline_timer);
+			}
 
 			if (__test_and_clear_bit(KGSL_FENCE_FLAG_SIGNAL_REFCOUNT, &kfence->flags)) {
 				list_move_tail(&kfence->child_list, &hw_fence_put_list);
@@ -1133,19 +1150,12 @@ void kgsl_sync_timeline_put(struct kgsl_sync_timeline *ktimeline)
 }
 
 #if (KERNEL_VERSION(6, 4, 0) <= LINUX_VERSION_CODE)
-#define BOOT_COMPLETE_COOLDOWN_WINDOW_US    16000
-
-static void kgsl_handle_missed_deadline(struct kgsl_sync_fence *kfence, ktime_t now)
+static void kgsl_handle_missed_deadline(struct kgsl_sync_fence *kfence)
 {
 	struct kgsl_sync_timeline *ktimeline = kfence->parent;
 	struct kgsl_device *device = ktimeline->device;
 
-	trace_kgsl_fence_deadline_info(kfence->context_id, kfence->timestamp, 0, 0, 0);
-
-	/* Account for bootup latency and ignore notification within short period */
-	if (!device->bootcomplete_ktime ||
-		ktime_us_delta(now, device->bootcomplete_ktime) < BOOT_COMPLETE_COOLDOWN_WINDOW_US)
-		return;
+	trace_kgsl_fence_deadline_info(kfence->context_id, kfence->timestamp, 0, 0, 0, 0);
 
 	dma_fence_get(&kfence->fence);
 
@@ -1170,12 +1180,15 @@ static void kgsl_sync_fence_process_deadline(struct kgsl_sync_fence *kfence, kti
 	}
 
 	/* Update the fence */
+	now = ktime_get();
+	/* Apply the configured offset to boost the gpu frequency ahead of the actual deadline */
+	deadline = deadline - (((deadline - now) * device->deadline_offset) / 100);
 	signaled = kfence->signaled;
 	kfence->deadline = deadline;
-	now = ktime_get();
 
 	trace_kgsl_fence_deadline_info(kfence->context_id, kfence->timestamp, deadline,
-			(s64)(ktime_to_us(deadline) - ktime_to_us(now)), kfence->signaled);
+			(s64)(ktime_to_us(deadline) - ktime_to_us(now)), kfence->signaled,
+			device->deadline_offset);
 
 	/*
 	 * Schedule work to notify missed deadline if the fence is signaled after the deadline, or
@@ -1209,7 +1222,6 @@ static void kgsl_sync_fence_set_deadline(struct dma_fence *fence, ktime_t deadli
 	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
 	struct kgsl_sync_timeline *ktimeline = kfence->parent;
 	struct kgsl_device *device = ktimeline->device;
-	ktime_t now = ktime_get();
 
 	/* Return early is the context is bad */
 	if (kgsl_context_is_bad(ktimeline->context))
@@ -1222,7 +1234,7 @@ static void kgsl_sync_fence_set_deadline(struct dma_fence *fence, ktime_t deadli
 
 	if (!deadline) {
 		/* A deadline of 0 represents an exclusion of a draw for a context from a frame */
-		kgsl_handle_missed_deadline(kfence, now);
+		kgsl_handle_missed_deadline(kfence);
 		return;
 	}
 

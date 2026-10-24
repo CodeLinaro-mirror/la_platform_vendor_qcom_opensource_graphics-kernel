@@ -89,13 +89,14 @@ TRACE_EVENT(adreno_hw_fence_query,
 			__get_str(val))
 );
 
-TRACE_EVENT(adreno_input_hw_fence,
-	TP_PROTO(u32 id, u64 context, u64 seqno, u64 flags, const char *name),
-	TP_ARGS(id, context, seqno, flags, name),
+TRACE_EVENT(adreno_input_syncobj_fence,
+	TP_PROTO(u32 id, u64 context, u64 seqno, u32 handle, u64 flags, const char *name),
+	TP_ARGS(id, context, seqno, handle, flags, name),
 	TP_STRUCT__entry(
 		__field(u32, id)
 		__field(u64, context)
 		__field(u64, seqno)
+		__field(u32, handle)
 		__field(u64, flags)
 		__string(fence_name, name)
 	),
@@ -103,12 +104,13 @@ TRACE_EVENT(adreno_input_hw_fence,
 		__entry->id = id;
 		__entry->context = context;
 		__entry->seqno = seqno;
+		__entry->handle = handle;
 		__entry->flags = flags;
 		adreno_assign_str(fence_name, name);
 	),
 	TP_printk(
-		"ctx=%u id=%lld seqno=%lld flags=%s name=%s",
-			__entry->id,  __entry->context, __entry->seqno,
+		"ctx=%u id=%lld seqno=%lld handle=0x%x flags=%s name=%s",
+			__entry->id,  __entry->context, __entry->seqno, __entry->handle,
 			__entry->flags ? __print_flags(__entry->flags, "|",
 				GMU_SYNCOBJ_FLAGS) : "none",
 			__get_str(fence_name))
@@ -959,23 +961,47 @@ TRACE_EVENT(adreno_preempt_done,
 	)
 );
 
-TRACE_EVENT(adreno_ext_hw_fence_signal,
-	TP_PROTO(u64 context, u64 seq_no, u32 flags, u64 gmu_ticks),
-	TP_ARGS(context, seq_no, flags, gmu_ticks),
+TRACE_EVENT(adreno_input_hw_fence_signal,
+	TP_PROTO(u64 context, u64 seq_no, u32 handle, u32 status, u64 gmu_ticks),
+	TP_ARGS(context, seq_no, handle, status, gmu_ticks),
 	TP_STRUCT__entry(
 		__field(u64, context)
 		__field(u64, seq_no)
-		__field(u32, flags)
+		__field(u32, handle)
+		__field(u32, status)
 		__field(u64, ticks)
 	),
 	TP_fast_assign(
 		__entry->context = context;
 		__entry->seq_no = seq_no;
-		__entry->flags = flags;
+		__entry->handle = handle;
+		__entry->status = status;
 		__entry->ticks = gmu_ticks;
 	),
-	TP_printk("id=%llu seqno=%llu flags=0x%x ticks=%llu",
-		__entry->context, __entry->seq_no, __entry->flags, __entry->ticks
+	TP_printk("id=%llu seqno=%llu handle=0x%x status=%u ticks=%llu",
+		__entry->context, __entry->seq_no, __entry->handle, __entry->status, __entry->ticks
+	)
+);
+
+TRACE_EVENT(adreno_input_synx_signal,
+	TP_PROTO(u64 context, u64 seq_no, u32 handle, u32 status, u64 gmu_ticks),
+	TP_ARGS(context, seq_no, handle, status, gmu_ticks),
+	TP_STRUCT__entry(
+		__field(u64, context)
+		__field(u64, seq_no)
+		__field(u32, handle)
+		__field(u32, status)
+		__field(u64, ticks)
+	),
+	TP_fast_assign(
+		__entry->context = context;
+		__entry->seq_no = seq_no;
+		__entry->handle = handle;
+		__entry->status = status;
+		__entry->ticks = gmu_ticks;
+	),
+	TP_printk("id=%llu seqno=%llu handle=0x%x status=%u ticks=%llu",
+		__entry->context, __entry->seq_no, __entry->handle, __entry->status, __entry->ticks
 	)
 );
 
@@ -1297,6 +1323,70 @@ TRACE_EVENT(adreno_spel_cap_pwrlevel,
 		__entry->ticks,
 		__entry->pwrlevel,
 		__entry->freq
+	)
+);
+
+TRACE_EVENT(adreno_output_synx_signal,
+	TP_PROTO(u64 ticks, u32 gpu_context_id, u32 remote_host_id, u64 dma_fence_context_id,
+		u64 dma_fence_seqno, u64 hash, u64 flags),
+	TP_ARGS(ticks, gpu_context_id, remote_host_id, dma_fence_context_id, dma_fence_seqno,
+		hash, flags),
+	TP_STRUCT__entry(
+		__field(u64, ticks)
+		__field(u32, gpu_context_id)
+		__field(u32, remote_host_id)
+		__field(u64, dma_fence_context_id)
+		__field(u64, dma_fence_seqno)
+		__field(u64, hash)
+		__field(u64, flags)
+	),
+	TP_fast_assign(
+		__entry->ticks = ticks;
+		__entry->gpu_context_id = gpu_context_id;
+		__entry->remote_host_id = remote_host_id;
+		__entry->dma_fence_context_id = dma_fence_context_id;
+		__entry->dma_fence_seqno = dma_fence_seqno;
+		__entry->hash = hash;
+		__entry->flags = flags;
+	),
+	TP_printk("ticks=%llu context=%u dma_context=%llu seqno=%llu handle=%llu flags=%llu remote_host_id=%u",
+		__entry->ticks,
+		__entry->gpu_context_id,
+		__entry->dma_fence_context_id,
+		__entry->dma_fence_seqno,
+		__entry->hash,
+		__entry->flags,
+		__entry->remote_host_id
+	)
+);
+
+TRACE_EVENT(adreno_output_hw_fence_signal,
+	TP_PROTO(u64 ticks, u32 gpu_context_id, u64 dma_fence_context_id, u64 dma_fence_seqno,
+		u64 hash, u64 flags),
+	TP_ARGS(ticks, gpu_context_id, dma_fence_context_id, dma_fence_seqno, hash, flags),
+	TP_STRUCT__entry(
+		__field(u64, ticks)
+		__field(u32, gpu_context_id)
+		__field(u64, dma_fence_context_id)
+		__field(u64, dma_fence_seqno)
+		__field(u64, hash)
+		__field(u64, flags)
+	),
+	TP_fast_assign(
+		__entry->ticks = ticks;
+		__entry->gpu_context_id = gpu_context_id;
+		__entry->dma_fence_context_id = dma_fence_context_id;
+		__entry->dma_fence_seqno = dma_fence_seqno;
+		__entry->hash = hash;
+		__entry->flags = flags;
+	),
+	TP_printk("ticks=%llu context=%u dma_context=%llu seqno=%llu handle=%llu flags=%llu",
+		__entry->ticks,
+		__entry->gpu_context_id,
+		__entry->dma_fence_context_id,
+		__entry->dma_fence_seqno,
+		__entry->hash,
+		__entry->flags
 	)
 );
 

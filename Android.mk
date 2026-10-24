@@ -54,7 +54,9 @@ ifeq ($(TARGET_BOARD_PLATFORM), pineapple)
         LOCAL_ADDITIONAL_DEPENDENCIES := $(call intermediates-dir-for,DLKM,hw-fence-module-symvers)/Module.symvers
 endif
 # Include msm_kgsl.ko in the /vendor/lib/modules (vendor.img)
+ifeq ($(filter hamoa mahua, $(TARGET_BOARD_PLATFORM)),)
 BOARD_VENDOR_KERNEL_MODULES += $(LOCAL_MODULE_PATH)/$(LOCAL_MODULE)
+endif
 include $(DLKM_DIR)/Build_external_kernelmodule.mk
 
 endif # DLKM check

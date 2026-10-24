@@ -1885,6 +1885,28 @@ static bool _ft_long_ib_detect_show(struct adreno_device *adreno_dev)
 	return adreno_dev->long_ib_detect;
 }
 
+#define LONG_IB_TIMEOUT_MIN_MS 2000
+#define LONG_IB_TIMEOUT_MAX_MS 8000
+static int _long_ib_timeout_ms_store(struct adreno_device *adreno_dev, u32 val)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (val && (val < LONG_IB_TIMEOUT_MIN_MS || val > LONG_IB_TIMEOUT_MAX_MS)) {
+		dev_err_ratelimited(device->dev,
+			"long_ib_timeout_ms: %ums outside supported range %u-%ums\n",
+			val, LONG_IB_TIMEOUT_MIN_MS, LONG_IB_TIMEOUT_MAX_MS);
+		return -EINVAL;
+	}
+
+	return adreno_power_cycle_u32(adreno_dev,
+			&adreno_dev->hwsched.long_ib_timeout_ms, val);
+}
+
+static u32 _long_ib_timeout_ms_show(struct adreno_device *adreno_dev)
+{
+	return adreno_dev->hwsched.long_ib_timeout_ms;
+}
+
 static ssize_t ctx_pri_req_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -2025,6 +2047,7 @@ done:
 static ADRENO_SYSFS_BOOL(preemption);
 static ADRENO_SYSFS_RO_U32(preempt_count);
 static ADRENO_SYSFS_BOOL(ft_long_ib_detect);
+static ADRENO_SYSFS_U32(long_ib_timeout_ms);
 static ADRENO_SYSFS_CUSTOM(ctx_pri_req);
 
 static const struct attribute *_hwsched_attr_list[] = {
@@ -2032,6 +2055,7 @@ static const struct attribute *_hwsched_attr_list[] = {
 	&adreno_attr_preempt_count.attr.attr,
 	&adreno_attr_preempt_info.attr,
 	&adreno_attr_ft_long_ib_detect.attr.attr,
+	&adreno_attr_long_ib_timeout_ms.attr.attr,
 	&adreno_attr_ctx_pri_req.attr,
 	NULL,
 };
@@ -2460,22 +2484,41 @@ static bool adreno_hwsched_context_is_guilty(struct adreno_context *drawctxt)
 	return context_is_guilty(context, cmd->error);
 }
 
-static void print_fault_syncobj(struct adreno_device *adreno_dev,
+static struct kgsl_drawobj *find_fault_syncobj(struct adreno_device *adreno_dev,
 				u32 ctxt_id, u32 ts)
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct cmd_list_obj *obj;
+	struct kgsl_drawobj *fault_drawobj = NULL;
 
 	list_for_each_entry(obj, &hwsched->cmd_list, node) {
 		struct kgsl_drawobj *drawobj = obj->drawobj;
 
 		if (drawobj->type == SYNCOBJ_TYPE) {
 			if ((ctxt_id == drawobj->context->id) &&
-			(ts == drawobj->timestamp))
-				kgsl_drawobj_log_hw_syncobj(KGSL_DEVICE(adreno_dev),
-					SYNCOBJ(drawobj));
+				(ts == drawobj->timestamp)) {
+				fault_drawobj = drawobj;
+				break;
+			}
 		}
 	}
+
+	return fault_drawobj;
+}
+
+static bool skip_snapshot(struct kgsl_context *context, struct kgsl_context *context_lpac)
+{
+	/* Take snapshot if no context is found */
+	if (!context && !context_lpac)
+		return false;
+
+	if (context && !(context->flags & KGSL_CONTEXT_NO_SNAPSHOT))
+		return false;
+
+	if (context_lpac && !(context_lpac->flags & KGSL_CONTEXT_NO_SNAPSHOT))
+		return false;
+
+	return true;
 }
 
 static void adreno_hwsched_snapshot_legacy(struct adreno_device *adreno_dev, int fault)
@@ -2491,8 +2534,13 @@ static void adreno_hwsched_snapshot_legacy(struct adreno_device *adreno_dev, int
 		srcu_notifier_call_chain(&device->nh, GPU_SSR_BEGIN, NULL);
 
 	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
-		print_fault_syncobj(adreno_dev, cmd->ctxt_id, cmd->ts);
-		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
+		drawobj = find_fault_syncobj(adreno_dev, cmd->ctxt_id, cmd->ts);
+		if (drawobj) {
+			kgsl_drawobj_log_hw_syncobj(device, SYNCOBJ(drawobj));
+			context = drawobj->context;
+		}
+		if (!skip_snapshot(context, NULL))
+			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		return;
 	}
 
@@ -2535,7 +2583,8 @@ static void adreno_hwsched_snapshot_legacy(struct adreno_device *adreno_dev, int
 
 	do_fault_header(adreno_dev, drawobj, fault);
 
-	kgsl_device_snapshot(device, context, NULL, false);
+	if (!skip_snapshot(context, NULL))
+		kgsl_device_snapshot(device, context, NULL, false);
 
 	force_retire_timestamp(device, drawobj);
 
@@ -2572,8 +2621,13 @@ static int adreno_hwsched_snapshot_and_soft_reset(struct adreno_device *adreno_d
 		adreno_dev->hwsched.reset_type = GMU_GPU_HARD_RESET;
 
 	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
-		print_fault_syncobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
-		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
+		drawobj = find_fault_syncobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
+		if (drawobj) {
+			kgsl_drawobj_log_hw_syncobj(device, SYNCOBJ(drawobj));
+			context = drawobj->context;
+		}
+		if (!skip_snapshot(context, NULL))
+			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		ret = -ETIMEDOUT;
 		goto done;
 	}
@@ -2637,7 +2691,9 @@ static int adreno_hwsched_snapshot_and_soft_reset(struct adreno_device *adreno_d
 	if (drawobj_lpac && drawobj_lpac->context)
 		set_bit(ADRENO_CONTEXT_FAULT, &drawobj_lpac->context->priv);
 
-	kgsl_device_snapshot(device, context, context_lpac, false);
+	if (!skip_snapshot(context, context_lpac))
+		kgsl_device_snapshot(device, context, context_lpac, false);
+
 	adreno_gpufault_stats(adreno_dev, drawobj, drawobj_lpac, fault);
 
 	if (drawobj) {
@@ -2784,6 +2840,9 @@ static void adreno_hwsched_work(struct kthread_work *work)
 
 #define DEADLINE_BOOST_DEBOUNCE_WINDOW_US    4000
 
+/* Account for bootup latency and ignore deadline notifications within this window */
+#define BOOT_COMPLETE_COOLDOWN_WINDOW_US    16000
+
 static void adreno_hwsched_hint_missed_deadline(struct kgsl_context *context, u32 timestamp,
 		ktime_t deadline)
 {
@@ -2800,17 +2859,33 @@ static void adreno_hwsched_hint_missed_deadline(struct kgsl_context *context, u3
 
 		/*
 		 * Ignore duplicate deadline boosts within a short period. We only want one
-		 * boost per frame in this path.
+		 * boost per frame in this path. Also account for bootup latency and ignore
+		 * notifications within a short cooldown period after boot complete, since the
+		 * GPU could be in slumber or still in the process of booting up, to avoid
+		 * unwanted GPU frequency boosts.
 		 */
-		if (ktime_us_delta(now, device->prev_deadline_ktime) <
-				DEADLINE_BOOST_DEBOUNCE_WINDOW_US)
+		if ((ktime_us_delta(now, device->prev_deadline_ktime) <
+						DEADLINE_BOOST_DEBOUNCE_WINDOW_US) ||
+			(!device->bootcomplete_ktime) ||
+			(ktime_us_delta(now, device->bootcomplete_ktime) <
+						BOOT_COMPLETE_COOLDOWN_WINDOW_US))
 			return;
 
 		trace_kgsl_missed_deadline(context->id, timestamp, 0);
 		hwsched_ops->notify_deadline_boost(adreno_dev, context->id);
 		device->prev_deadline_ktime = now;
 	} else if (ktime_after(deadline, device->prev_missed_deadline)) {
-		/* Ignore multiple boosts for same deadline */
+		/*
+		 * Ignore multiple boosts for same deadline. The GPU could alos be in slumber
+		 * or still in the process of booting up. Account for bootup latency and ignore
+		 * notifications within a short cooldown period after boot complete to avoid
+		 * unwanted GPU frequency boosts.
+		 */
+		if (!device->bootcomplete_ktime || ktime_before(deadline,
+				ktime_add_us(device->bootcomplete_ktime,
+					BOOT_COMPLETE_COOLDOWN_WINDOW_US)))
+			return;
+
 		trace_kgsl_missed_deadline(context->id, timestamp, ktime_to_ns(deadline));
 		hwsched_ops->notify_deadline_boost(adreno_dev, context->id);
 		device->prev_missed_deadline = deadline;
@@ -2879,6 +2954,7 @@ static void adreno_hwsched_setup_fence(struct adreno_device *adreno_dev,
 {
 	struct kgsl_sync_timeline *ktimeline = kfence->parent;
 	struct kgsl_context *context = ktimeline->context;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_hwsched_ops *hwsched_ops =
 				adreno_dev->hwsched.hwsched_ops;
 
@@ -2886,17 +2962,20 @@ static void adreno_hwsched_setup_fence(struct adreno_device *adreno_dev,
 	if (kgsl_context_is_bad(context))
 		return;
 
-	kthread_init_work(&kfence->deadline_work, adreno_hwsched_fence_deadline_work);
+	/* Skip deadline timer/work init on targets that don't support deadline boost */
+	if (!IS_ERR_OR_NULL(device->deadline_worker)) {
+		kthread_init_work(&kfence->deadline_work, adreno_hwsched_fence_deadline_work);
 
 #if (KERNEL_VERSION(6, 15, 0) > LINUX_VERSION_CODE)
-	hrtimer_init(&kfence->deadline_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
-	kfence->deadline_timer.function = adreno_hwsched_fence_deadline_timer;
+		hrtimer_init(&kfence->deadline_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+		kfence->deadline_timer.function = adreno_hwsched_fence_deadline_timer;
 #else
-	hrtimer_setup(&kfence->deadline_timer, adreno_hwsched_fence_deadline_timer,
-			CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+		hrtimer_setup(&kfence->deadline_timer, adreno_hwsched_fence_deadline_timer,
+				CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 #endif
+	}
 
-	if (!gmu_core_is_gmu_fencing_enabled(KGSL_DEVICE(adreno_dev)))
+	if (!gmu_core_is_gmu_fencing_enabled(device))
 		return;
 
 	/* If the fence is already signaled, skip the work to create a hw fence */

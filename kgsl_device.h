@@ -214,6 +214,8 @@ struct kgsl_functable {
 	bool (*is_first_boot_done)(struct kgsl_device *device);
 	/** @context_is_guilty: Check if the context is guilty for gpu fault */
 	bool (*context_is_guilty)(struct kgsl_context *context);
+	/** @is_reset_recovery: Check if the ADRENO device under goes reset recovery */
+	bool (*is_reset_recovery)(struct kgsl_device *device);
 };
 
 struct kgsl_ioctl {
@@ -422,6 +424,8 @@ struct kgsl_device {
 	bool fence_deadline_boost;
 	/** @deadline_worker: Worker thread to send missed deadline hint to GMU */
 	struct kthread_worker *deadline_worker;
+	/** @deadline_offset: Percentage offset applied to the deadline to boost gpu freq early */
+	u32 deadline_offset;
 	/** @prev_missed_deadline: previous deadline for the vsync */
 	ktime_t prev_missed_deadline;
 	/** @prev_deadline_ktime: Previous ktime of deadline boost sent */
@@ -737,6 +741,8 @@ struct kgsl_snapshot {
 	bool is_fault_snapshot;
 	/** @qecp_carveout_addr: Physical address of the encrypted debugbus buffer */
 	u64 qecp_carveout_addr;
+	/** @qecp_carveout_ptr: Pointer to the encrypted debugbus buffer */
+	void *qecp_carveout_ptr;
 	/** @qecp_carveout_size: Size of the encrypted debugbus buffer to be shared with QECP */
 	u32 qecp_carveout_size;
 	/** qecp_gx_debugbus_captured: True if QECP captured GX debugbus */

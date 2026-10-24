@@ -706,6 +706,7 @@ adreno_identify_gpu(struct platform_device *pdev, u32 *chipid)
 
 static const struct of_device_id adreno_match_table[] = {
 	{ .compatible = "qcom,kgsl-3d0", .data = &device_3d0 },
+	{ .compatible = "qcom,kgsl", .data = &device_3d0 },
 	{ },
 };
 
@@ -4162,6 +4163,13 @@ static void adreno_set_thermal_index(struct kgsl_device *device)
 		ops->set_thermal_index(adreno_dev);
 }
 
+static bool adreno_is_reset_recovery(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+
+	return test_bit(ADRENO_DEVICE_RESET_RECOVERY, &adreno_dev->priv);
+}
+
 static bool adreno_is_first_boot_done(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
@@ -4227,6 +4235,7 @@ static const struct kgsl_functable adreno_functable = {
 	.alloc_dcvs_profile_memory = adreno_alloc_dcvs_profile_memory,
 	.is_first_boot_done = adreno_is_first_boot_done,
 	.context_is_guilty = adreno_context_is_guilty,
+	.is_reset_recovery = adreno_is_reset_recovery,
 };
 
 static const struct component_master_ops adreno_ops = {

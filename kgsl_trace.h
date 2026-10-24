@@ -351,14 +351,15 @@ TRACE_EVENT(kgsl_missed_deadline,
 
 TRACE_EVENT(kgsl_fence_deadline_info,
 	TP_PROTO(unsigned int ctx, unsigned int ts, u64 deadline_ktime, s64 expiry_us,
-		u64 signaled_ktime),
-	TP_ARGS(ctx, ts, deadline_ktime, expiry_us, signaled_ktime),
+		u64 signaled_ktime, u32 deadline_offset),
+	TP_ARGS(ctx, ts, deadline_ktime, expiry_us, signaled_ktime, deadline_offset),
 	TP_STRUCT__entry(
 		__field(unsigned int, ctx)
 		__field(unsigned int, ts)
 		__field(u64, deadline_ktime)
 		__field(s64, expiry_us)
 		__field(u64, signaled_ktime)
+		__field(u32, deadline_offset)
 	),
 	TP_fast_assign(
 		__entry->ctx = ctx;
@@ -366,14 +367,16 @@ TRACE_EVENT(kgsl_fence_deadline_info,
 		__entry->deadline_ktime = deadline_ktime;
 		__entry->expiry_us = expiry_us;
 		__entry->signaled_ktime = signaled_ktime;
+		__entry->deadline_offset = deadline_offset;
 	),
 
-	TP_printk("ctx=%u ts=%u deadline_ktime=%llu expiry_us=%lld signaled_ktime=%llu",
+	TP_printk("ctx=%u ts=%u deadline_ktime=%llu expiry_us=%lld signaled_ktime=%llu deadline_offset=%u",
 		__entry->ctx,
 		__entry->ts,
 		__entry->deadline_ktime,
 		__entry->expiry_us,
-		__entry->signaled_ktime)
+		__entry->signaled_ktime,
+		__entry->deadline_offset)
 );
 
 /*
@@ -1719,6 +1722,64 @@ TRACE_EVENT(kgsl_migrate_process,
 	TP_printk(
 		"tgid=%u migrate_count=%u",
 		__entry->pid, __entry->migrate_count
+	)
+);
+
+TRACE_EVENT(kgsl_hw_fence_create,
+	TP_PROTO(u32 context_id, u64 dma_fence_context_id, u64 seqno, u32 type, u64 hw_fence_handle,
+		u64 synx_handle, u64 flags
+	),
+	TP_ARGS(context_id, dma_fence_context_id, seqno, type, hw_fence_handle, synx_handle, flags),
+	TP_STRUCT__entry(
+		__field(u32, context_id)
+		__field(u64, dma_fence_context_id)
+		__field(u64, seqno)
+		__field(u32, type)
+		__field(u64, hw_fence_handle)
+		__field(u64, synx_handle)
+		__field(u64, flags)
+	),
+	TP_fast_assign(
+		__entry->context_id = context_id;
+		__entry->dma_fence_context_id = dma_fence_context_id;
+		__entry->seqno = seqno;
+		__entry->type = type;
+		__entry->hw_fence_handle = hw_fence_handle;
+		__entry->synx_handle = synx_handle;
+		__entry->flags = flags;
+	),
+	TP_printk("context=%u dma_context=%llu seqno=%llu type=%u hw_fence_handle=%llu synx_handle=%llu flags=0x%llx",
+		__entry->context_id, __entry->dma_fence_context_id, __entry->seqno, __entry->type,
+		__entry->hw_fence_handle, __entry->synx_handle, __entry->flags
+	)
+);
+
+TRACE_EVENT(kgsl_hw_fence_signal_cpu,
+	TP_PROTO(u32 context_id, u64 dma_fence_context_id, u64 seqno, u32 type, u64 hw_fence_handle,
+		u64 synx_handle, u64 flags
+	),
+	TP_ARGS(context_id, dma_fence_context_id, seqno, type, hw_fence_handle, synx_handle, flags),
+	TP_STRUCT__entry(
+		__field(u32, context_id)
+		__field(u64, dma_fence_context_id)
+		__field(u64, seqno)
+		__field(u32, type)
+		__field(u64, hw_fence_handle)
+		__field(u64, synx_handle)
+		__field(u64, flags)
+	),
+	TP_fast_assign(
+		__entry->context_id = context_id;
+		__entry->dma_fence_context_id = dma_fence_context_id;
+		__entry->seqno = seqno;
+		__entry->type = type;
+		__entry->hw_fence_handle = hw_fence_handle;
+		__entry->synx_handle = synx_handle;
+		__entry->flags = flags;
+	),
+	TP_printk("context=%u dma_context=%llu seqno=%llu type=%u hw_fence_handle=%llu synx_handle=%llu flags=0x%llx",
+		__entry->context_id, __entry->dma_fence_context_id, __entry->seqno, __entry->type,
+		__entry->hw_fence_handle, __entry->synx_handle, __entry->flags
 	)
 );
 

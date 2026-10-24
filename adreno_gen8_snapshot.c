@@ -8,6 +8,8 @@
 
 #include "adreno.h"
 #include "adreno_gen8_0_0_snapshot.h"
+#include "adreno_gen8_1_0_snapshot.h"
+#include "adreno_gen8_10_0_snapshot.h"
 #include "adreno_gen8_2_0_snapshot.h"
 #include "adreno_gen8_3_0_snapshot.h"
 #include "adreno_gen8_6_0_snapshot.h"
@@ -54,6 +56,69 @@ const struct gen8_snapshot_block_list gen8_0_0_snapshot_block_list = {
 	.index_registers_len = ARRAY_SIZE(gen8_0_0_cp_indexed_reg_list),
 	.mempool_index_registers = gen8_0_0_cp_mempool_reg_list,
 	.mempool_index_registers_len = ARRAY_SIZE(gen8_0_0_cp_mempool_reg_list),
+};
+
+const struct gen8_snapshot_block_list gen8_1_0_snapshot_block_list = {
+	.pre_crashdumper_regs = gen8_1_0_ahb_registers,
+	.num_pre_crashdumper_regs = ARRAY_SIZE(gen8_1_0_ahb_registers),
+	.debugbus_blocks = gen8_1_0_debugbus_blocks,
+	.debugbus_blocks_len = ARRAY_SIZE(gen8_1_0_debugbus_blocks),
+	/* GBIF_GX is included in gen8_1_0_debugbus_blocks per data file */
+	.gbif_debugbus_blocks = gen8_1_0_gbif_debugbus_blocks,
+	.gbif_debugbus_blocks_len = ARRAY_SIZE(gen8_1_0_gbif_debugbus_blocks),
+	.cx_debugbus_blocks = gen8_cx_debugbus_blocks,
+	.cx_debugbus_blocks_len = ARRAY_SIZE(gen8_cx_debugbus_blocks),
+	.external_core_regs = gen8_1_0_external_core_regs,
+	.num_external_core_regs = ARRAY_SIZE(gen8_1_0_external_core_regs),
+	.gmu_cx_unsliced_regs = gen8_1_0_gmucx_registers,
+	.gmu_gx_regs = gen8_1_0_gmu_gx_registers,
+	.num_gmu_gx_regs = ARRAY_SIZE(gen8_1_0_gmu_gx_registers),
+	.rscc_regs = gen8_2_0_rscc_rsc_registers,
+	.reg_list = gen8_1_0_misc_registers,
+	.cx_misc_regs = gen8_1_0_cx_misc_registers,
+	.shader_blocks = gen8_1_0_shader_blocks,
+	.num_shader_blocks = ARRAY_SIZE(gen8_1_0_shader_blocks),
+	.cp_clusters = gen8_1_0_cp_clusters,
+	.num_cp_clusters = ARRAY_SIZE(gen8_1_0_cp_clusters),
+	.clusters = gen8_1_0_mvc_clusters,
+	.num_clusters = ARRAY_SIZE(gen8_1_0_mvc_clusters),
+	.sptp_clusters = gen8_1_0_sptp_clusters,
+	.num_sptp_clusters = ARRAY_SIZE(gen8_1_0_sptp_clusters),
+	.index_registers = gen8_1_0_cp_indexed_reg_list,
+	.index_registers_len = ARRAY_SIZE(gen8_1_0_cp_indexed_reg_list),
+	.mempool_index_registers = gen8_2_0_cp_mempool_reg_list,
+	.mempool_index_registers_len = ARRAY_SIZE(gen8_2_0_cp_mempool_reg_list),
+};
+
+const struct gen8_snapshot_block_list gen8_10_0_snapshot_block_list = {
+	.pre_crashdumper_regs = gen8_1_0_ahb_registers,
+	.num_pre_crashdumper_regs = ARRAY_SIZE(gen8_1_0_ahb_registers),
+	.debugbus_blocks = gen8_10_0_debugbus_blocks,
+	.debugbus_blocks_len = ARRAY_SIZE(gen8_10_0_debugbus_blocks),
+	.gbif_debugbus_blocks = gen8_1_0_gbif_debugbus_blocks,
+	.gbif_debugbus_blocks_len = ARRAY_SIZE(gen8_1_0_gbif_debugbus_blocks),
+	.cx_debugbus_blocks = gen8_cx_debugbus_blocks,
+	.cx_debugbus_blocks_len = ARRAY_SIZE(gen8_cx_debugbus_blocks),
+	.external_core_regs = gen8_1_0_external_core_regs,
+	.num_external_core_regs = ARRAY_SIZE(gen8_1_0_external_core_regs),
+	.gmu_cx_unsliced_regs = gen8_1_0_gmucx_registers,
+	.gmu_gx_regs = gen8_1_0_gmu_gx_registers,
+	.num_gmu_gx_regs = ARRAY_SIZE(gen8_1_0_gmu_gx_registers),
+	.rscc_regs = gen8_2_0_rscc_rsc_registers,
+	.reg_list = gen8_1_0_misc_registers,
+	.cx_misc_regs = gen8_1_0_cx_misc_registers,
+	.shader_blocks = gen8_1_0_shader_blocks,
+	.num_shader_blocks = ARRAY_SIZE(gen8_1_0_shader_blocks),
+	.cp_clusters = gen8_1_0_cp_clusters,
+	.num_cp_clusters = ARRAY_SIZE(gen8_1_0_cp_clusters),
+	.clusters = gen8_1_0_mvc_clusters,
+	.num_clusters = ARRAY_SIZE(gen8_1_0_mvc_clusters),
+	.sptp_clusters = gen8_1_0_sptp_clusters,
+	.num_sptp_clusters = ARRAY_SIZE(gen8_1_0_sptp_clusters),
+	.index_registers = gen8_1_0_cp_indexed_reg_list,
+	.index_registers_len = ARRAY_SIZE(gen8_1_0_cp_indexed_reg_list),
+	.mempool_index_registers = gen8_2_0_cp_mempool_reg_list,
+	.mempool_index_registers_len = ARRAY_SIZE(gen8_2_0_cp_mempool_reg_list),
 };
 
 const struct gen8_snapshot_block_list gen8_2_0_snapshot_block_list = {
@@ -2106,6 +2171,46 @@ static bool gen8_snapshot_pc_indexed_regs(struct kgsl_device *device,
 	return ret;
 }
 
+static void gen8_snapshot_qecp(struct adreno_device *adreno_dev, struct kgsl_snapshot *snapshot)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_snapshot_section_header *header =
+		(struct kgsl_snapshot_section_header *)snapshot->ptr;
+	void *data = snapshot->ptr + sizeof(*header);
+	size_t section_size = sizeof(*header) + QECP_DEBUGBUS_DATA_SIZE;
+	int ret;
+
+	/* Check if secure debugbus data was captured by QECP */
+	if (!snapshot->qecp_gx_debugbus_captured && !snapshot->qecp_cx_debugbus_captured)
+		return;
+
+	if (!snapshot->qecp_carveout_ptr)
+		return;
+
+	ret = adreno_qmi_debugbus_get_data(adreno_dev, snapshot);
+	if (ret) {
+		dev_err(device->dev, "Failed to copy data QMI req ret=%d\n", ret);
+		return;
+	}
+
+	if (snapshot->remain < section_size) {
+		SNAPSHOT_ERR_NOMEM(device, "QECP SECTION");
+		return;
+	}
+
+	header->magic = SNAPSHOT_SECTION_MAGIC;
+	header->id = KGSL_SNAPSHOT_SECTION_QECP;
+	header->size = section_size;
+
+	/* Make sure the QECP data is available in memory before copying it out */
+	mb();
+	memcpy(data, snapshot->qecp_carveout_ptr, QECP_DEBUGBUS_DATA_SIZE);
+
+	snapshot->ptr += header->size;
+	snapshot->remain -= header->size;
+	snapshot->size += header->size;
+}
+
 /*
  * gen8_snapshot() - GEN8 GPU snapshot function
  * @adreno_dev: Device being snapshotted
@@ -2164,13 +2269,7 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 
 	gen8_snapshot_debugbus(adreno_dev, snapshot);
 
-	/* Copy over the secure debugbus data if QECP captured it */
-	if (snapshot->qecp_gx_debugbus_captured || snapshot->qecp_cx_debugbus_captured) {
-		int ret = adreno_qmi_debugbus_get_data(adreno_dev, snapshot);
-
-		if (ret)
-			dev_err(device->dev, "Failed to copy data QMI req ret=%d\n", ret);
-	}
+	gen8_snapshot_qecp(adreno_dev, snapshot);
 
 	is_current_rt = rt_task(current);
 
@@ -2290,7 +2389,8 @@ void gen8_crashdump_init(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 	u64 capturescript_regs_pages = ((adreno_is_gen8_2_x(adreno_dev) ||
-		adreno_is_gen8_11_x(adreno_dev)) ? 400 : 200);
+		adreno_is_gen8_11_x(adreno_dev) ||
+		adreno_is_gen8_1_0(adreno_dev)) ? 400 : 200);
 
 	ret = adreno_allocate_global(device, &gen8_capturescript,
 		50 * PAGE_SIZE, 0, KGSL_MEMFLAGS_GPUREADONLY,

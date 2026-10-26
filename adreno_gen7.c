@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
@@ -1793,9 +1793,15 @@ int gen7_perfcounter_update(struct adreno_device *adreno_dev,
 	struct cpu_gpu_lock *lock = ptr;
 	u32 *data = ptr + sizeof(*lock);
 	int i, offset = (lock->ifpc_list_len + lock->preemption_list_len) * 2;
+	u64 reglist_size_dwords = adreno_dev->pwrup_reglist->size / sizeof(u32);
+	u64 lock_size_dwords = sizeof(*lock) / sizeof(u32);
 	bool select_reg_present = false;
+	u32 pending_triplets = 1;
+	int ret = 0;
 
 	if (flags & ADRENO_PERFCOUNTER_GROUP_RESTORE) {
+		/* No of triplet to add if restoring: 1 main + 1 control otherwise: 1 control */
+		pending_triplets++;
 		for (i = 0; i < lock->dynamic_list_len; i++) {
 			if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
 				select_reg_present = true;
@@ -1809,6 +1815,13 @@ int gen7_perfcounter_update(struct adreno_device *adreno_dev,
 		}
 	} else if (lock->dynamic_list_len) {
 		goto update;
+	}
+
+	/* Ensure there is enough space in the reglist buffer for new triplets */
+	if ((!select_reg_present) && ((offset + (pending_triplets * 3) + lock_size_dwords) >=
+		reglist_size_dwords)) {
+		ret = -ENOSPC;
+		goto err;
 	}
 
 	if (kgsl_hwlock(lock)) {
@@ -1853,7 +1866,8 @@ update:
 	if (update_reg)
 		kgsl_regwrite(KGSL_DEVICE(adreno_dev), reg->select,
 			reg->countable);
-	return 0;
+err:
+	return ret;
 }
 
 static u64 gen7_9_0_read_alwayson(struct adreno_device *adreno_dev)

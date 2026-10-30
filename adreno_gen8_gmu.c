@@ -213,7 +213,7 @@ static int gen8_timed_poll_check_rscc(struct gen8_gmu_device *gmu,
 		u32 offset, u32 expected_ret,
 		u32 timeout, u32 mask)
 {
-	u32 value;
+	u32 value = 0;
 
 	return readl_poll_timeout(gmu->rscc_virt + (offset << 2), value,
 		(value & mask) == expected_ret, 100, timeout * 1000);
@@ -1114,7 +1114,7 @@ static void _do_gbif_halt(struct kgsl_device *device, u32 reg, u32 ack_reg,
  */
 static inline void gen8_gbif_gx_reinit(struct kgsl_device *device)
 {
-	u32 ack;
+	u32 ack = 0;
 	int ret;
 
 	kgsl_regwrite(device, GEN8_GBIF_REINIT_ENABLE, 0x1);
@@ -2619,6 +2619,10 @@ static void gen8_gmu_touch_wakeup(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	int ret;
+
+	/* If device is already in SUSPEND state, don't act on touch wakeup */
+	if (device->state == KGSL_STATE_SUSPEND)
+		return;
 
 	/*
 	 * Do not wake up a suspended device or until the first boot sequence

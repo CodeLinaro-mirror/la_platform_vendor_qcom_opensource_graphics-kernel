@@ -225,7 +225,7 @@ static int gen7_timed_poll_check_rscc(struct gen7_gmu_device *gmu,
 		unsigned int offset, unsigned int expected_ret,
 		unsigned int timeout, unsigned int mask)
 {
-	u32 value;
+	u32 value = 0;
 
 	return readl_poll_timeout(gmu->rscc_virt + (offset << 2), value,
 		(value & mask) == expected_ret, 100, timeout * 1000);
@@ -2685,6 +2685,10 @@ static void gen7_gmu_touch_wakeup(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	int ret;
+
+	/* If device is already in SUSPEND state, don't act on touch wakeup */
+	if (device->state == KGSL_STATE_SUSPEND)
+		return;
 
 	/*
 	 * Do not wake up a suspended device or until the first boot sequence

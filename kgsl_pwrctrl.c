@@ -1836,11 +1836,7 @@ static int kgsl_pwrctrl_probe_gx_gdsc(struct kgsl_device *device, struct platfor
 		}
 		pwr->gx_pd = gx_pd;
 
-<<<<<<< TARGET BRANCH (895344 Merge 7f4e7b2763c099d927ae41f8209fa054a7f6891c on remote bra)
-		if (gmu_core_isenabled(device))
-=======
 		if (gmu_device_is_enabled(pdev->dev.of_node))
->>>>>>> SOURCE BRANCH (55daed Merge "kgsl: Skip syscore registration for gx_pd on non-gmu")
 			dev_pm_syscore_device(pwr->gx_pd, true);
 	} else {
 		struct regulator *gx_regulator = devm_regulator_get(&pdev->dev, "vdd");

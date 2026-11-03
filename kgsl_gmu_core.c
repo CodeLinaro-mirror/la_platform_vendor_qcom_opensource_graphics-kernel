@@ -64,6 +64,11 @@ void gmu_core_close(struct kgsl_device *device)
 {
 }
 
+bool gmu_device_is_enabled(struct device_node *node)
+{
+	return of_match_node(gmu_match_table, node);
+}
+
 bool gmu_core_isenabled(struct kgsl_device *device)
 {
 	return test_bit(GMU_ENABLED, &device->gmu_core.flags);

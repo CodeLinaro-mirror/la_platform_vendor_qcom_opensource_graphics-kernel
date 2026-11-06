@@ -1814,6 +1814,8 @@ int gen7_perfcounter_update(struct adreno_device *adreno_dev,
 	void *ptr = adreno_dev->pwrup_reglist->hostptr;
 	struct cpu_gpu_lock *lock = ptr;
 	u32 *data = ptr + sizeof(*lock);
+	u64 reglist_size_dwords = adreno_dev->pwrup_reglist->size / sizeof(u32);
+	u64 lock_size_dwords = sizeof(*lock) / sizeof(u32);
 	int i, offset = (lock->ifpc_list_len + lock->preemption_list_len) * 2;
 	bool select_reg_present = false;
 	u32 pending_triplets = 1;
@@ -1836,8 +1838,9 @@ int gen7_perfcounter_update(struct adreno_device *adreno_dev,
 		goto update;
 	}
 	/* Ensure there is enough space in the reglist buffer for new triplets */
-	if ((!select_reg_present) && (offset + (pending_triplets * 3)) >=
-		(adreno_dev->pwrup_reglist->size / sizeof(u32))) {
+	if ((!select_reg_present) &&
+		((offset + (pending_triplets * 3) + lock_size_dwords) >=
+		reglist_size_dwords)) {
 		return -ENOSPC;
 	}
 
